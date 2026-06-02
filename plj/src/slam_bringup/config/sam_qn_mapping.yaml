@@ -1,0 +1,52 @@
+sam-qn_node:
+  ros__parameters:
+    basic:
+      map_frame: "map"
+      loop_update_hz: 1.0
+      vis_hz: 0.5
+
+    keyframe:
+      keyframe_threshold: 0.1
+      # Upstream SAM-QN declares this parameter with this spelling.
+      nusubmap_keyframes: 20
+      enable_submap_matching: false
+
+    loop:
+      loop_detection_radius: 30.0
+      loop_detection_timediff_threshold: 20.0
+
+    quatro_nano_gicp_voxel_resolution: 0.1
+    save_voxel_resolution: 0.1
+
+    nano_gicp:
+      thread_number: 0
+      icp_score_threshold: 0.05
+      correspondences_number: 15
+      max_iter: 50
+      transformation_epsilon: 0.005
+      euclidean_fitness_epsilon: 0.005
+      ransac:
+        max_iter: 10
+        outlier_rejection_threshold: 0.5
+
+    quatro:
+      enable: false
+      optimize_matching: true
+      distance_threshold: 50.0
+      # Upstream SAM-QN declares this parameter with this spelling.
+      max_nucorrespondences: 300
+      fpfh_normal_radius: 0.3
+      fpfh_radius: 0.45
+      estimating_scale: false
+      noise_bound: 0.3
+      rotation:
+        # Upstream SAM-QN declares this parameter with this spelling.
+        numax_iter: 50
+        gnc_factor: 1.4
+        rot_cost_diff_threshold: 0.00005
+
+    result:
+      save_map_pcd: true
+      save_map_bag: true
+      save_in_kitti_format: false
+      seq_name: "l1_sequence"

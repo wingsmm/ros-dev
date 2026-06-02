@@ -1,0 +1,21 @@
+climb_supervisor:
+  ros__parameters:
+    stair_detected_topic: "/stair_detected"
+    stair_info_topic: "/stair_info"
+    climb_ready_topic: "/climb_ready"
+    climb_complete_topic: "/climb_complete"
+    cmd_vel_topic: "/cmd_vel"
+    climb_trigger_topic: "/climb_mode_trigger"
+    normal_trigger_topic: "/normal_mode_trigger"
+    state_topic: "/climb_state"
+    localization_reinit_topic: "/localization_reinit"
+    backend_pause_topic: "/slam_backend_pause"
+
+    max_climbable_height: 0.25
+    min_confidence: 0.60
+    stop_before_climb_sec: 0.8
+    chassis_ready_timeout_sec: 5.0
+    climb_timeout_sec: 20.0
+    recovery_sec: 2.0
+    auto_trigger: false
+    publish_stop_command: true

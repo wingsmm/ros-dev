@@ -1,0 +1,41 @@
+localization_qn_node:
+  ros__parameters:
+    basic:
+      map_frame: "map"
+      saved_map: "/home/nvidia/maps/result.bag"
+      map_match_hz: 2.0
+      visualize_voxel_size: 0.3
+
+    keyframe:
+      keyframe_threshold: 0.1
+      num_submap_keyframes: 20
+
+    match:
+      match_detection_radius: 500.0
+      quatro_nano_gicp_voxel_resolution: 0.1
+
+    nano_gicp:
+      thread_number: 0
+      icp_score_threshold: 0.005
+      correspondences_number: 15
+      max_correspondence_distance: 35.0
+      max_iter: 50
+      transformation_epsilon: 0.01
+      euclidean_fitness_epsilon: 0.01
+      ransac:
+        max_iter: 10
+        outlier_rejection_threshold: 0.5
+
+    quatro:
+      enable: false
+      optimize_matching: true
+      distance_threshold: 30.0
+      max_correspondences: 350
+      fpfh_normal_radius: 0.6
+      fpfh_radius: 0.9
+      estimating_scale: false
+      noise_bound: 0.3
+      rotation:
+        num_max_iter: 50
+        gnc_factor: 1.4
+        rot_cost_diff_threshold: 0.0001

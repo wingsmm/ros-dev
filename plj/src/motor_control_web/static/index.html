@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>双电机控制网页（可交互版）</title>
+    <!-- 引入独立的CSS样式文件 -->
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <!-- 第一模块：双电机正反转控制（上） -->
+    <div class="control-panel">
+        <h1>双电机正反转控制</h1>
+
+        <div class="operation-title">上升操作</div>
+        <div class="form-group">
+            <button class="btn-forward" onclick="controlMotor(event,'forward_1')" value="1">电机1正转上升</button>
+            <button class="btn-forward" onclick="controlMotor(event,'forward_1')" value="2">电机2正转上升</button>
+        </div>
+
+        <div class="operation-title">下降操作</div>
+        <div class="form-group">
+            <button class="btn-backward" onclick="controlMotor(event,'backward_1')" value="1">电机1反转下降</button>
+            <button class="btn-backward" onclick="controlMotor(event,'backward_1')" value="2">电机2反转下降</button>
+        </div>
+
+        <div class="operation-title">同步操作</div>
+        <div class="form-group">
+            <button class="btn-sync" onclick="controlMotor(event,'backward_tongbu')">同步下降</button>
+        </div>
+
+        <div class="operation-title">停止操作</div>
+        <div class="form-group">
+            <button class="btn-stop" onclick="controlMotor(event,'forward_stop_1')" value="1">电机1正转停止</button>
+            <button class="btn-stop" onclick="controlMotor(event,'forward_stop_1')" value="2">电机2正转停止</button>
+        </div>
+        <div class="form-group">
+            <button class="btn-stop" onclick="controlMotor(event,'backward_stop_1')" value="1">电机1反转停止</button>
+            <button class="btn-stop" onclick="controlMotor(event,'backward_stop_1')" value="2">电机2反转停止</button>
+        </div>
+
+        <div class="operation-title">读状态</div>
+        <div class="form-group">
+            <button class="btn-sync" onclick="controlMotor(event,'read_state')" value="1">读取一电机状态</button>
+            <button class="btn-sync" onclick="controlMotor(event,'read_state')" value="2">读取二电机状态</button>
+        </div>
+        <!-- 结果提示区 -->
+        <div id="result" class="result"></div>
+    </div>
+
+    <!-- 第二模块：后侧驱动电机控制（中） -->
+    <div class="control-panel">
+        <h1>后侧驱动电机控制</h1>
+
+        <div class="operation-title">设备地址</div>
+        <div class="form-group">
+            <input type="number" id="slaveId" value="1">
+        </div>
+
+        <div class="operation-title">速度调节（0-100）</div>
+        <div class="form-group">
+            <input type="number" id="speed" value="50">
+        </div>
+
+        <div class="operation-title">运行方向</div>
+        <div class="form-group">
+            <select id="direction">
+                <option value="0">正转</option>
+                <option value="1">反转</option>
+            </select>
+        </div>
+
+        <div class="operation-title">底盘运行控制</div>
+        <div class="form-group">
+            <button class="btn-forward" onclick="controlChassisMotor()">启动底盘电机</button>
+            <button class="btn-stop" onclick="stopChassisMotor()">停止底盘电机</button>
+        </div>
+
+        <!-- 同步控制按钮 -->
+        <div class="operation-title">同步控制（电机1+2同时动作）</div>
+        <div class="form-group">
+            <button class="btn-forward" onclick="syncForward()">正转(向后走)</button>
+            <button class="btn-backward" onclick="syncBackward()">反转(向前走)</button>
+            <button class="btn-stop" onclick="syncStop()">停止</button>
+        </div>
+         <!-- 转向控制按钮 -->
+        <div class="operation-title">同步控制（电机1+2同时反向动作）</div>
+        <div class="form-group">
+            <button class="btn-forward" onclick="turn_left()">1正转 2反转(向左转向)</button>
+        </div>
+        <div class="form-group">
+            <button class="btn-forward" onclick="turn_right()">2正转 1反转(向右转向)</button>
+        </div>
+    </div>
+
+    <!-- 第三模块：底盘电机控制（下） -->
+    <div class="control-panel" >
+        <h1>底盘电机控制</h1>
+
+        <div class="control-panel-item">
+            <h2>履带行走</h2>
+            <input type="hidden" id="dipan_zx" value="1">
+            <div class="operation-title">运行方向</div>
+            <div class="form-group">
+                <select id="dipan_zhuanxiang_direction">
+                    <option value="0">后</option>
+                    <option value="1">前</option>
+                </select>
+            </div>
+            <div class="operation-title">速度调节（0-100）</div>
+            <div class="form-group">
+                <input type="number" id="dipan_zhuanxiang_speed" value="50">
+            </div>
+            <div class="form-group">
+                <button class="btn-forward" onclick="start_dipan()">启动</button>
+                <button class="btn-stop" onclick="stop_dipan()">停止</button>
+            </div>
+        </div>
+
+        <div class="control-panel-item">
+            <h2>转向</h2>
+            <div class="operation-title">目标位置</div>
+            <div class="form-group">
+                <input type="number" id="target_position" value="3600">
+            </div>
+            <div class="operation-title">速度</div>
+            <div class="form-group">
+                <input type="number" id="zhuanxiang_speed" value="300">
+            </div>
+            <div class="form-group">
+                <button class="btn-forward" onclick="start_zhuanxiang()">启动</button>
+                <button class="btn-stop" onclick="stop_zhuanxiang()">停止</button>
+            </div>
+            <div class="operation-title">状态</div>
+            <div class="item">电机1# 当前位置：<span id="m1c">0</span></div>
+<!--            <div class="item">电机2# 当前位置：<span id="m2c">0</span></div>-->
+            <div class="item">电机1# 目标位置：<span id="m1t">0</span></div>
+<!--            <div class="item">电机2# 目标位置：<span id="m2t">0</span></div>-->
+            <div class="item">电机1限位：<span id="l1"></span></div>
+            <div class="item">电机2限位：<span id="l2"></span></div>
+        </div>
+    </div>
+
+    <!-- 引入JS文件 路径不变 所有js函数完全兼容 -->
+    <script src="./js/control.js"></script>
+</body>
+</html>

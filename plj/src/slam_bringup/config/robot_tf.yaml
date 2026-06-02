@@ -1,0 +1,17 @@
+robot_tf:
+  # Temporary measured values. Replace after physical measurement.
+  lidar_x: "0.15"
+  lidar_y: "0.0"
+  lidar_z: "0.25"
+  lidar_roll: "0.0"
+  lidar_pitch: "-0.26"
+  lidar_yaw: "0.0"
+  imu_x: "0.0077"
+  imu_y: "0.0147"
+  imu_z: "-0.0067"
+  imu_roll: "0.0"
+  imu_pitch: "0.0"
+  imu_yaw: "0.0"
+  base_frame: "base_link"
+  lidar_frame: "unilidar_lidar"
+  imu_frame: "unilidar_imu"

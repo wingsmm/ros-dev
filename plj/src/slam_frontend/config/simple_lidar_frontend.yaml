@@ -1,0 +1,20 @@
+simple_lidar_frontend:
+  ros__parameters:
+    cloud_topic: "/unilidar/cloud"
+    odom_topic: "/frontend/odom"
+    path_topic: "/frontend/path"
+    local_map_topic: "/frontend/local_map"
+    odom_frame: "odom"
+    base_frame: "base_link"
+    publish_tf: true
+
+    voxel_size: 0.18
+    min_range: 0.30
+    max_range: 8.00
+    max_points: 700
+    icp_iterations: 8
+    max_correspondence_distance: 0.65
+    min_correspondences: 45
+    keyframe_translation: 0.20
+    keyframe_yaw: 0.12
+    local_map_keyframes: 20

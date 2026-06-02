@@ -1,0 +1,193 @@
+/* 全局样式重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "微软雅黑", Arial, sans-serif;
+}
+
+/* 页面背景 */
+body {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
+    padding: 30px 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+/* 控制面板容器 */
+.control-panel {
+    background-color: white;
+    padding: 40px 30px;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    width: 100%;
+    max-width: 600px;
+    margin: 0 auto;
+    border: 1px solid #e8e8e8;
+}
+
+/* 标题样式 */
+h1 {
+    color: #2d3748;
+    margin-bottom: 30px;
+    text-align: center;
+    font-size: 24px;
+    font-weight: 600;
+    position: relative;
+    padding-bottom: 15px;
+}
+
+h1::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 3px;
+    background-color: #2196F3;
+    border-radius: 3px;
+}
+
+/* 操作区域标题 */
+.operation-title {
+    color: #4a5568;
+    font-size: 16px;
+    font-weight: 500;
+    margin: 25px 0 15px 0;
+    padding-left: 10px;
+    border-left: 4px solid #2196F3;
+}
+
+/* 按钮组布局 */
+.form-group {
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* 按钮基础样式 */
+button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    min-width: 140px;
+}
+
+/* 上升按钮 */
+.btn-forward {
+    background-color: #2196F3;
+}
+.btn-forward:hover {
+    background-color: #1976D2;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(33,150,243,0.2);
+}
+
+/* 下降按钮 */
+.btn-backward {
+    background-color: #f44336;
+}
+.btn-backward:hover {
+    background-color: #d32f2f;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(244,67,54,0.2);
+}
+
+/* 停止按钮 */
+.btn-stop {
+    background-color: #ff9800;
+}
+.btn-stop:hover {
+    background-color: #f57c00;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(255,152,0,0.2);
+}
+
+/* 同步按钮 */
+.btn-sync {
+    background-color: #4CAF50;
+}
+.btn-sync:hover {
+    background-color: #388E3C;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(76,175,80,0.2);
+}
+
+/* 按钮点击反馈 */
+button:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+
+/* 结果提示框 */
+.result {
+    margin-top: 30px;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    display: none; /* 默认隐藏 */
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* 成功提示 */
+.success {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #c8e6c9;
+    display: block;
+}
+
+/* 错误提示 */
+.error {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ffcdd2;
+    display: block;
+}
+
+/* 输入框 + 下拉框 统一美化样式 */
+input[type="number"],
+select {
+    padding: 10px 12px;
+    border: 1px solid #dcdfe6;
+    border-radius: 6px;
+    font-size: 14px;
+    width: 100%;
+    outline: none;
+    transition: border 0.2s;
+}
+
+input[type="number"]:focus,
+select:focus {
+    border-color: #409eff;
+}
+
+/* 响应式适配（手机端） */
+@media (max-width: 480px) {
+    .control-panel {
+        padding: 30px 20px;
+    }
+    button {
+        min-width: 100%;
+        padding: 12px 20px;
+    }
+    .form-group {
+        gap: 10px;
+    }
+    h1 {
+        font-size: 20px;
+    }
+}

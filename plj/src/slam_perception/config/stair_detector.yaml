@@ -1,0 +1,35 @@
+stair_detector:
+  ros__parameters:
+    cloud_topic: "/unilidar/cloud"
+    target_frame: "base_link"
+    stair_detected_topic: "/stair_detected"
+    stair_info_topic: "/stair_info"
+    front_roi_cloud_topic: "/front_roi_cloud"
+    cmd_vel_topic: "/cmd_vel"
+    climb_trigger_topic: "/climb_mode_trigger"
+
+    # ROI in the LiDAR/base-forward frame. Tune after confirming TF direction.
+    min_x: 0.30
+    max_x: 2.00
+    min_y: -0.80
+    max_y: 0.80
+    min_z: -0.35
+    max_z: 0.80
+
+    # Stair geometry.
+    min_stair_height: 0.05
+    max_stair_height: 0.25
+    ground_threshold: 0.035
+    distance_bin_size: 0.08
+    min_points_per_bin: 8
+    min_step_width: 0.35
+    min_confidence: 0.55
+    ransac_iterations: 40
+    transform_timeout_sec: 0.05
+
+    # Temporal filtering and safety trigger.
+    confirm_frames: 4
+    clear_frames: 6
+    enable_stop_command: false
+    enable_climb_trigger: false
+    trigger_cooldown_sec: 3.0
