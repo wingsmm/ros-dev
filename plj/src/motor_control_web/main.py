@@ -10,10 +10,30 @@ from model.lift_motor_control import motor_forward, motor_backward, motor_stop, 
 from model import rwd_control, zhuanxiang_control
 
 # 配置静态文件目录和服务器参数
-STATIC_DIR = os.path.join(os.path.dirname(__file__), 'static')
+_APP_DIR = os.path.dirname(__file__)
+STATIC_DIR = os.path.join(_APP_DIR, 'static')
 
-HOST = '0.0.0.0'
-PORT = 8080
+
+def _load_dotenv(path: str) -> None:
+    """从 .env 加载 KEY=VALUE，不覆盖已有环境变量。"""
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, _, value = line.partition('=')
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+_load_dotenv(os.path.join(_APP_DIR, '.env'))
+
+HOST = os.environ.get('HOST', '0.0.0.0')
+PORT = int(os.environ.get('PORT', '8080'))
 
 
 # ======================

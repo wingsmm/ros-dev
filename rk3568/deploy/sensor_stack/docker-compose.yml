@@ -1,0 +1,178 @@
+﻿# RK3568 Astra Pro：宿主机 ~/ros2_ws 挂载，依赖打进 ros-humble-astra:deps，colcon 增量编译
+# 文档：rk3568/docs/Astra_RK3568部署方案.md
+
+services:
+  # 常驻：相机 + 雷达；restart 策略在 docker 服务启动后自动拉起（开机自启）
+  astra-camera:
+    image: ${ASTRA_IMAGE:-ros-humble-astra:deps}
+    pull_policy: never
+    container_name: astra-camera
+    network_mode: host
+    pid: host
+    ipc: host
+    privileged: true
+    security_opt:
+      - seccomp=unconfined
+    tmpfs:
+      - /dev/mqueue:rw,noexec,nosuid,nodev,size=65536
+    devices:
+      - ${VIDEO0:-/dev/video0}
+      - ${VIDEO1:-/dev/video1}
+      - ${MEDIA0:-/dev/media0}
+    volumes:
+      - /dev:/host_dev
+      - /dev/bus/usb:/dev/bus/usb
+      - ${ROS2_WS:-${HOME}/ros2_ws}:/ros2_ws
+      - ./scripts:/opt/sensor_stack/scripts:ro
+      - ./config:/opt/sensor_stack/config:ro
+      - ./logs:/var/log/sensor_stack
+      - ./data:/data
+    group_add:
+      - video
+      - dialout
+    env_file:
+      - .env
+    restart: unless-stopped
+    command:
+      - bash
+      - -lc
+      - exec bash /opt/sensor_stack/scripts/start_sensors.sh
+
+  cli:
+    image: ${ASTRA_IMAGE:-ros-humble-astra:deps}
+    pull_policy: never
+    network_mode: host
+    privileged: true
+    security_opt:
+      - seccomp=unconfined
+    tmpfs:
+      - /dev/mqueue:rw,noexec,nosuid,nodev,size=65536
+    profiles: [cli]
+    stdin_open: true
+    tty: true
+    volumes:
+      - ${ROS2_WS:-${HOME}/ros2_ws}:/ros2_ws
+    entrypoint: bash
+    command: -lc "source /opt/ros/humble/setup.bash && source /ros2_ws/install/setup.bash && exec bash"
+
+  rviz:
+    image: ${ASTRA_IMAGE:-ros-humble-astra:deps}
+    pull_policy: never
+    network_mode: host
+    profiles: [rviz]
+    environment:
+      DISPLAY: ${DISPLAY:-:0}
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ${ROS2_WS:-${HOME}/ros2_ws}:/ros2_ws
+    command:
+      - bash
+      - -lc
+      - |
+        source /opt/ros/humble/setup.bash
+        source /ros2_ws/install/setup.bash
+        apt-get update -qq && apt-get install -y -qq ros-humble-rviz2
+        exec rviz2
+
+  # 一次性：装 apt/ROS 依赖，commit 为 ros-humble-astra:deps（见文档，须 --no-rm）
+  deps-install:
+    image: ${BASE_IMAGE:-ros:humble-ros-base-jammy}
+    pull_policy: never
+    network_mode: host
+    pid: host
+    ipc: host
+    privileged: true
+    security_opt:
+      - seccomp=unconfined
+    tmpfs:
+      - /dev/mqueue:rw,noexec,nosuid,nodev,size=65536
+    profiles: [deps]
+    command:
+      - bash
+      - -lc
+      - |
+        set -e
+        apt-get update
+        apt-get install -y git python3-colcon-common-extensions \
+          libopenni2-dev libusb-1.0-0-dev libuvc-dev \
+          libgoogle-glog-dev libgflags-dev libeigen3-dev nlohmann-json3-dev \
+          libgoogle-glog0v5 libgflags2.2 libuvc0 libopenni2-0 \
+          ros-humble-camera-info-manager ros-humble-cv-bridge \
+          ros-humble-image-transport ros-humble-image-publisher \
+          ros-humble-image-geometry ros-humble-message-filters \
+          ros-humble-tf2-ros ros-humble-tf2-sensor-msgs ros-humble-tf2-eigen \
+          ros-humble-diagnostic-updater libopencv-dev
+        echo "DEPS_INSTALL_DONE — 另开终端: docker commit <容器名> ros-humble-astra:deps"
+
+  # 增量 colcon：产物在宿主机 ~/ros2_ws/{build,install}；--rm 只删容器，不删宿主机 install
+  # 首次或改 astra 源码：--profile build（编整个工作空间，耗时长）
+  build:
+    image: ${DEPS_IMAGE:-ros-humble-astra:deps}
+    pull_policy: never
+    network_mode: host
+    pid: host
+    ipc: host
+    privileged: true
+    security_opt:
+      - seccomp=unconfined
+    tmpfs:
+      - /dev/mqueue:rw,noexec,nosuid,nodev,size=65536
+    profiles: [build]
+    devices:
+      - ${VIDEO0:-/dev/video0}
+      - ${VIDEO1:-/dev/video1}
+      - ${MEDIA0:-/dev/media0}
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - ${ROS2_WS:-${HOME}/ros2_ws}:/ros2_ws
+    group_add:
+      - video
+    command:
+      - bash
+      - -lc
+      - |
+        set -e
+        if [ ! -d /ros2_ws/src/ros2_astra_camera ]; then
+          echo "缺少 /ros2_ws/src/ros2_astra_camera，请先在宿主机解压源码"
+          exit 1
+        fi
+        source /opt/ros/humble/setup.bash
+        cd /ros2_ws
+        export MAKEFLAGS=-j1
+        colcon build --symlink-install --parallel-workers 1 \
+          --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_BUILD_PARALLEL_LEVEL=1
+        source install/setup.bash
+        ros2 run astra_camera list_devices_node || true
+
+  # 只编雷达包，不重编 astra_camera（加新包时用此 profile）
+  build-lidar:
+    image: ${DEPS_IMAGE:-ros-humble-astra:deps}
+    pull_policy: never
+    network_mode: host
+    privileged: true
+    security_opt:
+      - seccomp=unconfined
+    tmpfs:
+      - /dev/mqueue:rw,noexec,nosuid,nodev,size=65536
+    profiles: [build-lidar]
+    devices:
+      - /dev/lidar
+      - /dev/ttyUSB0
+      - /dev/ttyUSB1
+    volumes:
+      - ${ROS2_WS:-${HOME}/ros2_ws}:/ros2_ws
+    command:
+      - bash
+      - -lc
+      - |
+        set -e
+        if [ ! -d /ros2_ws/src/sllidar_ros2 ]; then
+          echo "缺少 /ros2_ws/src/sllidar_ros2，请先在宿主机解压 sllidar_ros2.tar.gz"
+          exit 1
+        fi
+        source /opt/ros/humble/setup.bash
+        cd /ros2_ws
+        export MAKEFLAGS=-j1
+        colcon build --packages-select sllidar_ros2 --symlink-install --parallel-workers 1 \
+          --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_BUILD_PARALLEL_LEVEL=1
+        echo "BUILD_LIDAR_DONE — install 仍在宿主机 ~/ros2_ws/install，astra_camera 未重编"

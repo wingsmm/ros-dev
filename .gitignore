@@ -56,6 +56,11 @@ pnpm-debug.log*
 # ===== Secrets / local config =====
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 secrets.*
+
+# ===== Third-party ROS packages (ship via deploy/src/*.tar or packages/*.tar.gz) =====
+rk3568/deploy/src/ros2_astra_camera/
+rk3568/deploy/src/sllidar_ros2/

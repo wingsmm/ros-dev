@@ -1,0 +1,2 @@
+# RPLidar on RK3568 hub port 2-1.3 -> ttyUSB0 (verify after unplug test)
+SUBSYSTEM=="tty", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", KERNELS=="2-1.3", SYMLINK+="lidar", GROUP="dialout", MODE="0666"

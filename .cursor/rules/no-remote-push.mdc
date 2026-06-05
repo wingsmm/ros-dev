@@ -1,0 +1,49 @@
+---
+description: 禁止 Agent 主动将代码推送、同步或部署到远端
+alwaysApply: true
+---
+
+# 禁止主动推送/同步/部署到远端
+
+除非用户在当前对话中**明确要求**，否则不得执行任何将本地变更同步、推送、上传、部署或写入远端的操作。
+
+## 禁止的操作
+
+- `git push`（含 `git push -u origin <branch>`）
+- 创建 PR 前自动 push 分支
+- 通过 gh CLI 或其他工具间接 push
+- 部署、发布流程中未经确认的远端上传
+- `scp`、`rsync`、`sftp`、`ssh` 远端写文件或覆盖文件
+- 将本地 `src/` 复制到远端 `~/ros2_ws/src/`、`~/slam_ws/src/` 或其他路径
+- 在远端执行会修改源码树、安装本仓库代码、覆盖配置的命令
+
+## 允许的操作
+
+- 本地 `git add`、`git commit`（仅当用户明确要求 commit 时）
+- `git status`、`git diff`、`git log` 等只读命令
+- 本地分支创建、合并、rebase（不涉及 push）
+- 远端只读诊断命令，例如 `hostname`、`df -h`、`free -h`、`ros2 topic list`
+
+## 何时可以 push
+
+仅在以下情况执行 push：
+
+1. 用户明确说「push」「推送到远端」「创建 PR 并 push」等
+2. 用户规则中针对当前任务明确要求 push
+
+若意图不明确，先询问用户，不要假设需要 push。
+
+远端部署、同步或写入同理：必须先说明目标路径、文件范围和命令，并等待用户明确同意。
+
+## 示例
+
+```
+用户：帮我改一下这个 bug
+→ 只改代码，不 push
+
+用户：commit 一下
+→ 只 commit，不 push
+
+用户：push 到远端并创建 PR
+→ 可以 push
+```

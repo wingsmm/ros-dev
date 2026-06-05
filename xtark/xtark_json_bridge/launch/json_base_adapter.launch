@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+  <node pkg="xtark_json_bridge" type="json_base_adapter_node.py" name="json_base_adapter" output="screen">
+    <rosparam command="load" file="$(find xtark_json_bridge)/config/json_base_adapter.yaml"/>
+  </node>
+</launch>
