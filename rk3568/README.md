@@ -81,7 +81,12 @@ packages/rk3568_deploy_files_2026-06-04.tar.gz
 ```text
 docs/Astra_RK3568部署方案.md
 docs/RPLidar_RK3568部署方案.md
-docs/移动平台外挂感知建图导航方案.md
-docs/底盘JSON对接协议草案.md
+docs/README.md
 deploy/README.md
+```
+
+跨设备联调、底盘 JSON 协议和 WSL2 方案统一放在：
+
+```text
+../pc/docs/
 ```

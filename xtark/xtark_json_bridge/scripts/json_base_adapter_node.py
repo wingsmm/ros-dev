@@ -20,6 +20,14 @@ def clamp(value, limit):
     return max(-limit, min(limit, value))
 
 
+def normalize_angle(angle):
+    while angle > math.pi:
+        angle -= 2.0 * math.pi
+    while angle < -math.pi:
+        angle += 2.0 * math.pi
+    return angle
+
+
 class JsonBaseAdapter(object):
     def __init__(self):
         self.host = rospy.get_param("~host", "0.0.0.0")
@@ -41,6 +49,7 @@ class JsonBaseAdapter(object):
         self.last_cmd_time = 0.0
         self.stop_sent = True
         self.latest_voltage = None
+        self.last_pose_sample = None
 
         rospy.Subscriber(odom_topic, Odometry, self.on_odom, queue_size=10)
         rospy.Subscriber(voltage_topic, Float32, self.on_voltage, queue_size=2)
@@ -157,15 +166,38 @@ class JsonBaseAdapter(object):
         except Exception:
             yaw = 0.0
 
+        linear_x = msg.twist.twist.linear.x
+        linear_y = msg.twist.twist.linear.y
+        angular_z = msg.twist.twist.angular.z
+
+        if (
+            abs(linear_x) < 1e-6
+            and abs(linear_y) < 1e-6
+            and abs(angular_z) < 1e-6
+            and self.last_pose_sample is not None
+        ):
+            last_time, last_x, last_y, last_yaw = self.last_pose_sample
+            dt = max(now - last_time, 1e-6)
+            linear_x = (msg.pose.pose.position.x - last_x) / dt
+            linear_y = (msg.pose.pose.position.y - last_y) / dt
+            angular_z = normalize_angle(yaw - last_yaw) / dt
+
+        self.last_pose_sample = (
+            now,
+            msg.pose.pose.position.x,
+            msg.pose.pose.position.y,
+            yaw,
+        )
+
         payload = {
             "type": "odom_base",
             "stamp_ms": int(time.time() * 1000),
             "x": msg.pose.pose.position.x,
             "y": msg.pose.pose.position.y,
             "yaw": yaw,
-            "linear_x": msg.twist.twist.linear.x,
-            "linear_y": msg.twist.twist.linear.y,
-            "angular_z": msg.twist.twist.angular.z,
+            "linear_x": linear_x,
+            "linear_y": linear_y,
+            "angular_z": angular_z,
         }
         self.broadcast(payload)
 

@@ -53,8 +53,52 @@ roslaunch xtark_json_bridge json_base_adapter.launch
 {"type":"cmd_vel","linear_x":0.00,"linear_y":0.00,"angular_z":0.00}
 ```
 
+## 外部控制端
+
+PC / RK3568 上的命令行工具已放到仓库根目录 `pc/tools/`，不随 ROS1 包部署到 xtark。
+
+第二阶段推荐优先使用 `pc/qt_client/` 图形调试台；`pc/tools/` 保留为命令行备用和快速验证工具。
+
+键盘遥控：
+
+```bash
+cd pc/tools
+python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.15 --turn 0.4
+```
+
+流程：
+
+```text
+键盘 -> JSON cmd_vel -> xtark_json_bridge -> ROS1 /cmd_vel -> xtark_driver
+```
+
+按键逻辑与 `xtark_ctl/xtark_twist_keyboard.py` 一致：每次有效按键发送一条 JSON；按住键时靠终端连发。同连接可打印 `odom_base` 反馈，默认最多 2 Hz。
+
+只看控制、不打印反馈：
+
+```bash
+cd pc/tools
+python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.15 --turn 0.4 --no-feedback
+```
+
 ## 安全
 
 - 默认 `cmd_timeout_sec=0.5`，超过时间未收到控制指令会自动发布 0 速度。
 - 第一轮测试请低速：`linear_x <= 0.10`，`angular_z <= 0.20`。
 - 不要绕过 `xtark_driver` 直接写底盘串口。
+
+## 验收状态
+
+2026-06-05 第一阶段已通过：
+
+```text
+PC -> JSON cmd_vel -> xtark_json_bridge -> /cmd_vel -> xtark_driver -> 底盘
+xtark /odom /voltage -> JSON odom_base / base_status -> PC
+```
+
+已验证：
+
+- PC 本地键盘可低速控制 xtark 前进。
+- `odom_base` 的 `x / y / yaw` 能随小车运动变化。
+- 当 xtark `/odom` 的 twist 为 0 时，适配节点会用位姿差分估算 `linear_x / linear_y / angular_z`。
+- `base_status` 能回传 `online / estop / battery_v`。

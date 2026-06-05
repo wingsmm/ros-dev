@@ -1,5 +1,7 @@
 # 深度相机 VM 独立试验方案
 
+> 归档说明：这是 VMware + USB 直连深度相机的历史试验方案。当前主线已改为 RK3568 接 USB 传感器，PC / WSL2 通过网络做 ROS2 联调。本文件仅保留参考，不作为当前部署入口。
+
 在 **VMware Ubuntu 22.04** 上，用 **Docker + ROS2 Humble** 驱动 **Orbbec Astra Pro**，完成深度 / 红外 / 彩色三路图像与点云 demo。
 
 工程目录：`~/Desktop/depth_camera_demo/`（含 `docker-compose.yml`、`.env`）。

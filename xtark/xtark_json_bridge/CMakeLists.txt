@@ -13,7 +13,6 @@ catkin_package()
 
 catkin_install_python(PROGRAMS
   scripts/json_base_adapter_node.py
-  scripts/send_cmd_vel_json.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
