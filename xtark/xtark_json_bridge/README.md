@@ -19,17 +19,20 @@ ROS1 /odom /voltage -> JSON odom_base / base_status
 
 ## 启动
 
-先启动原生底盘驱动：
+推荐 `xtark/scripts/run_xtark.sh`（见 [DEPLOY.md](DEPLOY.md)）：
+
+```bash
+~/ros_ws/scripts/run_xtark.sh start    # 后台一键
+~/ros_ws/scripts/run_xtark.sh bringup  # 前台终端 1
+~/ros_ws/scripts/run_xtark.sh json     # 前台终端 2
+```
+
+手工等价命令：
 
 ```bash
 source /opt/ros/melodic/setup.bash
 source ~/ros_ws/devel/setup.bash
 roslaunch xtark_driver xtark_bringup.launch
-```
-
-再启动适配节点：
-
-```bash
 roslaunch xtark_json_bridge json_base_adapter.launch
 ```
 

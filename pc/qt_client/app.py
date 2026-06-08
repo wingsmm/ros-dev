@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import sys
 from datetime import datetime
 from typing import Any, Dict, Set, Tuple
@@ -20,15 +21,43 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from json_client import JsonClientBridge, JsonTcpClient, SEND_RATE_HZ
-from widgets import ControlPanel, LogPanel, StatusPanel
+from gateway.json_client import JsonClientBridge, JsonTcpClient, SEND_RATE_HZ
+from mapping.ros_stack import RosStackManager
+from ui.fonts import setup_app_font
+from ui.widgets import ControlPanel, LogPanel, StackPanel, StatusPanel
+
+APP_TITLE = "xtark Mapping Console"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="xtark WSL2 client")
+    parser.add_argument(
+        "--no-ros",
+        action="store_true",
+        help="JSON/GUI only; disable ROS2 publishing and mapping controls",
+    )
+    return parser.parse_args()
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, enable_ros2: bool = True):
         super().__init__()
-        self.setWindowTitle("xtark 底盘 JSON 调试台")
-        self.resize(980, 720)
+        self.setWindowTitle(APP_TITLE)
+        self.resize(980, 820)
+
+        self._ros2 = None
+        if enable_ros2:
+            from gateway.ros2_pub import ros2_unavailable_reason, try_create
+
+            self._ros2 = try_create()
+            if self._ros2 is None:
+                reason = ros2_unavailable_reason()
+                print("WARN: ROS2 publish unavailable:", reason or "unknown")
+                self._ros2_fail_reason = reason or "初始化失败"
+            else:
+                self._ros2_fail_reason = ""
+        else:
+            self._ros2_fail_reason = "已禁用 (--no-ros)"
 
         self.settings = QSettings("xtark", "json_debug_client")
         self.bridge = JsonClientBridge(self)
@@ -36,6 +65,8 @@ class MainWindow(QMainWindow):
         self.bridge.log_line.connect(self._on_log)
         self.bridge.message.connect(self._on_message)
         self.bridge.connection_changed.connect(self._on_connection)
+
+        self._stack = RosStackManager(log=self._on_log) if enable_ros2 else None
 
         self._pressed_keys: Set[int] = set()
         self._active_velocity: Tuple[float, float, float] = (0.0, 0.0, 0.0)
@@ -50,8 +81,31 @@ class MainWindow(QMainWindow):
         self._ui_timer.timeout.connect(self._refresh_status_labels)
         self._ui_timer.start()
 
+        if self._ros2 is not None:
+            self._ros_timer = QTimer(self)
+            self._ros_timer.setInterval(50)
+            self._ros_timer.timeout.connect(self._ros2_spin)
+            self._ros_timer.start()
+
+        if self._stack is not None:
+            self._stack_timer = QTimer(self)
+            self._stack_timer.setInterval(500)
+            self._stack_timer.timeout.connect(self._refresh_stack_status)
+            self._stack_timer.start()
+
         self._build_ui()
         self._load_settings()
+
+    def _ros2_spin(self) -> None:
+        if self._ros2 is None:
+            return
+        try:
+            self._ros2.spin_once()
+        except Exception as exc:
+            print("WARN: ROS2 spin stopped:", exc)
+            self._ros2 = None
+            if hasattr(self, "_ros_timer"):
+                self._ros_timer.stop()
 
     def _build_ui(self) -> None:
         central = QWidget()
@@ -80,6 +134,16 @@ class MainWindow(QMainWindow):
         left_layout = QVBoxLayout(left)
         self.control_panel = ControlPanel()
         left_layout.addWidget(self.control_panel)
+        self.stack_panel = StackPanel()
+        stack_ok = self._stack is not None
+        self.stack_panel.setEnabled(stack_ok)
+        if stack_ok:
+            self.stack_panel.set_ros2_status(
+                self._ros2 is not None,
+                getattr(self, "_ros2_fail_reason", ""),
+            )
+        left_layout.addWidget(self.stack_panel)
+        left_layout.addStretch(1)
         splitter.addWidget(left)
 
         right = QWidget()
@@ -98,6 +162,14 @@ class MainWindow(QMainWindow):
         self.disconnect_btn.clicked.connect(self._disconnect)
         self.control_panel.velocity_changed.connect(self._on_velocity_from_button)
         self.control_panel.stop_requested.connect(self._stop_motion)
+
+        if self._stack is not None:
+            self.stack_panel.start_rviz.connect(lambda: self._run_stack("start", "rviz2"))
+            self.stack_panel.stop_rviz.connect(lambda: self._run_stack("stop", "rviz2"))
+            self.stack_panel.start_slam.connect(lambda: self._run_stack("start", "slam"))
+            self.stack_panel.stop_slam.connect(lambda: self._run_stack("stop", "slam"))
+            self.stack_panel.start_all.connect(lambda: self._run_stack("start", "all"))
+            self.stack_panel.stop_all.connect(lambda: self._run_stack("stop", "all"))
 
     def _load_settings(self) -> None:
         host = self.settings.value("host", "192.168.1.169")
@@ -159,6 +231,29 @@ class MainWindow(QMainWindow):
             self.status_panel.update_odom(msg)
         elif msg_type == "base_status":
             self.status_panel.update_base_status(msg)
+        if self._ros2 is not None:
+            self._ros2.on_json(msg)
+
+    def _run_stack(self, action: str, target: str) -> None:
+        if self._stack is None:
+            return
+        if action == "start" and target == "rviz2":
+            self._stack.start_rviz()
+        elif action == "start" and target == "slam":
+            self._stack.start_slam()
+        elif action == "start" and target == "all":
+            self._stack.start_all()
+        elif action == "stop" and target == "all":
+            self._stack.stop_all()
+        else:
+            self._stack.stop(target)
+        self._refresh_stack_status()
+
+    def _refresh_stack_status(self) -> None:
+        if self._stack is None:
+            return
+        self.stack_panel.set_rviz_running(self._stack.is_running("rviz2"))
+        self.stack_panel.set_slam_running(self._stack.is_running("slam"))
 
     def _on_velocity_from_button(self, lx: float, ly: float, az: float) -> None:
         self._hold_from_button = True
@@ -193,11 +288,7 @@ class MainWindow(QMainWindow):
         linear = self.control_panel.linear_speed()
         angular = self.control_panel.angular_speed()
         lx = ly = az = 0.0
-        forward_keys = {
-            Qt.Key_W,
-            Qt.Key_I,
-            Qt.Key_Up,
-        }
+        forward_keys = {Qt.Key_W, Qt.Key_I, Qt.Key_Up}
         back_keys = {Qt.Key_S, Qt.Key_Down}
         left_keys = {Qt.Key_A, Qt.Key_J}
         right_keys = {Qt.Key_D, Qt.Key_L}
@@ -282,15 +373,29 @@ class MainWindow(QMainWindow):
         super().keyReleaseEvent(event)
 
     def closeEvent(self, event):
+        if hasattr(self, "_ros_timer"):
+            self._ros_timer.stop()
+        if hasattr(self, "_stack_timer"):
+            self._stack_timer.stop()
+        self._send_timer.stop()
+        self._ui_timer.stop()
         self._save_settings()
         self._stop_motion()
         self.client.disconnect(send_stop=False)
+        if self._stack is not None:
+            self._stack.stop_all()
+        if self._ros2 is not None:
+            self._ros2.shutdown()
         super().closeEvent(event)
 
 
 def main() -> int:
+    args = parse_args()
     app = QApplication(sys.argv)
-    window = MainWindow()
+    app.setApplicationName(APP_TITLE)
+    app.setApplicationDisplayName(APP_TITLE)
+    setup_app_font(app)
+    window = MainWindow(enable_ros2=not args.no_ros)
     window.show()
     return app.exec_()
 

@@ -18,15 +18,49 @@ source devel/setup.bash
 
 ## 3. 启动
 
-先启动 xtark 原生底盘：
+推荐用仓库里的 `xtark/scripts/run_xtark.sh`（复制到 xtark 后执行）。
+
+复制示例（在 PC / WSL 上，路径按本机仓库调整）：
+
+```bash
+scp -r xtark/scripts xtark@192.168.1.169:~/ros_ws/
+ssh xtark@192.168.1.169 'chmod +x ~/ros_ws/scripts/run_xtark.sh'
+```
+
+一键后台启动（先 bringup，再 json 适配，日志在 `~/xtark_logs/`）：
+
+```bash
+~/ros_ws/scripts/run_xtark.sh start
+```
+
+查看状态 / 日志 / 停止：
+
+```bash
+~/ros_ws/scripts/run_xtark.sh status
+~/ros_ws/scripts/run_xtark.sh logs
+~/ros_ws/scripts/run_xtark.sh stop
+```
+
+需要两个前台终端时（与原先手工命令等价）：
+
+```bash
+# 终端 1
+~/ros_ws/scripts/run_xtark.sh bringup
+
+# 终端 2
+~/ros_ws/scripts/run_xtark.sh json
+```
+
+在 Windows 上改过脚本后，用 LF 重新生成再复制：
+
+```bash
+python xtark/scripts/gen_run_xtark_sh.py
+```
+
+手工启动（无脚本时）：
 
 ```bash
 roslaunch xtark_driver xtark_bringup.launch
-```
-
-再启动 JSON 适配：
-
-```bash
 roslaunch xtark_json_bridge json_base_adapter.launch
 ```
 

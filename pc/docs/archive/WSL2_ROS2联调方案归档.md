@@ -2,16 +2,17 @@
 
 ## 1. 目的
 
-VMware 中直接接 USB 深度相机和 2D 雷达存在效率和网络问题，因此 USB 传感器改接 RK3568。PC 侧使用 WSL2 作为 ROS2 x86 开发和联调中心。
+VMware 中直接接 USB 深度相机和 2D 雷达存在效率和网络问题，因此 USB 传感器改接 RK3568。PC 侧统一使用 WSL2 作为 ROS2 x86 开发和联调中心，`pc/qt_client` 是唯一日常入口。
 
 当前主线：
 
 ```text
 WSL2 (PC 联调中心)
+  运行 pc/qt_client
   订阅 RK3568 ROS2 /scan
   TCP 接收 xtark odom_base / base_status
   TCP 发送 xtark cmd_vel
-  后续运行 RViz2 / slam_toolbox
+  GUI 启停 RViz2 / slam_toolbox
 
 RK3568
   只负责 Astra / RPLidar 等 USB 传感器采集
@@ -57,11 +58,20 @@ xtark JSON 控制和状态链路已通；
 
 | 设备 | 职责 |
 |------|------|
-| WSL2 / PC | ROS2 x86 开发、数据汇聚、RViz2、slam_toolbox |
+| WSL2 | 运行 `pc/qt_client`，承载 GUI、JSON、ROS2 发布、RViz2、slam_toolbox |
 | RK3568 | 传感器盒，发布 ROS2 `/scan` 和相机 topic |
 | xtark | 底盘运动、`odom_base`、`base_status`、接收 `cmd_vel` |
 
-不要把 USB 相机和雷达重新接回 WSL2。WSL2 只通过网络接收数据。
+不要把 USB 相机和雷达重新接回 WSL2。WSL2 只通过网络接收数据。也不要把 Qt GUI 放回 Windows 原生运行，避免 Windows / WSL2 两套环境分裂。
+
+统一栈可行性：
+
+```text
+RK3568 /scan 已能进入 WSL2 原生 ROS2；
+xtark JSON 8765 已能被 WSL2/PC 连接；
+WSLg 支持 PyQt5 和 RViz2 窗口；
+qt_client 可在同一进程中完成 JSON -> ROS2 /odom_base + TF。
+```
 
 ## 4. 操作顺序
 
@@ -208,11 +218,11 @@ WSL2 Mirrored + WSL2 原生 ROS2 + 防火墙放行 UDP 7400-7500
 
 ```text
 RK3568 /scan  --------------------\
-                                    -> WSL2 ROS2 -> RViz2 / slam_toolbox
+                                    -> WSL2 qt_client -> ROS2 / RViz2 / slam_toolbox
 xtark JSON odom_base / base_status /
 ```
 
-下一步需要在 WSL2 上增加一个小适配层：
+`qt_client` 负责把 JSON 反馈发布进 ROS2：
 
 ```text
 xtark JSON odom_base -> ROS2 /odom_base
@@ -234,7 +244,7 @@ base_link -> laser    来自外挂雷达安装位置，先静态发布
 |--------|------|------|
 | P0 | 前台启动 xtark `xtark_bringup` | WSL2 收到 `odom_base` |
 | P0 | 记录 `/scan` 与 `odom_base` 频率 | `/scan` 约 14 Hz，`odom_base` 连续变化 |
-| P1 | 写 WSL2 JSON -> ROS2 适配层 | WSL2 出现 `/odom_base`、`/base_status` |
+| P1 | 用 `qt_client` 发布 JSON -> ROS2 | WSL2 出现 `/odom_base`、`/base_status` |
 | P1 | 发布 TF | 有 `odom -> base_link`、`base_link -> laser` |
 | P2 | RViz2 可视化 | 同屏看到 `/scan` 和里程计 |
 | P2 | slam_toolbox 低速建图 | 手动遥控能生成初版地图 |
