@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
+
+CmdVelFn = Callable[[float, float, float], None]
 
 try:
     import rclpy
-    from geometry_msgs.msg import Quaternion, TransformStamped
+    from geometry_msgs.msg import Quaternion, TransformStamped, Twist
     from nav_msgs.msg import Odometry
     from rclpy.node import Node
     from std_msgs.msg import String
@@ -31,10 +33,19 @@ class Ros2Publisher:
 
     def __init__(
         self,
-        odom_frame: str = "odom",
-        base_frame: str = "base_link",
-        laser_frame: str = "laser",
-        laser_z: float = 0.15,
+        odom_frame: str = "odom",       # [固定] Nav2/SLAM 使用的里程计坐标系。
+        base_frame: str = "base_link",  # [固定] ROS2 侧底盘坐标系，等价承接原车 base_footprint。
+        laser_frame: str = "laser",     # [固定] RK3568 /scan 的 frame_id 应与此一致。
+        # 保持原车 xtark XAS 的雷达外参。
+        # ROS1 原厂 xtark_bringup 使用：
+        #   base_footprint -> laser: x=0.05 y=0 z=0.10 yaw=pi
+        # 当前 ROS2 桥接里，base_link 相当于 slam_toolbox/Nav2 使用的底盘坐标系。
+        # 雷达 USB 从 xtark 挪到 RK3568 不会改变物理安装位置；
+        # 只有实测传感器和底盘相对位置发生变化时，才应该修改这些值。
+        laser_x: float = 0.05,          # [固定] 原车雷达相对底盘 x 偏移，单位 m。
+        laser_y: float = 0.0,           # [固定] 原车雷达相对底盘 y 偏移，单位 m。
+        laser_z: float = 0.10,          # [固定] 原车雷达相对底盘 z 高度，单位 m。
+        laser_yaw: float = math.pi,     # [固定] 原车雷达朝向，pi 表示相对底盘旋转 180 度。
     ) -> None:
         if not _ROS2_AVAILABLE:
             raise RuntimeError("rclpy not found; source /opt/ros/humble/setup.bash")
@@ -44,10 +55,36 @@ class Ros2Publisher:
         self._odom_frame = odom_frame
         self._base_frame = base_frame
         self._odom_pub = self._node.create_publisher(Odometry, "/odom_base", 10)
+        self._odom_nav_pub = self._node.create_publisher(Odometry, "/odom", 10)
         self._status_pub = self._node.create_publisher(String, "/base_status", 2)
         self._tf_broadcaster = TransformBroadcaster(self._node)
         self._static_tf_broadcaster = StaticTransformBroadcaster(self._node)
-        self._publish_static_laser(base_frame, laser_frame, laser_z)
+        self._cmd_vel_sub = self._node.create_subscription(
+            Twist, "/cmd_vel", self._on_cmd_vel, 10
+        )
+        self._nav_cmd_enabled = False
+        self._cmd_vel_callback: Optional[CmdVelFn] = None
+        self._last_nav_cmd: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+        self._publish_static_laser(
+            base_frame, laser_frame, laser_x, laser_y, laser_z, laser_yaw
+        )
+
+    def set_nav_cmd_enabled(self, enabled: bool) -> None:
+        self._nav_cmd_enabled = enabled
+        if not enabled:
+            self._last_nav_cmd = (0.0, 0.0, 0.0)
+
+    def set_cmd_vel_callback(self, callback: Optional[CmdVelFn]) -> None:
+        self._cmd_vel_callback = callback
+
+    def _on_cmd_vel(self, msg: Twist) -> None:
+        if not self._nav_cmd_enabled or self._cmd_vel_callback is None:
+            return
+        lx = float(msg.linear.x)
+        ly = float(msg.linear.y)
+        az = float(msg.angular.z)
+        self._last_nav_cmd = (lx, ly, az)
+        self._cmd_vel_callback(lx, ly, az)
 
     def spin_once(self) -> None:
         rclpy.spin_once(self._node, timeout_sec=0)
@@ -66,14 +103,22 @@ class Ros2Publisher:
         rclpy.shutdown()
 
     def _publish_static_laser(
-        self, base_frame: str, laser_frame: str, laser_z: float
+        self,
+        base_frame: str,
+        laser_frame: str,
+        laser_x: float,
+        laser_y: float,
+        laser_z: float,
+        laser_yaw: float,
     ) -> None:
         msg = TransformStamped()
         msg.header.stamp = self._node.get_clock().now().to_msg()
         msg.header.frame_id = base_frame
         msg.child_frame_id = laser_frame
+        msg.transform.translation.x = laser_x
+        msg.transform.translation.y = laser_y
         msg.transform.translation.z = laser_z
-        msg.transform.rotation.w = 1.0
+        msg.transform.rotation = _yaw_to_quaternion(laser_yaw)
         self._static_tf_broadcaster.sendTransform(msg)
 
     def _publish_odom(self, msg: Dict[str, Any]) -> None:
@@ -93,6 +138,7 @@ class Ros2Publisher:
         odom.twist.twist.linear.y = float(msg.get("linear_y", 0.0))
         odom.twist.twist.angular.z = float(msg.get("angular_z", 0.0))
         self._odom_pub.publish(odom)
+        self._odom_nav_pub.publish(odom)
 
         tf_msg = TransformStamped()
         tf_msg.header.stamp = stamp

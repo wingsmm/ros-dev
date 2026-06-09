@@ -75,7 +75,14 @@ class JsonTcpClient:
         self._emit_connection(False, "已断开")
         self._emit_log("DISCONNECT")
 
-    def send_cmd_vel(self, linear_x: float, linear_y: float, angular_z: float) -> bool:
+    def send_cmd_vel(
+        self,
+        linear_x: float,
+        linear_y: float,
+        angular_z: float,
+        *,
+        log_tx: bool = True,
+    ) -> bool:
         payload = {
             "type": "cmd_vel",
             "seq": self._seq,
@@ -101,7 +108,8 @@ class JsonTcpClient:
             return False
         self.last_send_time = time.time()
         self.last_sent_cmd = (linear_x, linear_y, angular_z)
-        self._emit_log("TX " + line.strip())
+        if log_tx:
+            self._emit_log("TX " + line.strip())
         return True
 
     def control_state(self) -> str:

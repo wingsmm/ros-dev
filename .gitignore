@@ -53,6 +53,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# qt_client 本地存图输出（联调产物）
+pc/qt_client/maps/*
+!pc/qt_client/maps/.gitkeep
+
 # ===== Secrets / local config =====
 .env
 .env.*

@@ -1,0 +1,252 @@
+# Nav2 参数：xtark 麦轮底盘 + RK3568 /scan + xtark JSON /odom。
+# 标记说明：
+# [固定] 坐标系/话题/硬件外参约定，硬件位置没变时不要改。
+# [可调] 算法效果参数，可根据定位/导航效果调整。
+# [待实测] 需要用真机尺寸、速度、雷达数据确认。
+# [保守] 为真机初测偏安全的限制值，稳定后可优化。
+#
+# 硬件前提：
+# - 雷达/深度相机物理安装位置不变。
+# - USB 从 xtark 挪到 RK3568 不改变 TF/外参。
+# - 重点验证 /scan frame_id=laser、odom->base_link、base_link->laser。
+# 安装依赖：sudo apt install ros-humble-nav2-bringup
+
+amcl:
+  ros__parameters:
+    alpha1: 0.2                         # [可调] 旋转导致旋转误差的噪声系数。
+    alpha2: 0.2                         # [可调] 平移导致旋转误差的噪声系数。
+    alpha3: 0.2                         # [可调] 平移导致平移误差的噪声系数。
+    alpha4: 0.2                         # [可调] 旋转导致平移误差的噪声系数。
+    alpha5: 0.2                         # [可调] 全向/横移运动误差系数，麦轮底盘需要保留。
+    base_frame_id: "base_link"          # [固定] qt_client 发布的底盘坐标系。
+    beam_skip_distance: 0.5             # [可调] beam skip 距离阈值。
+    beam_skip_error_threshold: 0.9      # [可调] beam skip 错误比例阈值。
+    beam_skip_threshold: 0.3            # [可调] beam skip 启用比例阈值。
+    do_beamskip: false                  # [保守] 先关闭 beam skip，避免掩盖雷达/地图不匹配问题。
+    global_frame_id: "map"              # [固定] 全局地图坐标系。
+    lambda_short: 0.1                   # [可调] 激光短读数模型参数。
+    laser_likelihood_max_dist: 2.0      # [可调] 障碍似然场最大影响距离。
+    laser_max_range: 12.0               # [待实测] AMCL 使用的雷达最大距离。
+    laser_min_range: 0.0                # [待实测] AMCL 使用的雷达最小距离。
+    laser_model_type: "likelihood_field" # [保守] 常用 2D 雷达定位模型。
+    max_beams: 60                       # [可调] AMCL 使用的激光束数量；越大越准也越耗 CPU。
+    max_particles: 2000                 # [可调] 最大粒子数；定位不稳可增大。
+    min_particles: 500                  # [可调] 最小粒子数；CPU 紧张可降低。
+    odom_frame_id: "odom"               # [固定] qt_client 发布给 Nav2 的里程计坐标系。
+    pf_err: 0.05                        # [可调] 粒子滤波误差目标。
+    pf_z: 0.99                          # [可调] 粒子滤波置信度。
+    recovery_alpha_fast: 0.0            # [保守] 快速恢复参数；初测保持关闭。
+    recovery_alpha_slow: 0.0            # [保守] 慢速恢复参数；初测保持关闭。
+    resample_interval: 1                # [可调] 粒子重采样间隔。
+    robot_model_type: "nav2_amcl::OmniMotionModel" # [固定] 麦轮/全向底盘模型。
+    save_pose_rate: 0.5                 # [可调] 保存 AMCL 位姿频率。
+    sigma_hit: 0.2                      # [可调] 激光命中模型标准差。
+    tf_broadcast: true                  # [固定] AMCL 发布 map->odom。
+    transform_tolerance: 1.0            # [保守] TF 时间容忍度，真机延迟时可略增。
+    update_min_a: 0.2                   # [可调] 旋转超过该值才更新定位。
+    update_min_d: 0.15                  # [可调] 平移超过该值才更新定位。
+    z_hit: 0.5                          # [可调] 激光命中权重。
+    z_max: 0.05                         # [可调] 最大量程读数权重。
+    z_rand: 0.5                         # [可调] 随机读数权重。
+    z_short: 0.05                       # [可调] 短读数权重。
+    scan_topic: scan                    # [固定] AMCL 订阅的雷达话题，等价 /scan。
+
+bt_navigator:
+  ros__parameters:
+    global_frame: map                   # [固定] 导航全局坐标系。
+    robot_base_frame: base_link         # [固定] 机器人底盘坐标系。
+    odom_topic: /odom                   # [固定] Nav2 使用的里程计话题。
+    bt_loop_duration: 10                # [保守] 行为树循环周期 ms。
+    default_server_timeout: 20          # [保守] 行为树服务默认超时 s。
+    navigators: ["navigate_to_pose", "navigate_through_poses"] # [固定] 启用单点/多点导航能力。
+    navigate_to_pose:
+      plugin: "nav2_bt_navigator/NavigateToPoseNavigator" # [固定] 单目标点导航插件。
+    navigate_through_poses:
+      plugin: "nav2_bt_navigator/NavigateThroughPosesNavigator" # [固定] 多目标点导航插件。
+
+controller_server:
+  ros__parameters:
+    controller_frequency: 20.0          # [保守] 局部控制频率。
+    min_x_velocity_threshold: 0.001     # [保守] x 速度小于该值视为 0。
+    min_y_velocity_threshold: 0.001     # [保守] y 速度小于该值视为 0，麦轮需要保留 y。
+    min_theta_velocity_threshold: 0.001 # [保守] 角速度小于该值视为 0。
+    failure_tolerance: 0.3              # [可调] 控制失败容忍时间。
+    progress_checker_plugin: "progress_checker" # [固定] 进度检查插件名。
+    goal_checker_plugins: ["general_goal_checker"] # [固定] 到点检查插件列表。
+    controller_plugins: ["FollowPath"]  # [固定] 局部规划/跟踪插件列表。
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker" # [固定] 简单进度检查器。
+      required_movement_radius: 0.5     # [可调] 规定时间内至少移动距离。
+      movement_time_allowance: 10.0     # [可调] 判断卡住前的允许时间。
+    general_goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker" # [固定] 简单目标检查器。
+      stateful: true                    # [保守] 接近目标后保持状态，减少抖动。
+      xy_goal_tolerance: 0.15           # [可调] 目标点位置容差。
+      yaw_goal_tolerance: 0.25          # [可调] 目标朝向容差。
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner" # [固定] DWB 局部规划器。
+      debug_trajectory_details: false   # [可调] 调试轨迹评分时打开。
+      min_vel_x: -0.12                  # [保守] 后退最大速度。
+      max_vel_x: 0.12                   # [保守] 前进最大速度。
+      min_vel_y: -0.12                  # [保守] 左右横移最大速度，麦轮需要。
+      max_vel_y: 0.12                   # [保守] 左右横移最大速度，麦轮需要。
+      max_vel_theta: 0.35               # [保守] 最大旋转角速度。
+      min_speed_xy: 0.0                 # [保守] 最小平移速度。
+      max_speed_xy: 0.15                # [保守] 最大合成平移速度。
+      min_speed_theta: 0.0              # [保守] 最小旋转速度。
+      acc_lim_x: 0.5                    # [待实测] x 方向加速度限制。
+      acc_lim_y: 0.5                    # [待实测] y 方向加速度限制。
+      acc_lim_theta: 0.8                # [待实测] 旋转加速度限制。
+      decel_lim_x: -0.5                 # [待实测] x 方向减速度限制。
+      decel_lim_y: -0.5                 # [待实测] y 方向减速度限制。
+      decel_lim_theta: -0.8             # [待实测] 旋转减速度限制。
+      vx_samples: 15                    # [可调] x 速度采样数。
+      vy_samples: 15                    # [可调] y 速度采样数，麦轮需要。
+      vtheta_samples: 20                # [可调] 角速度采样数。
+      sim_time: 1.5                     # [可调] 局部轨迹前向模拟时间。
+      linear_granularity: 0.05          # [可调] 轨迹线性采样粒度。
+      angular_granularity: 0.025        # [可调] 轨迹角度采样粒度。
+      transform_tolerance: 0.5          # [保守] 控制器 TF 时间容忍度。
+      xy_goal_tolerance: 0.15           # [可调] DWB 目标位置容差。
+      trans_stopped_velocity: 0.05      # [可调] 小于该平移速度视为停止。
+      short_circuit_trajectory_evaluation: true # [保守] 找到足够好轨迹后提前结束评分。
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"] # [可调] DWB 轨迹评分器列表。
+      BaseObstacle.scale: 0.02          # [可调] 障碍物代价权重。
+      PathAlign.scale: 32.0             # [可调] 路径朝向对齐权重。
+      GoalAlign.scale: 24.0             # [可调] 目标朝向对齐权重。
+      PathDist.scale: 32.0              # [可调] 路径距离权重。
+      GoalDist.scale: 24.0              # [可调] 目标距离权重。
+      RotateToGoal.scale: 32.0          # [可调] 到点旋转权重。
+      RotateToGoal.slowing_factor: 5.0  # [可调] 接近目标时旋转减速系数。
+      RotateToGoal.lookahead_time: -1.0 # [保守] 使用默认前瞻时间。
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0             # [保守] 局部代价地图更新频率。
+      publish_frequency: 2.0            # [保守] 局部代价地图发布频率。
+      global_frame: odom                # [固定] 局部地图跟随 odom。
+      robot_base_frame: base_link       # [固定] 底盘坐标系。
+      rolling_window: true              # [固定] 局部地图随车滚动。
+      width: 3                          # [可调] 局部地图宽度 m。
+      height: 3                         # [可调] 局部地图高度 m。
+      resolution: 0.05                  # [可调] 局部地图分辨率 m。
+      robot_radius: 0.18                # [待实测] 圆形底盘近似半径，需按车体尺寸确认。
+      plugins: ["voxel_layer", "inflation_layer"] # [固定] 局部代价地图插件列表。
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer" # [固定] 障碍膨胀层。
+        inflation_radius: 0.35          # [可调] 障碍膨胀半径。
+        cost_scaling_factor: 3.0        # [可调] 膨胀代价衰减速度。
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer" # [固定] 使用雷达观测障碍层。
+        enabled: true                   # [固定] 启用障碍层。
+        publish_voxel_map: false        # [可调] 调试 3D voxel 时打开；当前不需要。
+        origin_z: 0.0                   # [固定] 障碍层 z 原点。
+        z_resolution: 0.05              # [可调] z 方向分辨率。
+        z_voxels: 16                    # [可调] z 方向体素数量。
+        max_obstacle_height: 2.0        # [待实测] 障碍物最大高度。
+        mark_threshold: 0               # [保守] 标记障碍阈值。
+        observation_sources: scan       # [固定] 障碍观测来源为 /scan。
+        scan:
+          topic: /scan                  # [固定] 与 SLAM/AMCL 使用同一个雷达话题。
+          max_obstacle_height: 2.0      # [待实测] scan 障碍最大高度。
+          clearing: true                # [固定] 允许雷达清除空闲区域。
+          marking: true                 # [固定] 允许雷达标记障碍物。
+          data_type: "LaserScan"        # [固定] 2D 雷达消息类型。
+          raytrace_max_range: 12.0      # [待实测] 清除障碍最大射线距离。
+          obstacle_max_range: 10.0      # [待实测] 标记障碍最大距离。
+      always_send_full_costmap: true    # [保守] 发布完整代价地图，便于 RViz 调试。
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 1.0             # [保守] 全局代价地图更新频率。
+      publish_frequency: 1.0            # [保守] 全局代价地图发布频率。
+      global_frame: map                 # [固定] 全局地图坐标系。
+      robot_base_frame: base_link       # [固定] 底盘坐标系。
+      robot_radius: 0.18                # [待实测] 与 local_costmap.robot_radius 保持一致。
+      resolution: 0.05                  # [可调] 全局代价地图分辨率。
+      track_unknown_space: true         # [保守] 未知区域保持未知，真机更安全。
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"] # [固定] 全局代价地图插件。
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer" # [固定] 使用 map_server 静态地图。
+        map_subscribe_transient_local: true # [固定] 订阅持久化地图，避免 RViz/节点后启动收不到。
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer" # [固定] 全局障碍层。
+        enabled: true                   # [固定] 启用障碍层。
+        observation_sources: scan       # [固定] 障碍观测来源为 /scan。
+        scan:
+          topic: /scan                  # [固定] 与 SLAM/AMCL 使用同一个雷达话题。
+          max_obstacle_height: 2.0      # [待实测] scan 障碍最大高度。
+          clearing: true                # [固定] 允许清除空闲区域。
+          marking: true                 # [固定] 允许标记障碍物。
+          data_type: "LaserScan"        # [固定] 2D 雷达消息类型。
+          raytrace_max_range: 12.0      # [待实测] 清除障碍最大射线距离。
+          obstacle_max_range: 10.0      # [待实测] 标记障碍最大距离。
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer" # [固定] 障碍膨胀层。
+        inflation_radius: 0.35          # [可调] 全局障碍膨胀半径。
+        cost_scaling_factor: 3.0        # [可调] 膨胀代价衰减速度。
+      always_send_full_costmap: true    # [保守] 发布完整代价地图，便于 RViz 调试。
+
+map_server:
+  ros__parameters:
+    yaml_filename: ""                   # [固定] 由 GUI/launch 传入地图 yaml，不在这里写死。
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 20.0    # [保守] 全局规划期望频率。
+    planner_plugins: ["GridBased"]      # [固定] 全局规划插件列表。
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner" # [固定] NavFn 全局规划器。
+      tolerance: 0.5                    # [可调] 目标附近可接受规划容差。
+      use_astar: false                  # [可调] 是否使用 A*；false 为 Dijkstra 风格。
+      allow_unknown: true               # [保守] 允许穿过未知区规划，需结合地图质量评估。
+
+smoother_server:
+  ros__parameters:
+    smoother_plugins: ["simple_smoother"] # [固定] 路径平滑插件列表。
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother" # [固定] 简单路径平滑器。
+      tolerance: 1.0e-10                # [可调] 平滑收敛容差。
+      max_its: 1000                     # [可调] 最大平滑迭代次数。
+      do_refinement: true               # [可调] 是否做二次细化。
+
+behavior_server:
+  ros__parameters:
+    local_costmap_topic: local_costmap/costmap_raw # [固定] 行为服务器使用的局部代价地图。
+    global_costmap_topic: global_costmap/costmap_raw # [固定] 行为服务器使用的全局代价地图。
+    cycle_frequency: 10.0               # [保守] 行为服务器循环频率。
+    behavior_plugins: ["spin", "backup", "drive_on_heading", "wait"] # [固定] 恢复/行为插件列表。
+    spin:
+      plugin: "nav2_behaviors/Spin"     # [固定] 原地旋转行为。
+    backup:
+      plugin: "nav2_behaviors/BackUp"   # [固定] 后退行为。
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading" # [固定] 沿指定方向行驶行为。
+    wait:
+      plugin: "nav2_behaviors/Wait"     # [固定] 等待行为。
+
+waypoint_follower:
+  ros__parameters:
+    loop_rate: 20                       # [保守] 路点跟随循环频率。
+    stop_on_failure: false              # [可调] 路点失败时是否停止整个任务。
+    waypoint_task_executor_plugin: "wait_at_waypoint" # [固定] 路点任务执行插件。
+    wait_at_waypoint:
+      plugin: "nav2_waypoint_follower::WaitAtWaypoint" # [固定] 路点等待插件。
+      enabled: true                     # [可调] 到路点后是否等待。
+      waypoint_pause_duration: 200      # [可调] 路点等待时间 ms。
+
+velocity_smoother:
+  ros__parameters:
+    smoothing_frequency: 20.0           # [保守] 速度平滑频率。
+    scale_velocities: false             # [保守] 不按比例缩放速度分量。
+    feedback: "OPEN_LOOP"               # [保守] 开环平滑；当前 odom 质量未充分验证。
+    max_velocity: [0.15, 0.15, 0.35]    # [保守] 最大速度 [x, y, yaw]。
+    min_velocity: [-0.15, -0.15, -0.35] # [保守] 最小速度 [x, y, yaw]。
+    max_accel: [0.5, 0.5, 0.8]          # [待实测] 最大加速度 [x, y, yaw]。
+    max_decel: [-0.5, -0.5, -0.8]       # [待实测] 最大减速度 [x, y, yaw]。
+    odom_topic: "odom"                  # [固定] 速度平滑器参考的里程计话题。
+    odom_duration: 0.1                  # [可调] odom 数据有效时间窗口。
+    deadband_velocity: [0.0, 0.0, 0.0]  # [可调] 速度死区。
+    velocity_timeout: 1.0               # [保守] 超时未收到速度指令则输出停止。

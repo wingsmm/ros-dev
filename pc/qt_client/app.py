@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
 from datetime import datetime
 from typing import Any, Dict, Set, Tuple
 
-from PyQt5.QtCore import QSettings, QTimer, Qt
+from PyQt5.QtCore import QDir, QLockFile, QSettings, QTimer, Qt
 from PyQt5.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -24,9 +25,9 @@ from PyQt5.QtWidgets import (
 from gateway.json_client import JsonClientBridge, JsonTcpClient, SEND_RATE_HZ
 from mapping.ros_stack import RosStackManager
 from ui.fonts import setup_app_font
-from ui.widgets import ControlPanel, LogPanel, StackPanel, StatusPanel
+from ui.widgets import ControlPanel, LogPanel, NavPanel, StackPanel, StatusPanel
 
-APP_TITLE = "xtark Mapping Console"
+APP_TITLE = "xtark Console"
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,6 +57,7 @@ class MainWindow(QMainWindow):
                 self._ros2_fail_reason = reason or "初始化失败"
             else:
                 self._ros2_fail_reason = ""
+                self._ros2.set_cmd_vel_callback(self._forward_nav_cmd_vel)
         else:
             self._ros2_fail_reason = "已禁用 (--no-ros)"
 
@@ -71,6 +73,8 @@ class MainWindow(QMainWindow):
         self._pressed_keys: Set[int] = set()
         self._active_velocity: Tuple[float, float, float] = (0.0, 0.0, 0.0)
         self._hold_from_button = False
+        self._nav_cmd_paused = False
+        self._cleanup_done = False
 
         self._send_timer = QTimer(self)
         self._send_timer.setInterval(int(1000 / SEND_RATE_HZ))
@@ -143,6 +147,9 @@ class MainWindow(QMainWindow):
                 getattr(self, "_ros2_fail_reason", ""),
             )
         left_layout.addWidget(self.stack_panel)
+        self.nav_panel = NavPanel()
+        self.nav_panel.setEnabled(stack_ok)
+        left_layout.addWidget(self.nav_panel)
         left_layout.addStretch(1)
         splitter.addWidget(left)
 
@@ -170,6 +177,18 @@ class MainWindow(QMainWindow):
             self.stack_panel.stop_slam.connect(lambda: self._run_stack("stop", "slam"))
             self.stack_panel.start_all.connect(lambda: self._run_stack("start", "all"))
             self.stack_panel.stop_all.connect(lambda: self._run_stack("stop", "all"))
+            self.stack_panel.save_map.connect(self._save_map)
+            self.nav_panel.start_localization.connect(self._start_localization)
+            self.nav_panel.stop_localization.connect(
+                lambda: self._stop_nav_part("localization")
+            )
+            self.nav_panel.start_navigation.connect(self._start_navigation)
+            self.nav_panel.stop_navigation.connect(
+                lambda: self._stop_nav_part("navigation")
+            )
+            self.nav_panel.start_nav_all.connect(self._start_nav_all)
+            self.nav_panel.stop_nav_all.connect(self._stop_nav_all)
+            self.nav_panel.emergency_stop.connect(self._emergency_stop)
 
     def _load_settings(self) -> None:
         host = self.settings.value("host", "192.168.1.169")
@@ -180,12 +199,16 @@ class MainWindow(QMainWindow):
         self.port_spin.setValue(port)
         self.control_panel.linear_spin.setValue(linear)
         self.control_panel.angular_spin.setValue(angular)
+        map_yaml = str(self.settings.value("map_yaml", ""))
+        if map_yaml:
+            self.nav_panel.set_map_yaml(map_yaml)
 
     def _save_settings(self) -> None:
         self.settings.setValue("host", self.host_edit.text().strip())
         self.settings.setValue("port", self.port_spin.value())
         self.settings.setValue("linear_speed", self.control_panel.linear_speed())
         self.settings.setValue("angular_speed", self.control_panel.angular_speed())
+        self.settings.setValue("map_yaml", self.nav_panel.map_yaml())
 
     def _connect(self) -> None:
         host = self.host_edit.text().strip()
@@ -220,6 +243,10 @@ class MainWindow(QMainWindow):
             self.host_edit.setEnabled(True)
             self.port_spin.setEnabled(True)
             self._send_timer.stop()
+        if self._ros2 is not None and self._stack is not None:
+            self._ros2.set_nav_cmd_enabled(
+                ok and self._stack.is_nav_running()
+            )
 
     def _on_log(self, text: str) -> None:
         stamp = datetime.now().strftime("%H:%M:%S")
@@ -254,8 +281,117 @@ class MainWindow(QMainWindow):
             return
         self.stack_panel.set_rviz_running(self._stack.is_running("rviz2"))
         self.stack_panel.set_slam_running(self._stack.is_running("slam"))
+        nav_active = self._stack.is_nav_running()
+        if not nav_active:
+            self._nav_cmd_paused = False
+        self.nav_panel.set_localization_running(self._stack.is_running("localization"))
+        self.nav_panel.set_navigation_running(self._stack.is_running("navigation"))
+        self.nav_panel.set_nav_active(nav_active)
+        self._set_manual_control_enabled(not nav_active)
+        if self._ros2 is not None:
+            self._ros2.set_nav_cmd_enabled(
+                nav_active and self.client.connected and not self._nav_cmd_paused
+            )
+
+    def _set_manual_control_enabled(self, enabled: bool) -> None:
+        self.control_panel.setEnabled(enabled)
+
+    def _forward_nav_cmd_vel(
+        self, linear_x: float, linear_y: float, angular_z: float
+    ) -> None:
+        if not self.client.connected:
+            return
+        self.client.send_cmd_vel(
+            linear_x, linear_y, angular_z, log_tx=False
+        )
+
+    def _start_localization(self) -> None:
+        if self._stack is None:
+            return
+        ok, detail = self._stack.start_localization(self.nav_panel.map_yaml())
+        if ok:
+            self._nav_cmd_paused = False
+            self.nav_panel.set_map_yaml(detail)
+            self._save_settings()
+        else:
+            QMessageBox.warning(self, "启动定位", detail)
+        self._refresh_stack_status()
+
+    def _start_navigation(self) -> None:
+        if self._stack is None:
+            return
+        if not self._stack.is_running("localization"):
+            QMessageBox.warning(self, "启动 Nav2", "请先启动定位。")
+            return
+        self._nav_cmd_paused = False
+        if not self._stack.start_navigation():
+            QMessageBox.warning(self, "启动 Nav2", "启动失败，见日志面板。")
+        self._refresh_stack_status()
+
+    def _start_nav_all(self) -> None:
+        if self._stack is None:
+            return
+        if not self.client.connected:
+            QMessageBox.warning(self, "启动导航栈", "请先连接 xtark。")
+            return
+        ok, detail = self._stack.start_nav_all(self.nav_panel.map_yaml())
+        if ok:
+            self._nav_cmd_paused = False
+            self.nav_panel.set_map_yaml(detail)
+            self._save_settings()
+            if not self._stack.is_running("rviz2"):
+                self._stack.start_rviz()
+        else:
+            QMessageBox.warning(self, "启动导航栈", detail)
+        self._refresh_stack_status()
+
+    def _stop_nav_part(self, name: str) -> None:
+        if self._stack is None:
+            return
+        if name == "navigation":
+            self._stack.cancel_navigation()
+        self._stack.stop(name)
+        self._stop_motion()
+        self._refresh_stack_status()
+
+    def _stop_nav_all(self) -> None:
+        if self._stack is None:
+            return
+        self._nav_cmd_paused = False
+        self._stack.cancel_navigation()
+        self._stack.stop_nav()
+        self._stop_motion()
+        self._refresh_stack_status()
+
+    def _emergency_stop(self) -> None:
+        self._pressed_keys.clear()
+        self._hold_from_button = False
+        self._active_velocity = (0.0, 0.0, 0.0)
+        self._nav_cmd_paused = True
+        if self._ros2 is not None:
+            self._ros2.set_nav_cmd_enabled(False)
+        if self.client.connected:
+            self.client.send_cmd_vel(0.0, 0.0, 0.0)
+        if self._stack is not None:
+            self._stack.cancel_navigation()
+
+    def _save_map(self) -> None:
+        if self._stack is None:
+            return
+        ok, message = self._stack.save_map(self.stack_panel.map_name())
+        if ok:
+            QMessageBox.information(self, "保存地图", message)
+            for line in message.splitlines():
+                if line.endswith(".yaml"):
+                    self.nav_panel.set_map_yaml(line)
+                    self._save_settings()
+                    break
+        else:
+            QMessageBox.warning(self, "保存地图", message)
 
     def _on_velocity_from_button(self, lx: float, ly: float, az: float) -> None:
+        if self._stack is not None and self._stack.is_nav_running():
+            return
         self._hold_from_button = True
         self._active_velocity = (lx, ly, az)
         self._ensure_send_timer()
@@ -332,7 +468,10 @@ class MainWindow(QMainWindow):
             return
         key = event.key()
         if key in (Qt.Key_K, Qt.Key_Space):
-            self._stop_motion()
+            self._emergency_stop()
+            event.accept()
+            return
+        if self._stack is not None and self._stack.is_nav_running():
             event.accept()
             return
         if key in (
@@ -372,7 +511,10 @@ class MainWindow(QMainWindow):
             return
         super().keyReleaseEvent(event)
 
-    def closeEvent(self, event):
+    def cleanup(self) -> None:
+        if self._cleanup_done:
+            return
+        self._cleanup_done = True
         if hasattr(self, "_ros_timer"):
             self._ros_timer.stop()
         if hasattr(self, "_stack_timer"):
@@ -383,9 +525,15 @@ class MainWindow(QMainWindow):
         self._stop_motion()
         self.client.disconnect(send_stop=False)
         if self._stack is not None:
+            self._stack.cancel_navigation()
             self._stack.stop_all()
         if self._ros2 is not None:
+            self._ros2.set_nav_cmd_enabled(False)
+        if self._ros2 is not None:
             self._ros2.shutdown()
+
+    def closeEvent(self, event):
+        self.cleanup()
         super().closeEvent(event)
 
 
@@ -395,9 +543,24 @@ def main() -> int:
     app.setApplicationName(APP_TITLE)
     app.setApplicationDisplayName(APP_TITLE)
     setup_app_font(app)
+    lock = QLockFile(QDir.tempPath() + "/xtark_console.lock")
+    lock.setStaleLockTime(0)
+    if not lock.tryLock(100):
+        QMessageBox.warning(None, APP_TITLE, "xtark Console is already running.")
+        return 1
     window = MainWindow(enable_ros2=not args.no_ros)
+    app.aboutToQuit.connect(window.cleanup)
+    signal.signal(signal.SIGINT, lambda *_args: window.close())
+    signal.signal(signal.SIGTERM, lambda *_args: window.close())
+    signal_timer = QTimer()
+    signal_timer.setInterval(500)
+    signal_timer.timeout.connect(lambda: None)
+    signal_timer.start()
     window.show()
-    return app.exec_()
+    result = app.exec_()
+    signal_timer.stop()
+    lock.unlock()
+    return result
 
 
 if __name__ == "__main__":

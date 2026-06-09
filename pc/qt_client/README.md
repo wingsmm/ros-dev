@@ -2,8 +2,8 @@
 
 `qt_client` 是 WSL2 统一栈的日常入口。它同时承担两个角色：
 
-- GUI 程序：连接、状态显示、遥控、建图栈启停。
-- ROS 网关：把 xtark TCP JSON 转成 ROS2 topic / TF，并接入 RK3568 `/scan` 给 slam_toolbox。
+- GUI 程序：连接、状态显示、遥控、建图栈 / 导航栈启停。
+- ROS 网关：JSON ↔ ROS2（`/odom_base`、`/odom`、TF、`/cmd_vel` → JSON）。
 
 ## 依赖
 
@@ -21,10 +21,14 @@ source /opt/ros/humble/setup.bash
 export ROS_DOMAIN_ID=0
 ```
 
-建图栈依赖：
+ROS 栈依赖：
 
 ```bash
-sudo apt-get install -y ros-humble-rviz2 ros-humble-slam-toolbox
+sudo apt-get install -y \
+  ros-humble-rviz2 \
+  ros-humble-slam-toolbox \
+  ros-humble-nav2-map-server \
+  ros-humble-nav2-bringup
 ```
 
 ## 启动
@@ -62,6 +66,16 @@ ros2 run tf2_ros tf2_echo base_link laser
 
 5. 检查通过后，在 GUI 中启动 RViz2 / SLAM。
 6. 真机低速小范围移动，先验证 `/map`、TF 和雷达方向。
+7. SLAM 运行中点击「保存地图」，输出到 `maps/<名称>.pgm` 与 `.yaml`（名称留空则自动带时间戳）。
+
+### 导航流程（已有地图）
+
+1. 在「导航栈」填写 `maps/xxx.yaml`（存图后会自动填入）。
+2. 连接 xtark，确认 `/scan` 与 `/odom` 正常。
+3. 点击「一键启动导航栈」（map_server + AMCL + Nav2；会自动停 SLAM）。
+4. RViz2 中用 **2D Goal Pose** 设目标点；`Nav2` 发 `/cmd_vel`，由 `qt_client` 转 JSON 到底盘。
+5. 导航运行时手动 WASD / 按钮遥控被禁用；**急停**或 `K` / 空格取消目标并停车。
+6. 结束点「停止导航栈」。
 
 ## 当前验收状态
 
@@ -82,17 +96,20 @@ qt_client/
 ├── run.sh
 ├── gateway/
 │   ├── json_client.py      # TCP NDJSON client: xtark <-> GUI
-│   └── ros2_pub.py         # JSON feedback -> /odom_base, /base_status, TF
+│   └── ros2_pub.py         # JSON <-> /odom, /odom_base, TF, /cmd_vel
 ├── mapping/
-│   └── ros_stack.py        # RViz2 / slam_toolbox process manager
+│   └── ros_stack.py        # RViz2 / SLAM / Nav2 process manager
 ├── ui/
 │   ├── fonts.py
 │   └── widgets/
 │       ├── control_panel.py
 │       ├── stack_panel.py
+│       ├── nav_panel.py
 │       ├── status_panel.py
 │       └── log_panel.py
 ├── config/
-│   └── slam_toolbox_xtark.yaml
+│   ├── slam_toolbox_xtark.yaml
+│   └── nav2_xtark.yaml
+├── maps/                   # 存图输出目录
 └── logs/
 ```

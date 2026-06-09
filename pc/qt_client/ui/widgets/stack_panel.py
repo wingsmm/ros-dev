@@ -1,7 +1,14 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QGroupBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PyQt5.QtWidgets import (
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+)
 
 
 class StackPanel(QGroupBox):
@@ -11,6 +18,7 @@ class StackPanel(QGroupBox):
     stop_slam = pyqtSignal()
     start_all = pyqtSignal()
     stop_all = pyqtSignal()
+    save_map = pyqtSignal()
 
     def __init__(self) -> None:
         super().__init__("建图栈")
@@ -52,12 +60,26 @@ class StackPanel(QGroupBox):
         row_all.addStretch(1)
         root.addLayout(row_all)
 
+        row_save = QHBoxLayout()
+        row_save.addWidget(QLabel("地图名"))
+        self.map_name_edit = QLineEdit()
+        self.map_name_edit.setPlaceholderText("留空则自动 xtark_日期时间")
+        row_save.addWidget(self.map_name_edit, 1)
+        self.save_map_btn = QPushButton("保存地图")
+        self.save_map_btn.setEnabled(False)
+        row_save.addWidget(self.save_map_btn)
+        root.addLayout(row_save)
+
         self.rviz_start_btn.clicked.connect(self.start_rviz.emit)
         self.rviz_stop_btn.clicked.connect(self.stop_rviz.emit)
         self.slam_start_btn.clicked.connect(self.start_slam.emit)
         self.slam_stop_btn.clicked.connect(self.stop_slam.emit)
         self.all_start_btn.clicked.connect(self.start_all.emit)
         self.all_stop_btn.clicked.connect(self.stop_all.emit)
+        self.save_map_btn.clicked.connect(self.save_map.emit)
+
+    def map_name(self) -> str:
+        return self.map_name_edit.text().strip()
 
     def set_ros2_status(self, ok: bool, detail: str = "") -> None:
         if ok:
@@ -79,3 +101,4 @@ class StackPanel(QGroupBox):
         self.slam_status.setText("SLAM: 运行中" if running else "SLAM: 未运行")
         self.slam_start_btn.setEnabled(not running)
         self.slam_stop_btn.setEnabled(running)
+        self.save_map_btn.setEnabled(running)

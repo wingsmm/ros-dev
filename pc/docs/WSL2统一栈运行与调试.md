@@ -203,7 +203,8 @@ ros2 topic echo /scan --once | grep frame_id
 再慢慢转回或后退
 ```
 
-7. 结束时先全部停止，再断开并关闭窗口。
+7. SLAM 运行中、RViz 里 `/map` 已有内容时，在 GUI 点击「保存地图」（输出到 `pc/qt_client/maps/`）。
+8. 结束时先全部停止，再断开并关闭窗口。
 
 建图时重点观察：
 
@@ -263,18 +264,42 @@ ros2 run tf2_ros tf2_echo base_link laser
 sudo apt install ros-humble-slam-toolbox
 ```
 
+### 6.3.1 存图失败
+
+```bash
+sudo apt install ros-humble-nav2-map-server
+```
+
+确认 SLAM 在跑且 `/map` 有数据后再点「保存地图」。
+
 ### 6.4 RViz2 找不到
 
 ```bash
 sudo apt install ros-humble-rviz2
 ```
 
-## 7. 本阶段不做
+## 7. GUI 导航流程
 
-- WSL2 直连 USB 相机或雷达
-- Nav2 自主导航闭环
+前提：已完成建图并存入 `pc/qt_client/maps/*.yaml`。
+
+1. 连接 xtark，确认 `/scan`、`/odom`（由 JSON 桥发布）正常。
+2. 在 GUI「导航栈」选择地图 yaml，点击「一键启动导航栈」。
+3. RViz2 中 **2D Goal Pose** 设目标；Nav2 经 `/cmd_vel` → JSON 驱动底盘。
+4. 导航中禁用手动遥控；**急停** / `K` / 空格取消导航并停车。
+5. 结束点「停止导航栈」。
+
+依赖：
+
+```bash
+sudo apt install ros-humble-nav2-bringup
+```
+
+参数：`pc/qt_client/config/nav2_xtark.yaml`（麦轮低速、/scan costmap）。
+
+## 8. 仍待真机联调
+
+- WSL2 直连 USB 传感器
 - 相机点云融合
 - 修改 xtark 底盘串口或 `xtark_driver`
-- 先行解决时间戳偏差
-
-这些都等真机低速试建图结果出来后再决定。
+- `/scan` 与 JSON 里程计时间戳精细对齐（AMCL 更敏感）
+- `base_link -> laser` 外参实测

@@ -1,27 +1,32 @@
 slam_toolbox:
   ros__parameters:
-    use_sim_time: false
-    mode: mapping
+    # 标记说明：
+    # [固定] 坐标系/话题约定，硬件位置没变时不要改。
+    # [可调] 算法效果参数，建图质量不好时可调整。
+    # [保守] 真机稳定优先的默认值，确认稳定后再优化。
 
-    odom_frame: odom
-    map_frame: map
-    base_frame: base_link
-    scan_topic: /scan
+    use_sim_time: false                 # [固定] 真机使用系统时间，不使用仿真时间。
+    mode: mapping                       # [固定] 启动在线建图模式。
 
-    solver_plugin: solver_plugins::CeresSolver
-    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY
-    ceres_preconditioner: SCHUR_JACOBI
-    ceres_trust_strategy: LEVENBERG_MARQUARDT
-    ceres_dogleg_type: TRADITIONAL_DOGLEG
-    ceres_loss_function: None
+    odom_frame: odom                    # [固定] qt_client 发布的里程计坐标系。
+    map_frame: map                      # [固定] SLAM 输出的地图坐标系。
+    base_frame: base_link               # [固定] qt_client 发布的底盘坐标系。
+    scan_topic: /scan                   # [固定] RK3568 发布的 2D 雷达话题，frame_id 应为 laser。
 
-    throttle_scans: 1
-    transform_publish_period: 0.02
-    map_update_interval: 5.0
-    resolution: 0.05
-    max_laser_range: 12.0
-    minimum_time_interval: 0.5
-    transform_timeout: 0.2
-    tf_buffer_duration: 30.0
-    stack_size_to_use: 40000000
-    enable_interactive_mode: true
+    solver_plugin: solver_plugins::CeresSolver       # [保守] 后端优化器，默认 Ceres。
+    ceres_linear_solver: SPARSE_NORMAL_CHOLESKY      # [保守] Ceres 线性求解器。
+    ceres_preconditioner: SCHUR_JACOBI               # [保守] Ceres 预条件器。
+    ceres_trust_strategy: LEVENBERG_MARQUARDT        # [保守] Ceres 信赖域策略。
+    ceres_dogleg_type: TRADITIONAL_DOGLEG            # [保守] dogleg 策略；当前策略下影响较小。
+    ceres_loss_function: None                        # [可调] 鲁棒损失函数；异常点多时可评估。
+
+    throttle_scans: 1                   # [可调] 使用每帧雷达；CPU 压力大时可增大。
+    transform_publish_period: 0.02      # [保守] map->odom 发布周期，0.02s 约 50Hz。
+    map_update_interval: 5.0            # [可调] 地图刷新间隔；越小越实时但更耗资源。
+    resolution: 0.05                    # [可调] 地图分辨率 5cm；精细地图可减小但更耗资源。
+    max_laser_range: 12.0               # [待实测] 雷达最大有效距离；应与实际雷达稳定量程匹配。
+    minimum_time_interval: 0.5          # [可调] 两次处理的最小间隔；影响建图实时性和负载。
+    transform_timeout: 0.2              # [保守] 等待 TF 的超时时间。
+    tf_buffer_duration: 30.0            # [保守] TF 缓存时长，回放/延迟排查时有用。
+    stack_size_to_use: 40000000         # [保守] slam_toolbox 栈大小，避免复杂地图栈溢出。
+    enable_interactive_mode: true       # [可调] 允许 RViz 交互式调整图优化。
