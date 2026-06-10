@@ -1,0 +1,2 @@
+include ':control_app_lib'
+project(':control_app_lib').projectDir = new File(settingsDir, '../control_app_lib')

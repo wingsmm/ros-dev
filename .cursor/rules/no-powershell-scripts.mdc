@@ -1,0 +1,36 @@
+---
+description: 禁止用 PowerShell 脚本做构建/自动化；改用 bat 或直接命令
+alwaysApply: true
+---
+
+# 禁止 PowerShell 脚本（.ps1）
+
+在本仓库中，**不得**创建、修改或执行 `.ps1` 脚本来完成构建、下载依赖、环境检查、一键编译等任务。
+
+## 原因
+
+- PowerShell 脚本在本项目多次因编码、变量展开、`$Args` 冲突、嵌套调用等问题崩溃
+- 用户明确要求不再使用此方式
+
+## 必须使用的替代方案
+
+1. **Windows 批处理**：`.bat`（首选），例如 `fetch_rosjava.bat`、`build_xtark.bat`
+2. **直接命令**：在终端逐条执行 `set JAVA_HOME=...`、`gradlew.bat assembleDebug` 等
+3. **Gradle / Make**：能用项目内构建工具解决的，不另写脚本
+
+## 禁止
+
+- 新建或恢复 `build_*.ps1`、`fetch_*.ps1` 等
+- 用 `powershell -File ...` 包装构建流程
+- 在回复中建议用户运行 `.ps1`
+
+## Android / RobotCA 编译约定
+
+- 拉 rosjava：`other/android/fetch_rosjava.bat`
+- 编译 APK：`other/android/build_xtark.bat`
+- 执行前先检查前置条件（jdk8、rosjava releases、android-25），失败则明确报错，不要盲跑
+
+## 例外
+
+- 只读查询（如 `git status`）可用终端默认 shell
+- 用户**明确要求**使用 PowerShell 的单一命令时，可用 `powershell -NoProfile -Command "..."` 单行，但不写 `.ps1` 文件

@@ -68,3 +68,22 @@ secrets.*
 # ===== Third-party ROS packages (ship via deploy/src/*.tar or packages/*.tar.gz) =====
 rk3568/deploy/src/ros2_astra_camera/
 rk3568/deploy/src/sllidar_ros2/
+
+# ===== Android / RobotCA client =====
+# Keep source, scripts, and docs under android/ for reviewable diffs.
+# Do not commit local toolchains, Maven caches, APKs, or generated outputs.
+android/tools/jdk8/
+android/tools/rosjava_mvn_repo/
+android/tools/_*/
+android/tools/*.zip
+android/tools/*.part
+
+android/**/*.apk
+android/**/build/
+android/**/.gradle/
+android/**/devel/
+android/**/install/
+android/**/log/
+android/**/local.properties
+android/**/.catkin_workspace
+android/**/.rosinstall

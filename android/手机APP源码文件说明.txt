@@ -1,0 +1,124 @@
+机器人 Android APP 源码和编译说明
+
+一、当前整理结果
+
+1. 当前独立 client 根目录：
+   D:\wingsmm\Desktop\other\android
+
+2. RobotCA 源码路径：
+   D:\wingsmm\Desktop\other\android\RobotCA-master\RobotCA-master
+
+3. 当前推荐安装包：
+   D:\wingsmm\Desktop\other\android\xtark-control-alt-debug.apk
+
+4. 当前推荐包名：
+   cn.xtark.robotca
+
+5. 原 Release 包名：
+   com.robotca.ControlApp
+
+说明：原 Release APK 和我们重新编译的 APK 不要使用同一个包名，否则安装时会互相覆盖。现在 build_robotca_super.bat 默认生成 cn.xtark.robotca，避免覆盖原版。
+
+二、推荐编译方式
+
+进入目录：
+
+   D:\wingsmm\Desktop\other\android
+
+执行：
+
+   build_robotca_super.bat
+
+这个脚本会从上到下逐项验证：
+
+1. Java：使用本目录 tools\jdk8
+2. Android SDK：使用 D:\ProgramData\Android\sdk
+3. rosjava 本地 Maven 仓库：tools\rosjava_mvn_repo
+4. RobotCA 工程结构和 appId 参数支持
+5. local.properties
+6. Gradle 编译
+7. APK 收集和 aapt 校验
+
+输出 APK：
+
+   xtark-control-alt-debug.apk
+
+如确实要生成和原 Release 同包名的 APK，才使用：
+
+   build_robotca_super.bat orig
+
+三、安装到 MuMu
+
+安装我们重新编译的非冲突版本：
+
+   deploy_mumu_alt.bat
+
+这个脚本会先卸载 cn.xtark.robotca，再安装 xtark-control-alt-debug.apk。
+
+四、为什么入口和原 Release 不完全一样
+
+原 Release 的 launcher 是：
+
+   com.robotca.ControlApp.ControlApp
+
+但当前源码直接冷启动 ControlApp 时，ROBOT_INFO 为空，会在启动时崩溃。因此当前重新编译版把 launcher 调整为：
+
+   com.robotca.ControlApp.RobotChooser
+
+这样启动后先进入机器人选择界面，再进入控制界面，至少能正常打开和测试。
+
+五、169 机器人端 Android 测试配合
+
+机器人地址：
+
+   192.168.1.169
+
+账号密码：
+
+   xtark / xtark
+
+启动机器人端 ROS master 和 Android 测试相关节点：
+
+   start_android_169.bat
+
+说明：Android/RobotCA 使用 rosjava 直接连接 ROS master。机器人端 run_android.sh 是 Android 专用独立脚本，会自己启动 roscore、xtark_bringup.launch 和 xtark_camera.launch，不依赖 run_xtark.sh，也不启动 json_base_adapter。json_base_adapter 是 Qt client 的 TCP JSON 桥，Android 测试不使用它，避免它同时发布 /cmd_vel 干扰手柄控制。
+
+查看状态和日志：
+
+   status_android_169.bat
+
+Android APP 里 ROS Master URI 使用：
+
+   http://192.168.1.169:11311
+
+六、当前保留脚本用途
+
+build_robotca_super.bat
+   RobotCA 超级编译脚本，默认生成非冲突包 cn.xtark.robotca。
+
+deploy_mumu_alt.bat
+   安装重新编译的非冲突 APK 到 MuMu。
+
+start_android_169.bat
+   远程启动 169 上的 Android 测试 ROS 环境，启动 roscore、xtark_bringup.launch 和 xtark_camera.launch，不启动 json_base_adapter。
+
+status_android_169.bat
+   查看 169 上 ROS master、/cmd_vel、/image_raw/compressed 和日志状态。
+
+run_android_xtark.sh
+   Windows 侧保存的机器人端 run_android.sh 源文件。需要时复制到 169 的 /home/xtark/ros_ws/scripts/run_android.sh。
+
+七、原始源码地址
+
+手机建图导航源码：
+https://github.com/rosjava/android_apps
+
+手机遥控源码：
+https://github.com/SCCapstone/RobotCA
+
+烟台塔克电子科技有限公司
+塔克公众号：塔克创新
+塔克ROS交流群：864199284（提供订单号入群）
+塔克官网：http://www.xtark.cn
+塔克博客：http://www.cnblogs.com/xtark/
+塔克淘宝：https://shop246676508.taobao.com
