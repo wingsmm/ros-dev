@@ -1,4 +1,4 @@
-# Android 手工控制与 SafeMode 说明
+# Android 手动控制与 SafeMode 说明
 
 本文记录 RobotCA Android 客户端在 xtark 上测试时，手工按钮或摇杆“前进不灵活”的常见原因。
 

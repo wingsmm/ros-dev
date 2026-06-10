@@ -156,4 +156,3 @@ SLAM 建图通常使用：
 
 - `GPS Map` 或 `Street Map`：现有 OSM/GPS 页面
 - `SLAM Map`：新增 `/map` 栅格地图页面
-
