@@ -60,8 +60,8 @@ public class SplashActivity extends Activity {
                 if (!Settings.canDrawOverlays(this)) {
 
                     AlertDialog.Builder builder = new AlertDialog.Builder(this);
-                    builder.setTitle("Permission Required!").setMessage("The app needs this permission " +
-                            "to run, it will now be closed.").create().show();
+                    builder.setTitle(R.string.permission_required_title)
+                            .setMessage(R.string.permission_required_message).create().show();
                     finish();
                 } else {
                     goToNextActivity(100L);

@@ -50,9 +50,9 @@ public class HelpFragment extends Fragment
             TabsAdapter mTabsAdapter = new TabsAdapter(getActivity(), mTabHost, mViewPager);
 
             // Here we load the content for each tab.
-            mTabsAdapter.addTab(mTabHost.newTabSpec("one").setIndicator("Setup"), PageOneFragment.class, null);
-            mTabsAdapter.addTab(mTabHost.newTabSpec("two").setIndicator("Using"), PageTwoFragment.class, null);
-            mTabsAdapter.addTab(mTabHost.newTabSpec("three").setIndicator("FAQ"), PageThreeFragment.class, null);
+            mTabsAdapter.addTab(mTabHost.newTabSpec("one").setIndicator(getString(R.string.help_tab_setup)), PageOneFragment.class, null);
+            mTabsAdapter.addTab(mTabHost.newTabSpec("two").setIndicator(getString(R.string.help_tab_using)), PageTwoFragment.class, null);
+            mTabsAdapter.addTab(mTabHost.newTabSpec("three").setIndicator(getString(R.string.help_tab_faq)), PageThreeFragment.class, null);
         }
 
 

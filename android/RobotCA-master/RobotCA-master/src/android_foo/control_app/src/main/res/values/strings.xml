@@ -17,6 +17,7 @@
     <string name="laser_pref_title">Laser Scan Topic</string>
     <string name="camera_pref_title">Image Topic</string>
     <string name="navsat_pref_title">GPS Topic</string>
+    <string name="preferences_title">Preferences</string>
     <string name="topic_pref_title">Topics</string>
     <string name="warning_enable_pref_title">Enable Warning System</string>
     <string name="pose_pref_title">Pose Topic</string>
@@ -101,6 +102,42 @@
     <string name="center">Center View</string>
     <string name="show_advanced_options">Show Advanced Options</string>
     <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="yes">YES</string>
+    <string name="no">NO</string>
+
+    <!-- Notification (RosActivity constructor; localized copy in zh-rCN) -->
+    <string name="notification_ticker">ROS Control</string>
+    <string name="notification_title">ROS Control</string>
+
+    <!-- Toasts and dialogs -->
+    <string name="waypoint_mode_hint">Tap twice to place or delete a waypoint. Tap and hold a waypoint to move it.</string>
+    <string name="delete_waypoint_title">Delete Waypoint</string>
+    <string name="delete_waypoint_message">Are you sure you wish to delete this way point?</string>
+    <string name="permission_required_title">Permission Required!</string>
+    <string name="permission_required_message">The app needs this permission to run, it will now be closed.</string>
+    <string name="showcase_add_robot_title">Add a Robot</string>
+    <string name="showcase_add_robot_text">Let\'s get started! You can add a robot to connect to using this button. Try adding one now.</string>
+    <string name="showcase_connect_title">Connect</string>
+    <string name="showcase_connect_text">To connect to this robot, tap its name.</string>
+    <string name="connecting_title">Connecting</string>
+    <string name="connecting_message">Connecting to %1$s (%2$s)</string>
+    <string name="cannot_connect_ros">Cannot connect to ROS. Please make sure ROS is running and that the Master URI is correct.</string>
+    <string name="invalid_master_uri">Invalid Master URI</string>
+    <string name="master_uri_required">Master URI required</string>
+    <string name="all_topics_required">All topic names are required</string>
+    <string name="robot_name_required">Robot name required</string>
+    <string name="delete_confirm_message">Delete: \'%1$s\'?</string>
+    <string name="centered_on_you">Centered on you</string>
+    <string name="centered_on_robot">Centered on the Robot</string>
+    <string name="map_tapped_message">Tapped on (%1$f,%2$f)</string>
+    <string name="help_tab_setup">Setup</string>
+    <string name="help_tab_using">Using</string>
+    <string name="help_tab_faq">FAQ</string>
+    <string name="not_set">Not Set</string>
+    <string name="connect_robot_desc">Connect to robot</string>
+    <string name="edit_robot_desc">Edit robot</string>
+    <string name="delete_robot_desc">Delete robot</string>
 
     <!-- Drawer item titles -->
     <string-array name="feature_titles">

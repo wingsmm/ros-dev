@@ -96,7 +96,7 @@ public class MapFragment extends Fragment implements MapEventsReceiver {
                 mapView.postInvalidate();
                 myLocationOverlay.disableFollowLocation();
                 mapView.postInvalidate();
-                Toast.makeText(mapView.getContext(), "Centered on you", Toast.LENGTH_SHORT).show();
+                Toast.makeText(mapView.getContext(), R.string.centered_on_you, Toast.LENGTH_SHORT).show();
                 secondMyLocationOverlay.enableFollowLocation();
                 mapView.postInvalidate();
                 return true;
@@ -109,7 +109,7 @@ public class MapFragment extends Fragment implements MapEventsReceiver {
             public void onClick(View v) {
                 secondMyLocationOverlay.disableFollowLocation();
                 mapView.postInvalidate();
-                Toast.makeText(mapView.getContext(), "Centered on the Robot", Toast.LENGTH_SHORT).show();
+                Toast.makeText(mapView.getContext(), R.string.centered_on_robot, Toast.LENGTH_SHORT).show();
                 myLocationOverlay.enableFollowLocation();
                 mapView.postInvalidate();
 
@@ -129,8 +129,9 @@ public class MapFragment extends Fragment implements MapEventsReceiver {
      */
     @Override
     public boolean singleTapConfirmedHelper(GeoPoint geoPoint) {
-        Toast.makeText(mapView.getContext(), "Tapped on (" + geoPoint.getLatitude() + "," +
-                geoPoint.getLongitude() + ")", Toast.LENGTH_LONG).show();
+        Toast.makeText(mapView.getContext(),
+                getString(R.string.map_tapped_message, geoPoint.getLatitude(), geoPoint.getLongitude()),
+                Toast.LENGTH_LONG).show();
 
         return true;
     }

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="fill_parent"
     android:layout_height="48dp"
     android:paddingTop="8dp"
@@ -24,5 +25,6 @@
         android:textSize="14sp"
         android:alpha="87"
         android:textColor="#000000"
-        android:text="Feature"/>
+        android:text=""
+        tools:text="Overview"/>
 </RelativeLayout>

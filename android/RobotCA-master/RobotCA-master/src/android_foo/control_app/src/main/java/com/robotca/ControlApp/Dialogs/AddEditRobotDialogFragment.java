@@ -148,17 +148,17 @@ public class AddEditRobotDialogFragment extends DialogFragment {
                         boolean invertAngVel = mInvertAngularVelocityCheckBox.isChecked();
 
                         if (masterUri.equals("")) {
-                            Toast.makeText(getActivity(), "Master URI required", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(getActivity(), R.string.master_uri_required, Toast.LENGTH_SHORT).show();
                         } else if (joystickTopic.equals("") || laserScanTopic.equals("") || cameraTopic.equals("")
                                 || navsatTopic.equals("") || odometryTopic.equals("") || poseTopic.equals("")) {
-                            Toast.makeText(getActivity(), "All topic names are required", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(getActivity(), R.string.all_topics_required, Toast.LENGTH_SHORT).show();
                         } else if (!name.equals("")) {
                             mListener.onAddEditDialogPositiveClick(new RobotInfo(mInfo.getId(), name,
                                     masterUri, joystickTopic, laserScanTopic, cameraTopic, navsatTopic,
                                     odometryTopic, poseTopic, reverseLaserScan, invertX, invertY, invertAngVel), mPosition);
                             dialog.dismiss();
                         } else {
-                            Toast.makeText(getActivity(), "Robot name required", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(getActivity(), R.string.robot_name_required, Toast.LENGTH_SHORT).show();
                         }
                     }
                 }).setNegativeButton(R.string.cancel, new DialogInterface.OnClickListener() {

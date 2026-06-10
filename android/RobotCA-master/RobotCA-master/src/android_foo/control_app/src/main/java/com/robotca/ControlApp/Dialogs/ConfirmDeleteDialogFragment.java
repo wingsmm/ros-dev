@@ -56,7 +56,7 @@ public class ConfirmDeleteDialogFragment extends DialogFragment {
         AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
 
         builder.setTitle(R.string.delete)
-                .setMessage("Delete: " + "'" + mItemName + "'" + "?")
+                .setMessage(getString(R.string.delete_confirm_message, mItemName))
                 .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {

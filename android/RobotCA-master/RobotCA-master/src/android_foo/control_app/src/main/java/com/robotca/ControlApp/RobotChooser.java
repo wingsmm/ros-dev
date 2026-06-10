@@ -181,8 +181,8 @@ public class RobotChooser extends AppCompatActivity implements AddEditRobotDialo
                                 .hideOnTouchOutside()
                                 .blockAllTouches()
                                 //.singleShot(0) Can use this instead of manually saving in preferences
-                                .setContentTitle("Add a Robot")
-                                .setContentText("Let's get started! You can add a robot to connect to using this button. Try adding one now.")
+                                .setContentTitle(R.string.showcase_add_robot_title)
+                                .setContentText(R.string.showcase_add_robot_text)
                                 .build();
 
                             //Get ready to show tutorial message when user adds a robot
@@ -341,8 +341,8 @@ public class RobotChooser extends AppCompatActivity implements AddEditRobotDialo
                                     .setStyle(R.style.CustomShowcaseTheme2)
                                     .hideOnTouchOutside()
                                     .blockAllTouches()
-                                    .setContentTitle("Connect")
-                                    .setContentText("To connect to this robot, tap it's name.")
+                                    .setContentTitle(R.string.showcase_connect_title)
+                                    .setContentText(R.string.showcase_connect_text)
                                     .build();
 
                             PreferenceManager

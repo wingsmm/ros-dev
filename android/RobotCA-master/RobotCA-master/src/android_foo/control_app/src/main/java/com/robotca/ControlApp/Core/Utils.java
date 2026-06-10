@@ -243,7 +243,18 @@ public class Utils {
             e.printStackTrace();
         }
 
-        return byteArrayOutputStream.toString();
+        try {
+            return byteArrayOutputStream.toString("UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            return byteArrayOutputStream.toString();
+        }
+    }
+
+    /**
+     * Loads a raw HTML resource into a WebView with UTF-8 encoding.
+     */
+    public static void loadRawHtml(android.webkit.WebView webView, Context context, int rawResId) {
+        webView.loadDataWithBaseURL(null, readText(context, rawResId), "text/html", "UTF-8", null);
     }
 
     /*

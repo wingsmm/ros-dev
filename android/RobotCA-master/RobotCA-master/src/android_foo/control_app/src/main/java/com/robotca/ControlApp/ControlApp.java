@@ -72,10 +72,10 @@ import java.util.List;
 public class ControlApp extends RosActivity implements ListView.OnItemClickListener,
         IWaypointProvider, AdapterView.OnItemSelectedListener {
 
-    /** Notification ticker for the App */
-    public static final String NOTIFICATION_TICKER = "ROS Control";
+    /** Notification ticker for the App (RosActivity requires constants in constructor) */
+    private static final String NOTIFICATION_TICKER = "ROS Control";
     /** Notification title for the App */
-    public static final String NOTIFICATION_TITLE = "ROS Control";
+    private static final String NOTIFICATION_TITLE = "ROS Control";
 
     /** The RobotInfo of the connected Robot */
     public static RobotInfo ROBOT_INFO;
@@ -784,8 +784,7 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
         invalidateOptionsMenu();
 
         if (controlMode == ControlMode.SimpleWaypoint || controlMode == ControlMode.Waypoint) {
-            Toast.makeText(this, "Tap twice to place or delete a waypoint. " +
-                    "Tap and hold a waypoint to move it.", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, R.string.waypoint_mode_hint, Toast.LENGTH_LONG).show();
         }
     }
 
@@ -871,9 +870,9 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
             final Vector3 remove = near;
 
             AlertDialog.Builder alert = new AlertDialog.Builder(ControlApp.this);
-            alert.setTitle("Delete Waypoint");
-            alert.setMessage("Are you sure you wish to delete this way point?");
-            alert.setPositiveButton("YES", new DialogInterface.OnClickListener() {
+            alert.setTitle(R.string.delete_waypoint_title);
+            alert.setMessage(R.string.delete_waypoint_message);
+            alert.setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
 
@@ -885,7 +884,7 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
                     dialog.dismiss();
                 }
             });
-            alert.setNegativeButton("NO", new DialogInterface.OnClickListener() {
+            alert.setNegativeButton(R.string.no, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
 

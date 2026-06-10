@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+</head>
+<body>
+
+<h1 style="background-color:#000044;color:white">&nbsp;常见问题</h1>
+
+<p>以下是使用本应用时的常见问题与排查建议。</p>
+
+<hr>
+
+<h3><font color="#000044">无法连接机器人？</font></h3>
+
+<h5><font color="#000044">Wi-Fi 是否同一网段？</font></h5>
+<p>手机/模拟器必须与机器人在同一局域网，否则无法访问 Master URI。</p>
+
+<h5><font color="#000044">IP 地址是否正确？</font></h5>
+<p>Master URI 应使用机器人实际 IP，例如 <b>http://192.168.1.169:11311</b>。不要用 localhost（那是机器人本机地址）。</p>
+
+<h5><font color="#000044">ROS 是否在运行？</font></h5>
+<p>确认机器人上 roscore 已启动，且 11311 端口可访问。可在 PC 上执行 <b>rosnode list</b> 验证。</p>
+
+<h5><font color="#000044">话题是否齐全？</font></h5>
+<p>添加机器人时高级选项中的话题名称需与机器人实际发布的话题一致，否则连接后部分界面无数据。</p>
+
+<hr>
+
+<h3><font color="#000044">某个界面没有画面或数据？</font></h3>
+<p>通常是对应话题没有消息。在机器人端用 <b>rostopic list</b> 和 <b>rostopic echo</b> 检查 /cmd_vel、/scan、/image_raw/compressed 等是否在发布。</p>
+
+<h3><font color="#000044">航点位置与机器人不对齐？</font></h3>
+<p>多为里程计 /odom 或位姿 /pose 数据异常。检查网络延迟，并确认机器人正在发布里程计消息。</p>
+
+<hr>
+
+<p>多数问题与网络连接或话题配置有关。建议先确认 Master URI、Wi-Fi 和 ROS 节点状态，再检查各话题名称是否与设置一致。</p>
+
+<br>
+</body>
+</html>

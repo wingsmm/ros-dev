@@ -22,7 +22,7 @@ public class PageThreeFragment extends Fragment {
         View view = inflater.inflate(R.layout.pagethree_fragment, container, false);
 
         WebView webView = (WebView) view.findViewById(R.id.faq_webview);
-        webView.loadData(Utils.readText(getActivity(), R.raw.faq), "text/html", null);
+        Utils.loadRawHtml(webView, getActivity(), R.raw.faq);
 
         return view;
     }

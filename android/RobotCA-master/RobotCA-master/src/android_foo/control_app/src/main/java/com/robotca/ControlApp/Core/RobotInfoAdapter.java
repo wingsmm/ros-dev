@@ -265,8 +265,11 @@ public class RobotInfoAdapter extends RecyclerView.Adapter<RobotInfoAdapter.View
         public Dialog onCreateDialog(Bundle savedInstanceState) {
 
             final ProgressDialog progressDialog
-                    = ProgressDialog.show(activity, "Connecting", "Connecting to "
-                    + INFO.getName() + " (" + INFO.getUri().toString() + ")", true, false);
+                    = ProgressDialog.show(activity,
+                    activity.getString(R.string.connecting_title),
+                    activity.getString(R.string.connecting_message,
+                            INFO.getName(), INFO.getUri().toString()),
+                    true, false);
 
             run();
 
@@ -291,7 +294,7 @@ public class RobotInfoAdapter extends RecyclerView.Adapter<RobotInfoAdapter.View
                 public void run() {
                     try {
                         if(!isPortOpen(INFO.getUri().getHost(), INFO.getUri().getPort(), 10000)){
-                            throw new Exception("Cannot connect to ROS. Please make sure ROS is running and that the Master URI is correct.");
+                            throw new Exception(activity.getString(R.string.cannot_connect_ros));
                         }
 
                         final Intent intent = new Intent(activity, ControlApp.class);
@@ -315,7 +318,7 @@ public class RobotInfoAdapter extends RecyclerView.Adapter<RobotInfoAdapter.View
                         activity.runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                Toast.makeText(activity, "Invalid Master URI", Toast.LENGTH_LONG).show();
+                                Toast.makeText(activity, R.string.invalid_master_uri, Toast.LENGTH_LONG).show();
                             }
                         });
                     }

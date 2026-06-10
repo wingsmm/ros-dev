@@ -23,7 +23,7 @@ public class PageOneFragment extends Fragment
         View view = inflater.inflate(R.layout.pageone_fragment, container, false);
 
         WebView webView = (WebView) view.findViewById(R.id.setup_webview);
-        webView.loadData(Utils.readText(getActivity(), R.raw.setup), "text/html", null);
+        Utils.loadRawHtml(webView, getActivity(), R.raw.setup);
 
         return view;
     }

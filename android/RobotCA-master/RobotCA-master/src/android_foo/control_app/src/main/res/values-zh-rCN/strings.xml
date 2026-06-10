@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">机器人遥控</string>
+
+    <!-- Preference titles -->
+    <string name="joy_pref_title">摇杆话题</string>
+    <string name="laser_pref_title">激光扫描话题</string>
+    <string name="camera_pref_title">图像话题</string>
+    <string name="navsat_pref_title">GPS 话题</string>
+    <string name="preferences_title">设置</string>
+    <string name="topic_pref_title">话题</string>
+    <string name="warning_enable_pref_title">启用预警系统</string>
+    <string name="pose_pref_title">位姿话题</string>
+    <string name="odometry_pref_title">里程计话题</string>
+    <string name="laser_scan_detail_pref_title">激光扫描细节</string>
+    <string name="random_walk_range_minimum_pref_title">随机游走最小距离</string>
+    <string name="warning_pref_title">预警系统</string>
+    <string name="warning_mindist_pref_title">预警距离</string>
+    <string name="warning_safemode_pref_title">安全模式</string>
+    <string name="warning_beep_pref_title">预警蜂鸣</string>
+
+    <!-- Preference summaries -->
+    <string name="topic_pref_summary">编辑默认话题名称</string>
+    <string name="warning_enable_pref_summary_off">启用预警系统以检测即将发生的碰撞</string>
+    <string name="warning_enable_pref_summary_on">禁用预警系统</string>
+    <string name="warning_pref_summary">编辑预警系统设置</string>
+    <string name="joy_pref_summary">
+        摇杆控件发布到此话题。\n期望消息类型：std_msgs/Twist\n当前值：%s
+    </string>
+    <string name="laser_pref_summary">
+        激光扫描控件订阅此话题。\n期望消息类型：sensor_msgs/LaserScan\n当前值：%s
+    </string>
+    <string name="camera_pref_summary">
+        摄像头控件订阅此话题。\n期望消息类型：sensor_msgs/CompressedImage\n当前值：%s
+    </string>
+    <string name="odometry_pref_summary">
+        应用从此话题获取里程计数据。\n期望消息类型：nav_msgs/Odometry\n当前值：%s
+    </string>
+    <string name="navsat_pref_summary">
+        应用从此话题获取 GPS 数据。\n期望消息类型：navsat/fix\n当前值：%s
+    </string>
+    <string name="pose_pref_summary">应用从此话题获取位姿信息。
+        \n期望消息类型：geometry_msgs/Pose
+        \n当前值：%s
+    </string>
+    <string name="laser_scan_detail_pref_summary">设置激光扫描可视化的细节级别。
+        数值越大绘制的激光点越多\n当前值：%s
+    </string>
+    <string name="random_walk_range_minimum_pref_summary">随机游走算法在感知到此距离时停止并转向\n当前值：%s</string>
+    <string name="warning_mindist_pref_summary">全速行驶时的最小安全距离\n当前值：%s</string>
+    <string name="warning_safemode_pref_summary_off">启用以防止机器人撞墙</string>
+    <string name="warning_safemode_pref_summary_on">禁用后允许机器人撞墙</string>
+    <string name="warning_beep_pref_summary_off">启用预警蜂鸣</string>
+    <string name="warning_beep_pref_summary_on">禁用预警蜂鸣</string>
+
+    <!-- Robot chooser -->
+    <string name="add_robot">添加机器人</string>
+    <string name="edit_robot">编辑机器人</string>
+    <string name="add_edit_robot">添加/编辑机器人</string>
+    <string name="robot_name_hint">机器人名称</string>
+    <string name="no_robots">暂无机器人，请添加一个！</string>
+
+    <string-array name="chooser_titles">
+        <item>选择机器人</item>
+        <item>帮助</item>
+        <item>关于</item>
+    </string-array>
+
+    <!-- Buttons -->
+    <string name="delete">删除</string>
+    <string name="stop">停止</string>
+    <string name="start">启动</string>
+    <string name="center">居中视图</string>
+    <string name="show_advanced_options">显示高级选项</string>
+    <string name="ok">确定</string>
+    <string name="cancel">取消</string>
+    <string name="yes">是</string>
+    <string name="no">否</string>
+
+    <string-array name="feature_titles">
+        <item>选择机器人</item>
+        <item>总览</item>
+        <item>摄像头</item>
+        <item>机器人</item>
+        <item>地图</item>
+        <item>设置</item>
+        <item>关于</item>
+    </string-array>
+
+    <string name="drawer_open">打开菜单</string>
+    <string name="drawer_close">关闭菜单</string>
+
+    <!-- UI -->
+    <string name="percent_string">%1$d%%</string>
+    <string name="speed_string">%1$5.2f m/s</string>
+    <string name="turnrate_string">%1$5.2f \u00B0/s</string>
+    <string name="location_string">(%1$14s, %2$14s)</string>
+    <string name="map_clear_string">清除航点</string>
+    <string name="map_lock_camera_string">锁定视角</string>
+    <string name="control_mode">控制模式：</string>
+    <string name="robot_name">机器人名称：</string>
+    <string name="master_uri">Master URI：</string>
+    <string name="joystick_topic_prompt">摇杆话题：</string>
+    <string name="camera_topic_prompt">摄像头话题：</string>
+    <string name="laserscan_topic_prompt">激光扫描话题：</string>
+    <string name="navsat_topic_prompt">GPS 话题：</string>
+    <string name="odometry_topic_prompt">里程计话题：</string>
+    <string name="pose_topic_prompt">位姿话题：</string>
+
+    <string name="wifi_strength_content_description">Wi-Fi 信号强度</string>
+    <string name="gps_icon_content_description">GPS 图标</string>
+    <string name="speedometer_icon_content_description">速度表图标</string>
+
+    <string name="tilt_calibration_message">点击摇杆可重置校准</string>
+
+    <string name="use_tilt_sensor_string">使用倾斜</string>
+    <string name="joystick_control">摇杆控制</string>
+    <string name="motion_control">倾斜控制</string>
+    <string name="simple_waypoint_control">简单航点控制</string>
+    <string name="waypoint_control">航点控制</string>
+    <string name="random_walk">随机游走</string>
+
+    <string-array name="motion_plans">
+        <item>摇杆</item>
+        <item>倾斜</item>
+        <item>简单航点</item>
+        <item>航点</item>
+        <item>随机游走</item>
+    </string-array>
+
+    <string name="noCamera">无摄像头</string>
+    <string name="prefs_advanced_control_settings_summary">编辑高级控制设置</string>
+    <string name="advanced_controls__pref_title">高级控制</string>
+    <string name="reverse_angle_reading_summary_off"><![CDATA[反转角度读数（最小→最大角）]]></string>
+    <string name="reverse_angle_reading_summary_on"><![CDATA[反转角度读数（最大→最小角）]]></string>
+    <string name="reverse_angle_reading_title">反转激光扫描</string>
+    <string name="invert_angular_velocity_summary">反转角速度驱动方向</string>
+    <string name="invert_x_axis_summary">反转 X 轴驱动方向</string>
+    <string name="invert_x_axis_title">反转 X 轴</string>
+    <string name="invert_angular_velocity_title">反转角速度</string>
+    <string name="invert_y_axis_title">反转 Y 轴</string>
+    <string name="invert_y_axis_summary">反转 Y 轴驱动方向</string>
+    <string name="reverse_laser_scan_prompt">反转激光扫描：</string>
+    <string name="invert_x_axis_prompt">反转 X 轴：</string>
+    <string name="invert_y_axis_prompt">反转 Y 轴：</string>
+    <string name="invert_angular_velocity_prompt">反转角速度：</string>
+
+    <!-- Notification -->
+    <string name="notification_ticker">ROS 遥控</string>
+    <string name="notification_title">ROS 遥控</string>
+
+    <!-- Toasts and dialogs -->
+    <string name="waypoint_mode_hint">双击放置或删除航点，长按航点可拖动。</string>
+    <string name="delete_waypoint_title">删除航点</string>
+    <string name="delete_waypoint_message">确定要删除此航点吗？</string>
+    <string name="permission_required_title">需要权限</string>
+    <string name="permission_required_message">应用需要此权限才能运行，即将退出。</string>
+    <string name="showcase_add_robot_title">添加机器人</string>
+    <string name="showcase_add_robot_text">开始使用吧！点击此按钮添加要连接的机器人。</string>
+    <string name="showcase_connect_title">连接</string>
+    <string name="showcase_connect_text">点击机器人名称即可连接。</string>
+    <string name="connecting_title">正在连接</string>
+    <string name="connecting_message">正在连接 %1$s（%2$s）</string>
+    <string name="cannot_connect_ros">无法连接 ROS。请确认 ROS 已运行且 Master URI 正确。</string>
+    <string name="invalid_master_uri">Master URI 无效</string>
+    <string name="master_uri_required">请填写 Master URI</string>
+    <string name="all_topics_required">请填写所有话题名称</string>
+    <string name="robot_name_required">请填写机器人名称</string>
+    <string name="delete_confirm_message">删除「%1$s」？</string>
+    <string name="centered_on_you">已居中到当前位置</string>
+    <string name="centered_on_robot">已居中到机器人</string>
+    <string name="map_tapped_message">点击坐标（%1$f，%2$f）</string>
+    <string name="help_tab_setup">配置</string>
+    <string name="help_tab_using">使用</string>
+    <string name="help_tab_faq">常见问题</string>
+    <string name="not_set">未设置</string>
+    <string name="connect_robot_desc">连接机器人</string>
+    <string name="edit_robot_desc">编辑机器人</string>
+    <string name="delete_robot_desc">删除机器人</string>
+
+</resources>

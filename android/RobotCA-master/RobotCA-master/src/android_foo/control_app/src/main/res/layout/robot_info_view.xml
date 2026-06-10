@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <android.support.v7.widget.CardView
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -23,14 +24,16 @@
                 android:id="@+id/robot_name_text_view"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Test1"
+                android:text=""
+                tools:text="xtark"
                 android:textSize="20dp"/>
 
             <TextView
                 android:id="@+id/master_uri_text_view"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Test2"/>
+                android:text=""
+                tools:text="http://192.168.1.169:11311"/>
         </LinearLayout>
         <LinearLayout
             android:layout_alignParentEnd="true"
@@ -40,17 +43,20 @@
             <ImageView
                 android:src="@drawable/wifi_0"
                 android:id="@+id/robot_wifi_image"
+                android:contentDescription="@string/connect_robot_desc"
                 android:layout_gravity="center"
                 android:layout_width="30dp"
                 android:layout_height="30dp">
             </ImageView>
             <ImageButton
                 android:id="@+id/robot_edit_button"
+                android:contentDescription="@string/edit_robot_desc"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:src="@drawable/ic_edit_black_24dp"/>
             <ImageButton
                 android:id="@+id/robot_delete_button"
+                android:contentDescription="@string/delete_robot_desc"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:src="@drawable/ic_delete_black_24dp"/>

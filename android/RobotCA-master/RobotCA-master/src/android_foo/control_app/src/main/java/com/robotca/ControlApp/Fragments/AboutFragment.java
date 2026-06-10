@@ -32,7 +32,7 @@ public class AboutFragment extends Fragment {
         @SuppressLint("InflateParams") View view = inflater.inflate(R.layout.fragment_about, null);
 
         WebView webView = (WebView) view.findViewById(R.id.abouttxt);
-        webView.loadData(Utils.readText(getActivity(), R.raw.about), "text/html", null);
+        Utils.loadRawHtml(webView, getActivity(), R.raw.about);
 
         return view;
     }

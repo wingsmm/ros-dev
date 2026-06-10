@@ -22,7 +22,7 @@ public class PageTwoFragment extends Fragment {
         View view = inflater.inflate(R.layout.pagetwo_fragment, container, false);
 
         WebView webView = (WebView) view.findViewById(R.id.using_webview);
-        webView.loadData(Utils.readText(getActivity(), R.raw.using), "text/html", null);
+        Utils.loadRawHtml(webView, getActivity(), R.raw.using);
 
         return view;
     }

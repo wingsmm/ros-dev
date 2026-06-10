@@ -6,6 +6,8 @@ import android.preference.EditTextPreference;
 import android.preference.PreferenceManager;
 import android.util.AttributeSet;
 
+import com.robotca.ControlApp.R;
+
 /**
  * Improved EditTextPreference that shows the current value of the preference.
  * Use %s or %1$s in the summary text to replace it with the preference's current value.
@@ -27,7 +29,7 @@ public class BetterEditTextPreference extends EditTextPreference {
         SUMMARY = getSummary().toString();
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        setDisplayValue(prefs.getString(getKey(), "Not Set"));
+        setDisplayValue(prefs.getString(getKey(), context.getString(R.string.not_set)));
     }
 
     @Override
