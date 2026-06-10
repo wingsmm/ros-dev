@@ -50,6 +50,7 @@ import com.robotca.ControlApp.Fragments.AboutFragment;
 import com.robotca.ControlApp.Fragments.CameraViewFragment;
 import com.robotca.ControlApp.Fragments.HUDFragment;
 import com.robotca.ControlApp.Fragments.JoystickFragment;
+import com.robotca.ControlApp.Fragments.ManualControlFragment;
 import com.robotca.ControlApp.Fragments.LaserScanFragment;
 import com.robotca.ControlApp.Fragments.MapFragment;
 import com.robotca.ControlApp.Fragments.OverviewFragment;
@@ -93,6 +94,8 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
 
     // Fragment for the Joystick
     private JoystickFragment joystickFragment;
+    // Fragment for hold-to-drive manual buttons
+    private ManualControlFragment manualControlFragment;
     // Fragment for the HUD
     private HUDFragment hudFragment;
 
@@ -251,6 +254,8 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
 
         // Find the Joystick fragment
         joystickFragment = (JoystickFragment) getFragmentManager().findFragmentById(R.id.joystick_fragment);
+        manualControlFragment =
+                (ManualControlFragment) getFragmentManager().findFragmentById(R.id.manual_control_fragment);
 
         // Create the RobotController
         controller = new RobotController(this);
@@ -303,6 +308,8 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
 
         if (joystickFragment != null)
             joystickFragment.stop();
+        if (manualControlFragment != null)
+            manualControlFragment.stop();
         onTrimMemory(TRIM_MEMORY_BACKGROUND);
         super.onStop();
 
@@ -319,6 +326,8 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
 
         if (joystickFragment != null)
             joystickFragment.stop();
+        if (manualControlFragment != null)
+            manualControlFragment.stop();
 
         onTrimMemory(TRIM_MEMORY_BACKGROUND);
         onTrimMemory(TRIM_MEMORY_COMPLETE);
@@ -435,6 +444,8 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
     public boolean stopRobot(boolean cancelMotionPlan) {
         Log.d(TAG, "Stopping Robot");
         joystickFragment.stop();
+        if (manualControlFragment != null)
+            manualControlFragment.stop();
         return controller.stop(cancelMotionPlan);
     }
 
@@ -503,6 +514,9 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
         if (joystickFragment != null && getControlMode().ordinal() <= ControlMode.Tilt.ordinal()) {
             joystickFragment.show();
         }
+        if (manualControlFragment != null && getControlMode() == ControlMode.Joystick) {
+            manualControlFragment.show();
+        }
 
         if (hudFragment != null) {
             hudFragment.show();
@@ -565,6 +579,8 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
             case 5:
                 if (joystickFragment != null)
                     joystickFragment.hide();
+                if (manualControlFragment != null)
+                    manualControlFragment.hide();
                 if (hudFragment != null) {
                     hudFragment.hide();
 
@@ -583,6 +599,8 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
             case 6:
                 if (joystickFragment != null)
                     joystickFragment.hide();
+                if (manualControlFragment != null)
+                    manualControlFragment.hide();
                 if (hudFragment != null) {
                     hudFragment.hide();
 
@@ -771,6 +789,8 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
 
         // Notify the Joystick on the new ControlMode
         joystickFragment.setControlMode(controlMode);
+        if (manualControlFragment != null)
+            manualControlFragment.setControlMode(controlMode);
         hudFragment.toggleEmergencyStopUI(true);
 
         // If the ControlMode has an associated RobotPlan, run the plan

@@ -36,6 +36,16 @@
                 android:layout_alignParentEnd="true"
                 tools:layout="@layout/fragment_joystick_view" />
 
+            <fragment
+                android:id="@+id/manual_control_fragment"
+                android:name="com.robotca.ControlApp.Fragments.ManualControlFragment"
+                android:layout_width="360dp"
+                android:layout_height="170dp"
+                android:layout_alignParentLeft="true"
+                android:layout_alignParentStart="true"
+                android:layout_alignParentBottom="true"
+                tools:layout="@layout/fragment_manual_control" />
+
         </RelativeLayout>
         <!-- The navigation drawer -->
         <ListView android:id="@+id/left_drawer"

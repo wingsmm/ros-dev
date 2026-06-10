@@ -91,7 +91,30 @@ Android APP 里 ROS Master URI 使用：
 
    http://192.168.1.169:11311
 
-六、当前保留脚本用途
+六、Android 手工控制和 SafeMode 注意事项
+
+Android 左下角手工按钮和右下角摇杆走同一条速度链路：
+
+   ManualControlFragment / JoystickView -> RobotController.forceVelocity() -> /cmd_vel -> xtark_driver
+
+因此手工按钮也会经过 RobotCA 原有 SafeMode 安全减速。当前 SafeMode 不是完整自主避障，而是“前向碰撞预警 + 安全减速”：
+
+1. WarningSystem 读取激光雷达前方约 +/-40 度范围。
+2. 如果前方障碍过近，HUD 会红色预警，warnAmount 增大。
+3. SafeMode 开启时，前进速度按 (1 - warnAmount)^2 自动缩小。
+4. warnAmount 很高时，前进几乎等于被禁止。
+
+所以如果出现“后退/转向还行，但前进不灵活”的现象，优先看 HUD 是否红色预警，并在车端执行：
+
+   rostopic echo /cmd_vel
+
+按住 Android 前进按钮时，如果 /cmd_vel.linear.x 明显小于设置的人工按钮线速度，通常不是 xtark 没收到命令，而是 Android SafeMode 在发布前已经把速度裁剪了。
+
+详细说明见：
+
+   android\docs\android-manual-control-safemode.md
+
+七、当前保留脚本用途
 
 build_robotca_super.bat
    RobotCA 超级编译脚本，默认生成非冲突包 cn.xtark.robotca。
@@ -108,7 +131,7 @@ status_android_169.bat
 run_android_xtark.sh
    Windows 侧保存的机器人端 run_android.sh 源文件。需要时复制到 169 的 /home/xtark/ros_ws/scripts/run_android.sh。
 
-七、原始源码地址
+八、原始源码地址
 
 手机建图导航源码：
 https://github.com/rosjava/android_apps

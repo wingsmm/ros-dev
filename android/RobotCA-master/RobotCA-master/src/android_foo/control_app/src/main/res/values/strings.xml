@@ -221,4 +221,22 @@
     <string name="invert_y_axis_prompt">Invert Y-axis:</string>
     <string name="invert_angular_velocity_prompt">Invert Ang. Vel:</string>
 
+    <!-- Manual control buttons -->
+    <string name="manual_forward">Fwd</string>
+    <string name="manual_backward">Back</string>
+    <string name="manual_strafe_left">Left</string>
+    <string name="manual_strafe_right">Right</string>
+    <string name="manual_turn_left">Turn L</string>
+    <string name="manual_turn_right">Turn R</string>
+
+    <!-- Manual control preferences -->
+    <string name="prefs_manual_linear_speed_key">manual_linear_speed</string>
+    <string name="prefs_manual_angular_speed_key">manual_angular_speed</string>
+    <string name="manual_linear_speed_pref_title">Manual Linear Speed</string>
+    <string name="manual_angular_speed_pref_title">Manual Angular Speed</string>
+    <string name="manual_linear_speed_pref_summary">Hold-button linear speed in m/s (0.02–0.30)\nValue: %s</string>
+    <string name="manual_angular_speed_pref_summary">Hold-button angular speed in rad/s (0.05–0.80)\nValue: %s</string>
+    <string name="default_manual_linear_speed">0.10</string>
+    <string name="default_manual_angular_speed">0.20</string>
+
 </resources>

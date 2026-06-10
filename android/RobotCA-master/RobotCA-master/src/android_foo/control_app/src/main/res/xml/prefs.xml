@@ -169,6 +169,22 @@
             android:summaryOff="@string/invert_angular_velocity_summary"
             android:summaryOn="@string/invert_angular_velocity_summary"
             android:title="@string/invert_angular_velocity_title" />
+
+        <com.robotca.ControlApp.Views.BetterEditTextPreference
+            android:defaultValue="@string/default_manual_linear_speed"
+            android:inputType="numberDecimal"
+            android:key="@string/prefs_manual_linear_speed_key"
+            android:singleLine="true"
+            android:summary="@string/manual_linear_speed_pref_summary"
+            android:title="@string/manual_linear_speed_pref_title" />
+
+        <com.robotca.ControlApp.Views.BetterEditTextPreference
+            android:defaultValue="@string/default_manual_angular_speed"
+            android:inputType="numberDecimal"
+            android:key="@string/prefs_manual_angular_speed_key"
+            android:singleLine="true"
+            android:summary="@string/manual_angular_speed_pref_summary"
+            android:title="@string/manual_angular_speed_pref_title" />
     </PreferenceScreen>
 
 </PreferenceScreen>

@@ -146,6 +146,20 @@
     <string name="invert_y_axis_prompt">反转 Y 轴：</string>
     <string name="invert_angular_velocity_prompt">反转角速度：</string>
 
+    <!-- Manual control buttons -->
+    <string name="manual_forward">前进</string>
+    <string name="manual_backward">后退</string>
+    <string name="manual_strafe_left">左移</string>
+    <string name="manual_strafe_right">右移</string>
+    <string name="manual_turn_left">左转</string>
+    <string name="manual_turn_right">右转</string>
+
+    <!-- Manual control preferences -->
+    <string name="manual_linear_speed_pref_title">人工按钮线速度</string>
+    <string name="manual_angular_speed_pref_title">人工按钮角速度</string>
+    <string name="manual_linear_speed_pref_summary">按住按钮时的线速度（m/s，0.02–0.30）\n当前值：%s</string>
+    <string name="manual_angular_speed_pref_summary">按住按钮时的角速度（rad/s，0.05–0.80）\n当前值：%s</string>
+
     <!-- Notification -->
     <string name="notification_ticker">ROS 遥控</string>
     <string name="notification_title">ROS 遥控</string>
