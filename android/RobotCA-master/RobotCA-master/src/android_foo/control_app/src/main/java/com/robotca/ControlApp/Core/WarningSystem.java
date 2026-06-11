@@ -40,7 +40,7 @@ public class WarningSystem implements MessageListener<LaserScan> {
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(controlApp);
 
-        this.enabled = prefs.getBoolean(controlApp.getString(R.string.prefs_warning_system_key), true);
+        this.enabled = prefs.getBoolean(controlApp.getString(R.string.prefs_warning_checkbox_key), false);
         this.safemode = prefs.getBoolean(controlApp.getString(R.string.prefs_warning_safemode_key), true);
 
         String val = prefs.getString(controlApp.getString(R.string.prefs_warning_mindist_key),

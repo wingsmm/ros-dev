@@ -55,6 +55,51 @@
             android:summary="@string/pose_pref_summary"
             android:title="@string/pose_pref_title" />
 
+        <com.robotca.ControlApp.Views.BetterEditTextPreference
+            android:defaultValue="@string/map_topic"
+            android:key="@string/prefs_map_topic_edittext_key"
+            android:singleLine="true"
+            android:summary="@string/map_topic_pref_summary"
+            android:title="@string/map_topic_pref_title" />
+
+        <PreferenceScreen
+            android:summary="@string/slam_bound_pref_summary"
+            android:title="@string/slam_bounds_pref_title">
+
+            <com.robotca.ControlApp.Views.BetterEditTextPreference
+                android:defaultValue="@string/default_slam_xmin"
+                android:inputType="numberDecimal|numberSigned"
+                android:key="@string/prefs_slam_xmin_key"
+                android:singleLine="true"
+                android:summary="@string/slam_bound_pref_summary"
+                android:title="@string/slam_xmin_pref_title" />
+
+            <com.robotca.ControlApp.Views.BetterEditTextPreference
+                android:defaultValue="@string/default_slam_xmax"
+                android:inputType="numberDecimal|numberSigned"
+                android:key="@string/prefs_slam_xmax_key"
+                android:singleLine="true"
+                android:summary="@string/slam_bound_pref_summary"
+                android:title="@string/slam_xmax_pref_title" />
+
+            <com.robotca.ControlApp.Views.BetterEditTextPreference
+                android:defaultValue="@string/default_slam_ymin"
+                android:inputType="numberDecimal|numberSigned"
+                android:key="@string/prefs_slam_ymin_key"
+                android:singleLine="true"
+                android:summary="@string/slam_bound_pref_summary"
+                android:title="@string/slam_ymin_pref_title" />
+
+            <com.robotca.ControlApp.Views.BetterEditTextPreference
+                android:defaultValue="@string/default_slam_ymax"
+                android:inputType="numberDecimal|numberSigned"
+                android:key="@string/prefs_slam_ymax_key"
+                android:singleLine="true"
+                android:summary="@string/slam_bound_pref_summary"
+                android:title="@string/slam_ymax_pref_title" />
+
+        </PreferenceScreen>
+
     </PreferenceScreen>
 
     <!--<Preference-->
@@ -71,8 +116,8 @@
 
         <!-- For enabling/disabling the warning system -->
         <SwitchPreference
-            android:checked="true"
-            android:defaultValue="true"
+            android:checked="false"
+            android:defaultValue="false"
             android:key="@string/prefs_warning_checkbox_key"
             android:summaryOff="@string/warning_enable_pref_summary_off"
             android:summaryOn="@string/warning_enable_pref_summary_on"

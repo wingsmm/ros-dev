@@ -11,6 +11,7 @@
     <string name="odometry_topic">/odom</string>
     <string name="pose_topic">/pose</string>
     <string name="navsat_topic">/navsat/fix</string>
+    <string name="map_topic">/map</string>
 
     <!-- Preference titles -->
     <string name="joy_pref_title">Joystick Topic</string>
@@ -21,6 +22,7 @@
     <string name="topic_pref_title">Topics</string>
     <string name="warning_enable_pref_title">Enable Warning System</string>
     <string name="pose_pref_title">Pose Topic</string>
+    <string name="map_topic_pref_title">Map Topic</string>
     <string name="odometry_pref_title">Odometry Topic</string>
     <string name="laser_scan_detail_pref_title">Laser Scan Detail</string>
     <string name="random_walk_range_minimum_pref_title">Random Walk Range Minimum</string>
@@ -36,6 +38,11 @@
     <string name="prefs_navsat_topic_edittext_key">prefs_navsat_topic_edittext</string>
     <string name="prefs_odometry_topic_edittext_key">prefs_odometry_topic_edittext</string>
     <string name="prefs_pose_topic_edittext_key">prefs_pose_topic_edittext</string>
+    <string name="prefs_map_topic_edittext_key">prefs_map_topic_edittext</string>
+    <string name="prefs_slam_xmin_key">prefs_slam_xmin</string>
+    <string name="prefs_slam_xmax_key">prefs_slam_xmax</string>
+    <string name="prefs_slam_ymin_key">prefs_slam_ymin</string>
+    <string name="prefs_slam_ymax_key">prefs_slam_ymax</string>
     <string name="prefs_warning_checkbox_key">prefs_warning_checkbox</string>
     <string name="prefs_warning_mindist_key">prefs_warning_mindist</string>
     <string name="prefs_warning_system_key">prefs_warning_system</string>
@@ -66,6 +73,57 @@
         \nExpected message type: geometry_msgs/Pose
         \nValue: %s
     </string>
+    <string name="map_topic_pref_summary">Topic for SLAM occupancy grid.\nExpected message type: nav_msgs/OccupancyGrid\nValue: %s</string>
+    <string name="slam_bounds_pref_title">SLAM Test Area</string>
+    <string name="slam_bounds_pref_summary">Configured area shown as a yellow box on the SLAM map.</string>
+    <string name="slam_xmin_pref_title">SLAM X Min</string>
+    <string name="slam_xmax_pref_title">SLAM X Max</string>
+    <string name="slam_ymin_pref_title">SLAM Y Min</string>
+    <string name="slam_ymax_pref_title">SLAM Y Max</string>
+    <string name="slam_bound_pref_summary">Configured SLAM test-area bound in meters.\nValue: %s</string>
+    <string name="default_slam_xmin">-2</string>
+    <string name="default_slam_xmax">2</string>
+    <string name="default_slam_ymin">-2</string>
+    <string name="default_slam_ymax">2</string>
+    <string name="slam_map">SLAM Map</string>
+    <string name="gps_map">GPS Map</string>
+    <string name="slam_map_recenter">Recenter</string>
+    <string name="slam_map_waiting">Waiting for /map...</string>
+    <string name="slam_entropy_topic">/slam_gmapping/entropy</string>
+    <string name="slam_gmapping_param_xmin">/slam_gmapping/xmin</string>
+    <string name="slam_gmapping_param_xmax">/slam_gmapping/xmax</string>
+    <string name="slam_gmapping_param_ymin">/slam_gmapping/ymin</string>
+    <string name="slam_gmapping_param_ymax">/slam_gmapping/ymax</string>
+    <string name="slam_map_bounds_source_ros">Bounds source: ROS /slam_gmapping/*</string>
+    <string name="slam_map_bounds_source_prefs">Bounds source: Android Preferences (ROS params unavailable)</string>
+    <string name="slam_map_debug_waiting">/map: waiting</string>
+    <string name="slam_map_debug_map_ok">/map: OK, %1$s ago</string>
+    <string name="slam_map_debug_never">never</string>
+    <string name="slam_map_debug_seconds_ago">%1$d s</string>
+    <string name="slam_map_debug_minutes_ago">%1$d min</string>
+    <string name="slam_map_debug_size">Map size: %1$d x %2$d cells</string>
+    <string name="slam_map_debug_resolution">Resolution: %1$.3f m/cell</string>
+    <string name="slam_map_debug_canvas_extent">Map canvas: ~%1$.1f m x %2$.1f m</string>
+    <string name="slam_map_debug_known_extent">Explored area: ~%1$.1f m x %2$.1f m</string>
+    <string name="slam_map_debug_known_extent_missing">Explored area: --</string>
+    <string name="slam_map_debug_configured_bounds">Configured area: x[%1$.1f,%2$.1f], y[%3$.1f,%4$.1f] m; yellow box on map</string>
+    <string name="slam_map_debug_updates">Map updates: %1$d</string>
+    <string name="slam_map_debug_cells">Cells: free %1$d%%, occ %2$d%%, unk %3$d%%</string>
+    <string name="slam_map_debug_configured_cells">Configured area cells: free %1$d%%, occ %2$d%%, unk %3$d%%</string>
+    <string name="slam_map_debug_render">Bitmap render: %1$d ms</string>
+    <string name="slam_map_debug_scale">Zoom scale: %1$.2f</string>
+    <string name="slam_map_debug_scan">/scan rate: %1$s</string>
+    <string name="slam_map_debug_scan_state">/scan state: %1$s</string>
+    <string name="slam_map_debug_odom">/odom: %1$s</string>
+    <string name="slam_map_debug_entropy">gmapping entropy: %1$.2f</string>
+    <string name="slam_map_debug_entropy_missing">gmapping entropy: --</string>
+    <string name="slam_map_debug_tf_hint">TF hint: requires odom + scan for SLAM</string>
+    <string name="slam_map_debug_topic">Map topic: %1$s</string>
+    <string name="slam_map_debug_ok">OK</string>
+    <string name="slam_map_debug_missing">missing</string>
+    <string name="slam_map_debug_tap_hint">Tap panel to expand/collapse details</string>
+    <string name="slam_map_debug_export">Export</string>
+    <string name="slam_map_debug_export_done">Diagnostic copied and saved to %1$s</string>
     <string name="laser_scan_detail_pref_summary">Sets the detail level of the laser scan visualization.
         A higher number will draw more laser points\nValue: %s
     </string>
@@ -145,7 +203,8 @@
         <item>Overview</item>
         <item>Camera</item>
         <item>Robot</item>
-        <item>Map</item>
+        <item>SLAM Map</item>
+        <item>GPS Map</item>
         <item>Preferences</item>
         <item>About</item>
     </string-array>

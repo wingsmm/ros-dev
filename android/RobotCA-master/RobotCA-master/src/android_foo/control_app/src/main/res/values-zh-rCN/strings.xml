@@ -44,6 +44,64 @@
         \n期望消息类型：geometry_msgs/Pose
         \n当前值：%s
     </string>
+    <string name="map_topic">/map</string>
+    <string name="prefs_map_topic_edittext_key">prefs_map_topic_edittext</string>
+    <string name="map_topic_pref_title">地图话题</string>
+    <string name="map_topic_pref_summary">SLAM 栅格地图话题。\n期望消息类型：nav_msgs/OccupancyGrid\n当前值：%s</string>
+    <string name="prefs_slam_xmin_key">prefs_slam_xmin</string>
+    <string name="prefs_slam_xmax_key">prefs_slam_xmax</string>
+    <string name="prefs_slam_ymin_key">prefs_slam_ymin</string>
+    <string name="prefs_slam_ymax_key">prefs_slam_ymax</string>
+    <string name="slam_bounds_pref_title">SLAM 测试区域</string>
+    <string name="slam_bounds_pref_summary">在 SLAM 地图上以黄色框显示的设定区域。</string>
+    <string name="slam_xmin_pref_title">SLAM X 最小值</string>
+    <string name="slam_xmax_pref_title">SLAM X 最大值</string>
+    <string name="slam_ymin_pref_title">SLAM Y 最小值</string>
+    <string name="slam_ymax_pref_title">SLAM Y 最大值</string>
+    <string name="slam_bound_pref_summary">设定的 SLAM 测试区域边界，单位米。\n当前值：%s</string>
+    <string name="default_slam_xmin">-2</string>
+    <string name="default_slam_xmax">2</string>
+    <string name="default_slam_ymin">-2</string>
+    <string name="default_slam_ymax">2</string>
+    <string name="slam_map">SLAM 地图</string>
+    <string name="gps_map">GPS 地图</string>
+    <string name="slam_map_recenter">居中</string>
+    <string name="slam_map_waiting">等待 /map...</string>
+    <string name="slam_entropy_topic">/slam_gmapping/entropy</string>
+    <string name="slam_gmapping_param_xmin">/slam_gmapping/xmin</string>
+    <string name="slam_gmapping_param_xmax">/slam_gmapping/xmax</string>
+    <string name="slam_gmapping_param_ymin">/slam_gmapping/ymin</string>
+    <string name="slam_gmapping_param_ymax">/slam_gmapping/ymax</string>
+    <string name="slam_map_bounds_source_ros">边界来源：ROS /slam_gmapping/*</string>
+    <string name="slam_map_bounds_source_prefs">边界来源：Android 设置（ROS 参数不可用）</string>
+    <string name="slam_map_debug_waiting">/map：等待中</string>
+    <string name="slam_map_debug_map_ok">/map：已连接，%1$s 前更新</string>
+    <string name="slam_map_debug_never">从未</string>
+    <string name="slam_map_debug_seconds_ago">%1$d 秒</string>
+    <string name="slam_map_debug_minutes_ago">%1$d 分钟</string>
+    <string name="slam_map_debug_size">地图尺寸：%1$d x %2$d 格</string>
+    <string name="slam_map_debug_resolution">分辨率：%1$.3f m/格</string>
+    <string name="slam_map_debug_canvas_extent">地图画布：约 %1$.1f m x %2$.1f m</string>
+    <string name="slam_map_debug_known_extent">已探索范围：约 %1$.1f m x %2$.1f m</string>
+    <string name="slam_map_debug_known_extent_missing">已探索范围：--</string>
+    <string name="slam_map_debug_configured_bounds">设定区域：x[%1$.1f,%2$.1f]，y[%3$.1f,%4$.1f] m；地图中黄色框</string>
+    <string name="slam_map_debug_updates">地图更新次数：%1$d</string>
+    <string name="slam_map_debug_cells">栅格比例：空闲 %1$d%%，障碍 %2$d%%，未知 %3$d%%</string>
+    <string name="slam_map_debug_configured_cells">设定区域栅格：空闲 %1$d%%，障碍 %2$d%%，未知 %3$d%%</string>
+    <string name="slam_map_debug_render">Bitmap 渲染：%1$d ms</string>
+    <string name="slam_map_debug_scale">缩放倍率：%1$.2f</string>
+    <string name="slam_map_debug_scan">/scan 频率：%1$s</string>
+    <string name="slam_map_debug_scan_state">/scan 状态：%1$s</string>
+    <string name="slam_map_debug_odom">/odom：%1$s</string>
+    <string name="slam_map_debug_entropy">gmapping entropy：%1$.2f</string>
+    <string name="slam_map_debug_entropy_missing">gmapping entropy：--</string>
+    <string name="slam_map_debug_tf_hint">TF 提示：SLAM 依赖 odom + scan + laser TF</string>
+    <string name="slam_map_debug_topic">地图话题：%1$s</string>
+    <string name="slam_map_debug_ok">正常</string>
+    <string name="slam_map_debug_missing">缺失</string>
+    <string name="slam_map_debug_tap_hint">点击面板展开/收起详情</string>
+    <string name="slam_map_debug_export">导出</string>
+    <string name="slam_map_debug_export_done">诊断信息已复制并保存到 %1$s</string>
     <string name="laser_scan_detail_pref_summary">设置激光扫描可视化的细节级别。
         数值越大绘制的激光点越多\n当前值：%s
     </string>
@@ -83,7 +141,8 @@
         <item>总览</item>
         <item>摄像头</item>
         <item>机器人</item>
-        <item>地图</item>
+        <item>SLAM 地图</item>
+        <item>GPS 地图</item>
         <item>设置</item>
         <item>关于</item>
     </string-array>

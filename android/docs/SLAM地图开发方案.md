@@ -1,584 +1,712 @@
-# RobotCA Android SLAM Map 开发方案
+# SLAM 地图与 A-B-A 往返导航开发方案
 
-## 1. 背景
+## 1. 目标收敛
 
-当前 RobotCA Android 项目中侧边栏的 `Map` 页面是 osmdroid/OpenStreetMap GPS 街道地图，主要用于显示机器人和 Android 设备的经纬度位置。它不订阅 `/map`，不处理 `nav_msgs/OccupancyGrid`，也不具备 SLAM 地图显示或保存能力。
+当前目标不是实现完整的室内任意点自主导航，也不是追求整张 gmapping 画布全部探索完成。
 
-本方案目标是在现有 RobotCA App 内合入 `make_a_map` 类能力，新增一个独立的 `SLAM Map` 页面，用于显示 ROS SLAM 发布的栅格地图，并为后续地图保存、导航、地图管理功能打基础。
-
-## 2. 总体目标
-
-第一阶段目标是实现稳定的 SLAM 栅格地图查看能力：
-
-- 订阅 ROS topic `/map`
-- 解析 `nav_msgs/OccupancyGrid`
-- 在 Android 端渲染栅格地图
-- 支持拖动、缩放、居中
-- 保留现有 GPS Map 页面，避免功能混淆
-
-第二阶段再补充机器人位姿叠加和地图保存能力。
-
-第三阶段再考虑导航和地图管理。
-
-推荐功能顺序：
+当前要实现的最小闭环是：
 
 ```text
-make_a_map / SLAM Map
-  -> map_nav
-  -> map_manager
+在 SLAM 地图中选择 A 点和 B 点
+  -> 小车从当前位置或 A 点导航到 B 点
+  -> 到达 B 点后再导航返回 A 点
 ```
 
-原因：
+约束条件：
 
-- 建图只依赖 `/scan`、`/odom`、gmapping 或其他 SLAM 节点，依赖较少
-- 建图产出的 `pgm + yaml` 是后续导航输入
-- `move_base`、`amcl`、`map_server` 参数配置较重，应在地图显示和保存稳定后再做
+- A 点和 B 点必须落在已探索的白色可通行区域。
+- A 到 B 的路径必须位于黄色设定区域与绿色已探索区域的有效交集内。
+- 不支持让小车主动进入灰色未知区域。
+- 不要求 Android 端自己做路径规划。
+- Android 端只负责显示地图、选择点、下发目标和显示导航状态。
+- 机器人端 ROS 负责建图、定位、路径规划、避障和底盘控制。
 
-## 3. 关键设计决策
+这一路线最稳妥，因为 Android 端不承担导航算法，只使用 ROS 标准导航链路。
 
-| 决策点 | 推荐方案 | 说明 |
-|---|---|---|
-| 菜单入口 | 新增 `SLAM Map`，保留原 `GPS Map` | 两者坐标系和用途不同，不建议复用一个页面 |
-| 菜单位置 | 插入在 `Robot` 和原 `Map` 之间 | 室内机器人调试时 SLAM Map 优先级更高 |
-| `/map` 订阅位置 | `RobotController` 集中订阅 | 与现有 `/scan`、`/odom`、`/navsat/fix` 模式一致 |
-| 渲染方式 | 自定义 `View` + `Bitmap` 缓存 | 收到地图时生成 bitmap，`onDraw()` 只绘制 bitmap，性能稳定 |
-| 坐标系 | 地图显示基于 OccupancyGrid 自身坐标 | 不使用 osmdroid，osmdroid 是经纬度坐标系 |
-| 机器人位姿 | 优先使用 `map` frame 下的 pose 或 TF | 不建议直接把 `/odom` 叠加到 `/map` 上 |
-| 地图保存 | 优先机器人端服务触发 `map_saver` | Android 端本地导出可作为备选，不作为第一优先级 |
+## 2. 当前实现状态
 
-## 4. 不推荐的实现方式
+### 2.1 已实现
 
-### 4.1 不建议复用现有 MapFragment
+Android 端已经完成以下能力：
 
-现有 `MapFragment` 使用：
+- 新增 `SLAM 地图` 页面。
+- 订阅 `/map`，消息类型为 `nav_msgs/OccupancyGrid`。
+- 使用 `SlamMapView` 将栅格地图渲染为 bitmap。
+- 支持地图拖动、缩放、居中。
+- 显示 gmapping 地图画布大小、分辨率、已探索范围。
+- 显示黄色设定区域：来自 `/slam_gmapping/xmin`、`xmax`、`ymin`、`ymax` 或 Android 设置。
+- 显示绿色已探索范围。
+- 统计整张地图栅格比例。
+- 统计设定区域内的空闲、障碍、未知比例。
+- 订阅并显示 `/scan` 频率、`/odom` 状态、gmapping entropy。
 
-- `org.osmdroid.views.MapView`
-- `TileSourceFactory.MAPNIK`
-- GPS 经纬度 overlay
+相关文件：
 
-SLAM `/map` 使用：
+```text
+android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Fragments/SlamMapFragment.java
+android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Views/SlamMapView.java
+android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Core/SlamMapDiagnostics.java
+android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Core/SlamMapStats.java
+android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Core/RobotController.java
+android/run_android.sh
+```
 
-- `nav_msgs/OccupancyGrid`
-- 栅格坐标
-- meter-based map frame
+### 2.2 尚未实现
 
-两者坐标体系完全不同，强行复用会导致坐标转换复杂、语义混乱、后续维护困难。
+Android 端尚未完成：
 
-### 4.2 不建议逐格实时 drawRect
+- 在 SLAM 地图上选择 A 点、B 点。
+- 将触摸像素坐标转换为 `/map` 坐标。
+- 校验 A/B 点是否位于可通行栅格。
+- 发布导航目标到 `/move_base_simple/goal`。
+- 订阅 `/move_base/status` 显示导航状态。
+- 支持取消导航目标。
+- 支持一键执行 `去 B -> 返回 A`。
 
-直接在 `onDraw()` 中循环每个栅格并执行 `canvas.drawRect()`，在地图尺寸较大时容易卡顿。
+机器人端尚未确认完成：
 
-推荐做法：
+- `move_base` 是否可用。
+- costmap 参数是否适合 xtark 小车。
+- 小车 footprint / inflation / obstacle layer 是否配置正确。
+- 使用 gmapping 在线地图导航，还是保存地图后使用 `map_server + amcl` 导航。
 
-- 收到新的 `OccupancyGrid` 后，将栅格数据转换成 `Bitmap`
-- `onDraw()` 使用 `canvas.drawBitmap()`
-- 平移和缩放通过 `Matrix` 或 canvas transform 完成
+## 3. 关键结论
 
-### 4.3 不建议假设 gmapping 提供 save_map 服务
+### 3.1 红色小方块不是小车初始位置
 
-ROS1 `gmapping` 通常发布 `/map`，但并不提供标准的 `/slam_gmapping/save_map` 服务。
+LaserScan 页面中的红色小方块通常表示激光雷达当前扫到的障碍点或反射点。
 
-标准保存方式通常是：
+真正代表小车当前姿态的是视图中心的蓝色箭头。
+
+### 3.2 整张地图未知比例不是核心指标
+
+gmapping 发布的 `/map` 画布可能自动扩展，实际画布可能远大于设定的 4m x 4m 区域。
+
+因此调试时应优先看：
+
+```text
+设定区域栅格：空闲 xx%，障碍 xx%，未知 xx%
+```
+
+而不是只看：
+
+```text
+整张地图栅格比例：未知 xx%
+```
+
+### 3.3 当前需求只需要局部可通行区域
+
+只要黄色设定区域和绿色已探索区域的交集中存在连续白色通道，就可以做 A-B-A 往返导航测试。
+
+不需要整张黄色框全部探索完成。
+
+## 4. 推荐总体架构
+
+```text
+Android SLAM 地图页面
+  - 显示 /map
+  - 选择 A/B 点
+  - 校验目标点
+  - 发布导航目标
+  - 显示 move_base 状态
+
+ROS 导航栈
+  - gmapping 或 map_server
+  - amcl 或在线 SLAM 位姿
+  - move_base
+  - global costmap
+  - local costmap
+  - scan obstacle layer
+
+小车底盘
+  - 接收 /cmd_vel
+  - 发布 /odom
+  - 发布 /scan
+  - 提供 TF: odom -> base_footprint -> laser
+```
+
+Android 与 ROS 的接口：
+
+| 功能 | Topic | 类型 | 方向 |
+|---|---|---|---|
+| 地图显示 | `/map` | `nav_msgs/OccupancyGrid` | ROS -> Android |
+| 激光诊断 | `/scan` | `sensor_msgs/LaserScan` | ROS -> Android |
+| 里程计诊断 | `/odom` | `nav_msgs/Odometry` | ROS -> Android |
+| 下发导航目标 | `/move_base_simple/goal` | `geometry_msgs/PoseStamped` | Android -> ROS |
+| 导航状态 | `/move_base/status` | `actionlib_msgs/GoalStatusArray` | ROS -> Android |
+| 取消导航 | `/move_base/cancel` | `actionlib_msgs/GoalID` | Android -> ROS |
+| 底盘控制 | `/cmd_vel` | `geometry_msgs/Twist` | move_base -> 小车 |
+
+## 5. 机器人端方案
+
+### 5.1 建图阶段
+
+当前 4m x 4m 测试区域推荐参数：
 
 ```bash
-rosrun map_server map_saver -f ~/maps/my_map
+SLAM_XMIN=-2
+SLAM_XMAX=2
+SLAM_YMIN=-2
+SLAM_YMAX=2
+SLAM_DELTA=0.10
+SLAM_MAX_URANGE=2.0
+SLAM_MAX_RANGE=2.5
+SLAM_LINEAR_UPDATE=0.20
+SLAM_ANGULAR_UPDATE=0.20
+SLAM_TEMPORAL_UPDATE=2.0
+SLAM_MAP_UPDATE_INTERVAL=1.0
 ```
 
-如果 Android 端要一键保存机器人端地图，需要机器人端额外提供一个服务或接口来触发上述命令。
+gmapping 启动要点：
 
-## 5. 分阶段开发计划
+```bash
+rosrun gmapping slam_gmapping \
+  scan:=/scan \
+  _base_frame:=base_footprint \
+  _xmin:=-2 _xmax:=2 _ymin:=-2 _ymax:=2 \
+  _delta:=0.10 \
+  _maxUrange:=2.0 _maxRange:=2.5 \
+  _linearUpdate:=0.20 _angularUpdate:=0.20 \
+  _temporalUpdate:=2.0 _map_update_interval:=1.0 \
+  __name:=slam_gmapping
+```
 
-## Phase 1: SLAM Map 显示
+注意：
 
-Phase 1 只做地图显示，不做保存，不做导航。
+- xtark 当前没有 `base_link`，需要使用 `base_footprint`。
+- gmapping 的 `/map` 画布可能仍会自动扩展，Android 端应以设定区域统计为准。
+- 如果只做 A-B-A 测试，地图不需要覆盖整个房间，只要 A/B 及路径附近是已知白色区域。
 
-### 5.1 新增文件
+### 5.2 导航阶段推荐路线
 
-#### `SlamMapView.java`
+推荐分两种路线，先做路线 A。
 
-路径：
+#### 路线 A：在线 SLAM + move_base
+
+用于快速验证 A-B-A 闭环。
 
 ```text
-src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Views/SlamMapView.java
+gmapping 发布 /map
+gmapping/TF 提供 map -> odom
+move_base 使用当前 /map 和 /scan
+Android 发布 /move_base_simple/goal
 ```
 
-职责：
+优点：
 
-- 接收 `nav_msgs.OccupancyGrid`
-- 将栅格数据转换为 `Bitmap`
-- 绘制 bitmap
-- 支持拖动、缩放、居中
-- 显示地图基本信息：宽、高、分辨率、更新时间
+- 不需要先保存地图。
+- 适合当前调试阶段。
+- 可以快速验证 A-B-A 能否跑通。
 
-核心接口：
+风险：
+
+- 在线建图过程中地图会继续变化，路径可能抖动。
+- 长时间运行可能受 odom 漂移影响。
+
+#### 路线 B：保存地图 + map_server + amcl + move_base
+
+用于稳定演示和长期使用。
+
+```text
+先用 gmapping 建好局部地图
+  -> map_saver 保存 pgm/yaml
+  -> 下次启动 map_server 加载地图
+  -> amcl 定位
+  -> move_base 导航
+```
+
+优点：
+
+- 地图固定，导航更稳定。
+- 更接近 ROS 标准导航流程。
+
+风险：
+
+- 初始位姿需要设置。
+- amcl 参数和 costmap 参数需要调试。
+
+本项目建议：
+
+```text
+先用路线 A 跑通 A-B-A
+再切换路线 B 做稳定版本
+```
+
+### 5.3 move_base 最小配置要求
+
+机器人端需要确认以下链路存在：
+
+```bash
+rostopic list | grep move_base
+rostopic echo /move_base/status -n 1
+rostopic echo /move_base_simple/goal -n 1
+rostopic echo /cmd_vel -n 1
+```
+
+TF 应至少满足：
+
+```text
+map -> odom -> base_footprint -> laser
+```
+
+costmap 初始建议：
+
+| 参数 | 建议值 | 说明 |
+|---|---:|---|
+| global_frame | `map` | 全局规划使用 map |
+| robot_base_frame | `base_footprint` | 匹配 xtark TF |
+| local_costmap width | `3.0` | 4m 区域内够用 |
+| local_costmap height | `3.0` | 4m 区域内够用 |
+| resolution | `0.05` 或 `0.10` | 先与地图一致可降低复杂度 |
+| inflation_radius | `0.15` 到 `0.25` | 根据车体尺寸调整 |
+| obstacle_range | `2.0` | 匹配当前激光有效范围 |
+| raytrace_range | `2.5` | 匹配当前 scan/maxRange |
+
+## 6. Android 端开发方案
+
+### 6.1 新增导航交互状态
+
+在 `SlamMapFragment` 或独立控制类中维护：
 
 ```java
-public void updateMap(OccupancyGrid grid);
-public void recenter();
-public void clear();
+enum NavPointMode {
+    SET_A,
+    SET_B,
+    NONE
+}
+
+enum RoundTripState {
+    IDLE,
+    GOING_TO_B,
+    RETURNING_TO_A,
+    FINISHED,
+    FAILED,
+    CANCELED
+}
 ```
 
-实现要点：
-
-- `OccupancyGrid.info.width`
-- `OccupancyGrid.info.height`
-- `OccupancyGrid.info.resolution`
-- `OccupancyGrid.info.origin`
-- `OccupancyGrid.data`
-
-栅格颜色建议：
-
-| OccupancyGrid 值 | 含义 | 显示颜色 |
-|---|---|---|
-| `-1` | unknown | 中灰 |
-| `0` | free | 白色 |
-| `1..99` | probability | 灰阶插值 |
-| `100` | occupied | 黑色 |
-
-注意：rosjava 中 `OccupancyGrid.getData()` 的实际返回类型需要以本地 jar 编译结果为准，常见可能是 `org.jboss.netty.buffer.ChannelBuffer`。实现时不要先假设它一定是 Java `byte[]` 或 `int[]`。
-
-#### `SlamMapFragment.java`
-
-路径：
-
-```text
-src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Fragments/SlamMapFragment.java
-```
-
-职责：
-
-- 管理 `SlamMapView`
-- 从 `RobotController` 注册 `/map` listener
-- 在 fragment 生命周期中添加和移除 listener
-- 提供 `Recenter` 按钮
-- 显示连接状态或无地图提示
-
-建议参考：
-
-- `LaserScanFragment.java`
-- `MapFragment.java`
-
-注意事项：
-
-- ROS 回调线程不能直接更新 UI
-- 需要通过 `Activity.runOnUiThread()` 或 `View.post()` 调用 `SlamMapView.updateMap()`
-- `onDestroyView()` 或 `onPause()` 中移除 listener，避免 fragment 泄漏
-
-#### `fragment_slam_map.xml`
-
-路径：
-
-```text
-src/android_foo/control_app/src/main/res/layout/fragment_slam_map.xml
-```
-
-布局建议：
-
-- 主体：`SlamMapView`
-- 底部工具栏：`Recenter`
-- 状态文本：显示地图尺寸、分辨率、topic 状态
-
-Phase 1 不放 `Save Map` 按钮，避免 UI 暗示保存能力已经可用。
-
-### 5.2 修改文件
-
-#### `RobotController.java`
-
-新增 import：
+保存点位：
 
 ```java
-import nav_msgs.OccupancyGrid;
+PoseStamped pointA;
+PoseStamped pointB;
+RoundTripState roundTripState;
 ```
+
+### 6.2 地图点选
+
+`SlamMapView` 需要暴露触摸点到 map 坐标的转换。
+
+屏幕坐标转 bitmap 坐标：
+
+```text
+bitmap_x = (touch_x - translateX) / scale
+bitmap_y = (touch_y - translateY) / scale
+```
+
+bitmap 坐标转 map 坐标：
+
+```text
+map_x = origin_x + bitmap_x * resolution
+map_y = origin_y + (height - bitmap_y) * resolution
+```
+
+注意：
+
+- 当前 bitmap 绘制时对 Y 轴做了翻转，所以转换时必须与 `mapRectToBitmapRect()` 保持一致。
+- 点选 A/B 时应同时保存 `frame_id = "map"`。
+- orientation 第一版可以固定为当前车头方向或默认朝向。
+
+第一版可以先使用固定朝向：
+
+```text
+orientation.z = 0
+orientation.w = 1
+```
+
+后续再根据 A->B 的路径方向自动设置 yaw。
+
+### 6.3 目标点合法性校验
+
+点选 A/B 后必须校验：
+
+- 点位在地图范围内。
+- 点位在黄色设定区域内。
+- 点位不是灰色未知。
+- 点位不是黑色障碍。
+- 点位周围至少保留一定安全半径。
+
+建议第一版实现简单栅格校验：
+
+```text
+目标点所在 cell 必须 value == 0
+目标点周围半径 2 到 3 个 cell 内不能有 occupied
+```
+
+若 `SLAM_DELTA=0.10`，半径 3 个 cell 约等于 0.3m。
+
+失败提示：
+
+```text
+目标点不可用：请选择白色可通行区域
+```
+
+### 6.4 发布导航目标
+
+新增 publisher：
+
+```java
+Publisher<PoseStamped> moveBaseGoalPublisher;
+```
+
+topic：
+
+```text
+/move_base_simple/goal
+```
+
+type：
+
+```text
+geometry_msgs/PoseStamped
+```
+
+消息内容：
+
+```text
+header.frame_id = "map"
+header.stamp = connectedNode.getCurrentTime()
+pose.position.x = selected_map_x
+pose.position.y = selected_map_y
+pose.position.z = 0
+pose.orientation = quaternion_from_yaw(yaw)
+```
+
+第一版目标：
+
+- 点击 `去 B`：发布 B 点。
+- 点击 `返回 A`：发布 A 点。
+- 点击 `A-B-A`：先发布 B 点，到达后自动发布 A 点。
+
+### 6.5 订阅导航状态
+
+新增 subscriber：
+
+```java
+Subscriber<GoalStatusArray> moveBaseStatusSubscriber;
+```
+
+topic：
+
+```text
+/move_base/status
+```
+
+type：
+
+```text
+actionlib_msgs/GoalStatusArray
+```
+
+需要处理的状态：
+
+| status | 含义 | Android 行为 |
+|---:|---|---|
+| `1` | ACTIVE | 显示正在导航 |
+| `3` | SUCCEEDED | 如果正在去 B，则发布 A；如果正在返回 A，则完成 |
+| `4` | ABORTED | 标记失败 |
+| `5` | REJECTED | 标记失败 |
+| `2` | PREEMPTED | 标记取消或被新目标覆盖 |
+
+A-B-A 状态机：
+
+```text
+IDLE
+  -> 点击 A-B-A
+  -> GOING_TO_B
+  -> 收到 SUCCEEDED
+  -> RETURNING_TO_A
+  -> 收到 SUCCEEDED
+  -> FINISHED
+```
+
+失败状态：
+
+```text
+GOING_TO_B 或 RETURNING_TO_A
+  -> 收到 ABORTED / REJECTED
+  -> FAILED
+```
+
+### 6.6 取消导航
+
+新增 publisher：
+
+```java
+Publisher<GoalID> moveBaseCancelPublisher;
+```
+
+topic：
+
+```text
+/move_base/cancel
+```
+
+type：
+
+```text
+actionlib_msgs/GoalID
+```
+
+发布空 `GoalID` 可取消当前目标：
+
+```text
+stamp = 0
+id = ""
+```
+
+Android 页面提供 `取消` 或复用 `停止`：
+
+- 发布 `/move_base/cancel`
+- 同时发布一次 `/cmd_vel` 零速度更稳妥
+- 状态切换为 `CANCELED`
+
+### 6.7 UI 设计
+
+在 `SLAM 地图` 页面增加最小控制区：
+
+```text
+[设 A] [设 B] [去 B] [返回 A] [A-B-A] [取消]
+```
+
+地图显示：
+
+- A 点：蓝色圆点或 `A` 标记。
+- B 点：红色圆点或 `B` 标记。
+- 当前目标点：高亮描边。
+- 若订阅到 global plan，后续可显示路径线，第一版不强制。
+
+面板显示：
+
+```text
+设定区域栅格：空闲 xx%，障碍 xx%，未知 xx%
+导航状态：去 B / 返回 A / 已完成 / 失败
+目标：A 或 B
+```
+
+注意：
+
+- 不要把 A/B 点允许放到灰色未知区。
+- 不要在 Android 端绘制一条蓝线就当成真实路径。真实路径应以后续 `/move_base/NavfnROS/plan` 或 `/move_base/DWAPlannerROS/local_plan` 为准。
+
+## 7. RobotController 修改建议
 
 新增字段：
 
 ```java
-private Subscriber<OccupancyGrid> mapSubscriber;
-private OccupancyGrid occupancyGrid;
-private final Object mapMutex = new Object();
-private final ArrayList<MessageListener<OccupancyGrid>> mapListeners;
+private Publisher<PoseStamped> moveBaseGoalPublisher;
+private Publisher<GoalID> moveBaseCancelPublisher;
+private Subscriber<GoalStatusArray> moveBaseStatusSubscriber;
+private final ArrayList<MessageListener<GoalStatusArray>> moveBaseStatusListeners;
 ```
 
-构造方法中初始化：
+新增方法：
 
 ```java
-this.mapListeners = new ArrayList<>();
+public boolean publishMoveBaseGoal(double x, double y, double yaw);
+public boolean cancelMoveBaseGoal();
+public boolean addMoveBaseStatusListener(MessageListener<GoalStatusArray> listener);
+public boolean removeMoveBaseStatusListener(MessageListener<GoalStatusArray> listener);
 ```
 
-新增 listener 方法：
+`refreshTopics()` 中初始化：
 
 ```java
-public boolean addMapListener(MessageListener<OccupancyGrid> listener);
-public boolean removeMapListener(MessageListener<OccupancyGrid> listener);
-public OccupancyGrid getOccupancyGrid();
+moveBaseGoalPublisher =
+    connectedNode.newPublisher("/move_base_simple/goal", PoseStamped._TYPE);
+
+moveBaseCancelPublisher =
+    connectedNode.newPublisher("/move_base/cancel", GoalID._TYPE);
+
+moveBaseStatusSubscriber =
+    connectedNode.newSubscriber("/move_base/status", GoalStatusArray._TYPE);
 ```
 
-`refreshTopics()` 中新增 `/map` 订阅：
-
-```java
-String mapTopic = PreferenceManager.getDefaultSharedPreferences(context)
-        .getString(context.getString(R.string.prefs_map_topic_edittext_key),
-                context.getString(R.string.map_topic));
-
-if (mapSubscriber == null || !mapTopic.equals(mapSubscriber.getTopicName().toString())) {
-    if (mapSubscriber != null) {
-        mapSubscriber.shutdown();
-    }
-
-    mapSubscriber = connectedNode.newSubscriber(mapTopic, OccupancyGrid._TYPE);
-    mapSubscriber.addMessageListener(new MessageListener<OccupancyGrid>() {
-        @Override
-        public void onNewMessage(OccupancyGrid grid) {
-            setOccupancyGrid(grid);
-        }
-    });
-}
-```
-
-新增内部方法：
-
-```java
-protected void setOccupancyGrid(OccupancyGrid grid) {
-    synchronized (mapMutex) {
-        occupancyGrid = grid;
-    }
-
-    synchronized (mapListeners) {
-        for (MessageListener<OccupancyGrid> listener : mapListeners) {
-            listener.onNewMessage(grid);
-        }
-    }
-}
-```
-
-`shutdownTopics()` 中补充：
-
-```java
-if (mapSubscriber != null) {
-    mapSubscriber.shutdown();
-}
-```
-
-#### `strings.xml`
-
-新增 topic 和 preference 文案：
-
-```xml
-<string name="map_topic">/map</string>
-<string name="prefs_map_topic_edittext_key">prefs_map_topic_edittext</string>
-<string name="map_topic_pref_title">Map Topic</string>
-<string name="map_topic_pref_summary">Topic for SLAM occupancy grid.\nExpected message type: nav_msgs/OccupancyGrid\nValue: %s</string>
-<string name="slam_map">SLAM Map</string>
-<string name="gps_map">GPS Map</string>
-<string name="slam_map_recenter">Recenter</string>
-<string name="slam_map_waiting">Waiting for /map...</string>
-```
-
-调整 `feature_titles`：
-
-```xml
-<string-array name="feature_titles">
-    <item>Select Robot</item>
-    <item>Overview</item>
-    <item>Camera</item>
-    <item>Robot</item>
-    <item>SLAM Map</item>
-    <item>GPS Map</item>
-    <item>Preferences</item>
-    <item>About</item>
-</string-array>
-```
-
-中文资源 `values-zh-rCN/strings.xml` 也应同步添加。
-
-#### `prefs.xml`
-
-在 topic 设置组中新增：
-
-```xml
-<com.robotca.ControlApp.Views.BetterEditTextPreference
-    android:defaultValue="@string/map_topic"
-    android:key="@string/prefs_map_topic_edittext_key"
-    android:singleLine="true"
-    android:summary="@string/map_topic_pref_summary"
-    android:title="@string/map_topic_pref_title" />
-```
-
-#### `ControlApp.java`
-
-新增 import：
-
-```java
-import com.robotca.ControlApp.Fragments.SlamMapFragment;
-```
-
-抽屉图标数组 `imgRes` 需要新增一项，保证长度和 `feature_titles` 一致。
-
-推荐复用：
-
-```java
-R.drawable.ic_terrain_black_24dp
-```
-
-`selectItem()` 中调整：
-
-```java
-case 3:
-    fragment = new LaserScanFragment();
-    break;
-
-case 4:
-    fragment = new SlamMapFragment();
-    break;
-
-case 5:
-    fragment = new MapFragment();
-    break;
-
-case 6:
-    // Preferences
-    break;
-
-case 7:
-    // About
-    break;
-```
-
-注意同步所有与 drawer index 相关的逻辑，避免 Preferences/About 错位。
-
-#### `build.gradle`
-
-项目已经使用 `nav_msgs.Odometry`，说明 `nav_msgs` 可能已通过 rosjava 依赖传递存在。
-
-推荐先尝试不改依赖直接编译。如果 `OccupancyGrid` 无法解析，再显式增加：
-
-```gradle
-compile 'org.ros.rosjava_messages:nav_msgs:1.12.7'
-```
-
-本地 maven 仓库中已存在：
+依赖如果缺失，优先检查本地 rosjava maven 仓库是否已有：
 
 ```text
-android/tools/rosjava_mvn_repo/org/ros/rosjava_messages/nav_msgs/1.12.7/
+geometry_msgs
+actionlib_msgs
 ```
 
-## Phase 2: 机器人位姿叠加
+若编译找不到，再在 `build.gradle` 显式补充。
 
-Phase 2 在 SLAM Map 稳定显示后实现。
+## 8. 实施阶段
 
-### 6.1 不建议直接使用 `/odom`
+### Phase 1：保持当前 SLAM 地图显示稳定
 
-`/map` 是 map frame，`/odom` 是 odom frame。直接把 `/odom` 坐标绘制到 `/map` 上会出现偏移或漂移。
+状态：基本完成。
 
-正确输入应满足以下条件之一：
+验收：
 
-- 位姿已经在 `map` frame 下
-- Android 端能计算 TF：`map -> odom -> base_link`
-- 机器人端发布一个专用 pose topic，例如 `/robot_pose_in_map`
+- `/map` 能显示。
+- `/scan` 约 14Hz。
+- `/odom` 正常。
+- 黄色设定区域显示正确。
+- 设定区域栅格统计能显示。
 
-### 6.2 推荐方案
+### Phase 2：机器人端启动 move_base
 
-优先推荐机器人端发布简化 pose：
+目标：
 
-```text
-topic: /robot_pose
-type: geometry_msgs/PoseStamped
-frame_id: map
-```
+- 能在 RViz 或命令行发布 `/move_base_simple/goal` 后让小车移动。
 
-Android 端只订阅该 topic，并在 `SlamMapView` 中将 pose 转换成栅格坐标。
-
-转换公式：
-
-```text
-grid_x = (pose_x - origin_x) / resolution
-grid_y = (pose_y - origin_y) / resolution
-```
-
-绘制时需要注意 Android Canvas 的 Y 轴方向与 OccupancyGrid 逻辑坐标方向可能不同，应在 `Bitmap` 生成或绘制矩阵中统一处理。
-
-## Phase 3: 地图保存
-
-Phase 3 在地图显示稳定后实现。
-
-### 7.1 推荐方案：机器人端保存
-
-Android 端不要直接假设存在 gmapping save service。推荐在机器人端提供一个明确的保存接口：
-
-```text
-service: /xtark/save_map
-request:
-  string map_name
-response:
-  bool success
-  string message
-```
-
-机器人端 service 内部执行：
+命令行测试示例：
 
 ```bash
-rosrun map_server map_saver -f ~/maps/<map_name>
+rostopic pub /move_base_simple/goal geometry_msgs/PoseStamped "
+header:
+  frame_id: 'map'
+pose:
+  position:
+    x: 0.5
+    y: 0.0
+    z: 0.0
+  orientation:
+    w: 1.0
+" -1
 ```
 
-Android 端 `Save Map` 按钮只负责调用 `/xtark/save_map`，并显示保存结果。
+验收：
 
-优点：
+- `/move_base/status` 有数据。
+- `/cmd_vel` 会被 move_base 发布。
+- 小车不会原地乱转或直接撞障碍。
 
-- 保存位置固定在机器人端
-- 格式标准：`pgm + yaml`
-- 后续 `map_nav` 可直接加载
-- Android 不需要处理文件传输和 ROS 地图格式细节
+### Phase 3：Android 实现 A/B 点选择
 
-### 7.2 备选方案：Android 本地导出
+目标：
 
-Android 可从当前 `OccupancyGrid` 本地生成：
+- 在地图上设置 A 点和 B 点。
+- A/B 点显示在地图上。
+- 点位坐标能导出到调试面板。
+- 点位必须通过可通行校验。
 
-- `map.pgm`
-- `map.yaml`
+验收：
 
-但它更适合作为调试或备份，不建议作为导航主流程。
+- 点白色区域成功。
+- 点灰色未知或黑色障碍会拒绝。
+- 地图缩放/拖动后点选坐标仍正确。
 
-原因：
+### Phase 4：Android 下发单目标
 
-- 文件还需要传回机器人
-- Android 存储权限和路径兼容性复杂
-- YAML 中 origin、resolution、occupied/free threshold 必须严格匹配 ROS 约定
+目标：
 
-## Phase 4: map_nav
+- `去 B` 发布 B 点到 `/move_base_simple/goal`。
+- `返回 A` 发布 A 点到 `/move_base_simple/goal`。
 
-导航依赖比建图更重，应在 SLAM Map 和地图保存跑通后实施。
+验收：
 
-机器人端需要：
+- 在 ROS 端能收到 goal。
+- 小车能向目标移动。
+- Android 能显示 ACTIVE / SUCCEEDED / FAILED。
 
-- `map_server`
-- `amcl`
-- `move_base`
-- global costmap 参数
-- local costmap 参数
-- planner 参数
-- footprint / inflation / obstacle layer 配置
+### Phase 5：Android 实现 A-B-A 自动往返
 
-Android 端主要新增：
+目标：
 
-- 地图选择
-- 发送 `move_base_simple/goal`
-- 显示目标点
-- 显示导航状态
-- 支持取消目标
-
-## Phase 5: map_manager
-
-地图管理应放在最后。
-
-它依赖机器人端已经有稳定地图目录和保存规范。
-
-功能包括：
-
-- 列出已保存地图
-- 重命名地图
-- 删除地图
-- 选择导航地图
-- 查看地图元信息
-
-建议通过机器人端服务提供统一接口，而不是 Android 直接操作机器人文件系统。
-
-## 8. 验证清单
-
-### 8.1 编译验证
-
-- Android 工程可完整编译
-- `feature_titles` 数量和 drawer icon 数量一致
-- `SlamMapFragment` 生命周期中 listener 正确添加和移除
-- 无 `OccupancyGrid` 类型解析错误
-
-### 8.2 机器人端验证
-
-启动 SLAM：
-
-```bash
-rosrun gmapping slam_gmapping scan:=/scan
-```
-
-确认 topic：
-
-```bash
-rostopic echo /map -n 1
-rostopic hz /map
-```
-
-### 8.3 App 端验证
-
-- 侧边栏出现 `SLAM Map`
-- 原 `GPS Map` 仍可进入
-- 进入 `SLAM Map` 后能看到地图逐步更新
-- 拖动和缩放流畅
-- 离开页面后不会继续刷新已销毁的 view
-- 断开 ROS 后不会崩溃
-
-### 8.4 回归验证
-
-- Joystick 控制正常
-- LaserScan 页面正常
-- Camera 页面正常
-- Preferences 页面正常
-- About 页面正常
-- 原 GPS Map 页面正常
-
-## 9. 建议最终文件变更清单
-
-### 新增
+- 点击 `A-B-A` 后自动执行：
 
 ```text
-src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Views/SlamMapView.java
-src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Fragments/SlamMapFragment.java
-src/android_foo/control_app/src/main/res/layout/fragment_slam_map.xml
+发布 B
+  -> B 到达
+  -> 发布 A
+  -> A 到达
+  -> 完成
 ```
 
-### 修改
+验收：
+
+- 小车从 A 附近出发能到 B。
+- 到达 B 后能自动返回 A。
+- 任一阶段失败时 Android 明确显示失败。
+- 点击取消能停止当前导航。
+
+### Phase 6：保存地图并切换稳定导航
+
+目标：
+
+- 将可用地图保存为 `pgm + yaml`。
+- 使用 `map_server + amcl + move_base` 重复 A-B-A。
+
+验收：
+
+- 重启后不重新建图，也能跑 A-B-A。
+- 初始定位完成后目标点仍然有效。
+
+## 9. 验收标准
+
+### 9.1 地图质量
+
+最低要求：
+
+- A 点、B 点均在白色区域。
+- A/B 周围 0.2m 到 0.3m 内无黑色障碍。
+- A 到 B 之间存在连续白色通路。
+- 设定区域内未知比例不作为唯一指标，但路径附近不能大片未知。
+
+建议目标：
 
 ```text
-src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Core/RobotController.java
-src/android_foo/control_app/src/main/java/com/robotca/ControlApp/ControlApp.java
-src/android_foo/control_app/src/main/res/values/strings.xml
-src/android_foo/control_app/src/main/res/values-zh-rCN/strings.xml
-src/android_foo/control_app/src/main/res/xml/prefs.xml
-src/android_foo/control_app/build.gradle
+设定区域未知 < 50% 可以开始局部测试
+路径附近未知 < 20% 更适合导航
 ```
 
-### 可选修改
+### 9.2 导航链路
 
-如果需要把 `/map` topic 纳入每个机器人独立配置，而不仅是全局 Preferences，需要额外修改：
+必须满足：
+
+- `/map` 正常。
+- `/scan` 正常。
+- `/odom` 正常。
+- TF 正常。
+- `/move_base/status` 正常。
+- `/cmd_vel` 由 move_base 输出。
+
+### 9.3 Android 交互
+
+必须满足：
+
+- 能设置 A/B。
+- 能拒绝非法点。
+- 能单独去 B。
+- 能单独返回 A。
+- 能一键 A-B-A。
+- 能取消。
+- 能显示失败原因或状态。
+
+## 10. 风险与处理
+
+| 风险 | 表现 | 处理 |
+|---|---|---|
+| 地图局部未知太多 | move_base 绕路或失败 | 在路径附近慢速移动、原地旋转补图 |
+| 目标点靠近障碍 | 小车不敢过去或撞障碍 | 目标点校验加入安全半径 |
+| TF 不完整 | move_base 报 transform 错误 | 确认 `map -> odom -> base_footprint -> laser` |
+| odom 漂移 | 回 A 不准 | 保存地图后切换 AMCL |
+| costmap 过保守 | 路很宽但规划失败 | 降低 inflation 或修正 footprint |
+| costmap 过激进 | 贴障碍太近 | 增大 inflation 或 footprint |
+| Android 坐标转换错误 | 点 A/B 后目标偏移 | 用 RViz 对比点击坐标和 goal 坐标 |
+
+## 11. 推荐下一步
+
+下一步不要继续扩大地图功能，直接进入 `A-B-A 往返导航 MVP`：
 
 ```text
-src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Core/RobotInfo.java
-src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Core/RobotStorage.java
-src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Dialogs/AddEditRobotDialogFragment.java
-src/android_foo/control_app/src/main/res/layout/dialog_add_robot.xml
+1. 机器人端先跑通 move_base 命令行 goal
+2. Android 增加 A/B 点选择
+3. Android 发布 /move_base_simple/goal
+4. Android 订阅 /move_base/status
+5. 实现 A-B-A 状态机
 ```
 
-Phase 1 建议先使用全局 Preferences 配置 `/map`，降低改动范围。等 SLAM Map 稳定后，再决定是否扩展到每个 RobotInfo。
-
-## 10. 推荐落地版本
-
-推荐第一版只交付：
-
-- 新增 `SLAM Map` 页面
-- 订阅 `/map`
-- Bitmap 渲染 OccupancyGrid
-- 支持拖动、缩放、居中
-- 保留原 GPS Map
-
-暂不交付：
-
-- 地图保存
-- 导航目标下发
-- 地图管理
-- TF 计算
-
-这样可以用最小改动快速验证核心链路：
-
-```text
-xtark gmapping -> /map -> RobotController -> SlamMapFragment -> SlamMapView
-```
-
-核心链路验证通过后，再逐步接入机器人位姿、保存地图和导航。
+第一版只要求在已探索白色区域内可靠往返，不要求任意区域、任意路线、地图管理或复杂巡航。

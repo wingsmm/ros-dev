@@ -16,6 +16,7 @@ import org.ros.node.Node;
 import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMain;
 import org.ros.node.NodeMainExecutor;
+import org.ros.node.parameter.ParameterTree;
 import org.ros.node.topic.Publisher;
 import org.ros.node.topic.Subscriber;
 
@@ -27,10 +28,12 @@ import geometry_msgs.Point;
 import geometry_msgs.Pose;
 import geometry_msgs.Quaternion;
 import geometry_msgs.Twist;
+import nav_msgs.OccupancyGrid;
 import nav_msgs.Odometry;
 import sensor_msgs.CompressedImage;
 import sensor_msgs.LaserScan;
 import sensor_msgs.NavSatFix;
+import std_msgs.Float64;
 
 /**
  * Manages receiving data from, and sending commands to, a connected Robot.
@@ -109,6 +112,20 @@ public class RobotController implements NodeMain, Savable {
     // Listener for NavSatFix
     private ArrayList<MessageListener<NavSatFix>> navSatListeners;
 
+    // Subscriber to OccupancyGrid (/map) data
+    private Subscriber<OccupancyGrid> mapSubscriber;
+    // The most recent OccupancyGrid
+    private OccupancyGrid occupancyGrid;
+    // Lock for synchronizing accessing and receiving the current OccupancyGrid
+    private final Object mapMutex = new Object();
+    // Listener for OccupancyGrid
+    private final ArrayList<MessageListener<OccupancyGrid>> mapListeners;
+
+    // Subscriber to gmapping entropy (optional debug topic)
+    private Subscriber<Float64> slamEntropySubscriber;
+    private double slamEntropy = Double.NaN;
+    private final Object slamEntropyMutex = new Object();
+
     /**
      * LocationProvider subscribers can register to to receive location updates.
      */
@@ -143,6 +160,7 @@ public class RobotController implements NodeMain, Savable {
         this.laserScanListeners = new ArrayList<>();
         this.odometryListeners = new ArrayList<>();
         this.navSatListeners = new ArrayList<>();
+        this.mapListeners = new ArrayList<>();
 
         this.LOCATION_PROVIDER = new LocationProvider();
         this.addNavSatFixListener(this.LOCATION_PROVIDER);
@@ -161,6 +179,15 @@ public class RobotController implements NodeMain, Savable {
      */
     public boolean addOdometryListener(MessageListener<Odometry> l) {
         return odometryListeners.add(l);
+    }
+
+    /**
+     * Removes an Odometry listener.
+     * @param l The listener
+     * @return True if the listener was removed
+     */
+    public boolean removeOdometryListener(MessageListener<Odometry> l) {
+        return odometryListeners.remove(l);
     }
 
     /**
@@ -192,6 +219,53 @@ public class RobotController implements NodeMain, Savable {
 
         synchronized (laserScanListeners) {
             return laserScanListeners.remove(l);
+        }
+    }
+
+    /**
+     * Adds an OccupancyGrid listener.
+     * @param listener The listener
+     * @return True on success
+     */
+    public boolean addMapListener(MessageListener<OccupancyGrid> listener) {
+        synchronized (mapListeners) {
+            return mapListeners.add(listener);
+        }
+    }
+
+    /**
+     * Removes an OccupancyGrid listener.
+     * @param listener The listener
+     * @return True if the listener was removed
+     */
+    public boolean removeMapListener(MessageListener<OccupancyGrid> listener) {
+        synchronized (mapListeners) {
+            return mapListeners.remove(listener);
+        }
+    }
+
+    /**
+     * @return The most recently received OccupancyGrid
+     */
+    public OccupancyGrid getOccupancyGrid() {
+        synchronized (mapMutex) {
+            return occupancyGrid;
+        }
+    }
+
+    /**
+     * Sets the current OccupancyGrid and notifies listeners.
+     * @param grid The OccupancyGrid
+     */
+    protected void setOccupancyGrid(OccupancyGrid grid) {
+        synchronized (mapMutex) {
+            occupancyGrid = grid;
+        }
+
+        synchronized (mapListeners) {
+            for (MessageListener<OccupancyGrid> listener : mapListeners) {
+                listener.onNewMessage(grid);
+            }
         }
     }
 
@@ -407,6 +481,10 @@ public class RobotController implements NodeMain, Savable {
                 .getString(context.getString(R.string.prefs_camera_topic_edittext_key),
                         context.getString(R.string.camera_topic));
 
+        String mapTopic = PreferenceManager.getDefaultSharedPreferences(context)
+                .getString(context.getString(R.string.prefs_map_topic_edittext_key),
+                        context.getString(R.string.map_topic));
+
         // Refresh the Move Publisher
         if (movePublisher == null
                 || !moveTopic.equals(movePublisher.getTopicName().toString())) {
@@ -520,6 +598,36 @@ public class RobotController implements NodeMain, Savable {
                 }
             });
         }
+
+        // Refresh the Map Subscriber
+        if (mapSubscriber == null
+                || !mapTopic.equals(mapSubscriber.getTopicName().toString())) {
+
+            if (mapSubscriber != null) {
+                mapSubscriber.shutdown();
+            }
+
+            mapSubscriber = connectedNode.newSubscriber(mapTopic, OccupancyGrid._TYPE);
+            mapSubscriber.addMessageListener(new MessageListener<OccupancyGrid>() {
+                @Override
+                public void onNewMessage(OccupancyGrid grid) {
+                    setOccupancyGrid(grid);
+                }
+            });
+        }
+
+        if (slamEntropySubscriber == null) {
+            slamEntropySubscriber = connectedNode.newSubscriber(
+                    context.getString(R.string.slam_entropy_topic), Float64._TYPE);
+            slamEntropySubscriber.addMessageListener(new MessageListener<Float64>() {
+                @Override
+                public void onNewMessage(Float64 entropy) {
+                    synchronized (slamEntropyMutex) {
+                        slamEntropy = entropy.getData();
+                    }
+                }
+            });
+        }
     }
 
     /**
@@ -548,6 +656,14 @@ public class RobotController implements NodeMain, Savable {
 
         if(poseSubscriber != null){
             poseSubscriber.shutdown();
+        }
+
+        if (mapSubscriber != null) {
+            mapSubscriber.shutdown();
+        }
+
+        if (slamEntropySubscriber != null) {
+            slamEntropySubscriber.shutdown();
         }
     }
 
@@ -786,6 +902,59 @@ public class RobotController implements NodeMain, Savable {
     public CompressedImage getImage(){
         synchronized (imageMutex) {
             return this.image;
+        }
+    }
+
+    /**
+     * @return Latest gmapping entropy if available, otherwise null.
+     */
+    public Double getSlamEntropy() {
+        synchronized (slamEntropyMutex) {
+            if (Double.isNaN(slamEntropy)) {
+                return null;
+            }
+            return slamEntropy;
+        }
+    }
+
+    /**
+     * @return The connected ROS node, or null if not connected yet.
+     */
+    public ConnectedNode getConnectedNode() {
+        return connectedNode;
+    }
+
+    /**
+     * @return True if the named ROS parameter exists on the parameter server.
+     */
+    public boolean hasRosParam(String name) {
+        try {
+            if (connectedNode == null) {
+                return false;
+            }
+            return connectedNode.getParameterTree().has(name);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to check ROS param: " + name, e);
+            return false;
+        }
+    }
+
+    /**
+     * Reads a double ROS parameter, returning fallback when unavailable.
+     */
+    public double getRosDoubleParam(String name, double fallback) {
+        try {
+            if (connectedNode == null) {
+                return fallback;
+            }
+            ParameterTree params = connectedNode.getParameterTree();
+            if (!params.has(name)) {
+                return fallback;
+            }
+            return params.getDouble(name, fallback);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to read ROS param: " + name, e);
+            return fallback;
         }
     }
 }

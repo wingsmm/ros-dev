@@ -53,6 +53,7 @@ import com.robotca.ControlApp.Fragments.JoystickFragment;
 import com.robotca.ControlApp.Fragments.ManualControlFragment;
 import com.robotca.ControlApp.Fragments.LaserScanFragment;
 import com.robotca.ControlApp.Fragments.MapFragment;
+import com.robotca.ControlApp.Fragments.SlamMapFragment;
 import com.robotca.ControlApp.Fragments.OverviewFragment;
 import com.robotca.ControlApp.Fragments.PreferencesFragment;
 import com.robotca.ControlApp.Fragments.RosFragment;
@@ -234,6 +235,7 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
                 R.drawable.ic_view_quilt_black_24dp,
                 R.drawable.ic_linked_camera_black_24dp,
                 R.drawable.ic_navigation_black_24dp,
+                R.drawable.ic_terrain_black_24dp,
                 R.drawable.ic_terrain_black_24dp,
                 R.drawable.ic_settings_black_24dp,
                 R.drawable.ic_info_outline_black_24dp
@@ -572,11 +574,16 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
                 break;
 
             case 4:
-                fragment = new MapFragment();
+                fragment = new SlamMapFragment();
                 fragmentsCreatedCounter = fragmentsCreatedCounter + 1;
                 break;
 
             case 5:
+                fragment = new MapFragment();
+                fragmentsCreatedCounter = fragmentsCreatedCounter + 1;
+                break;
+
+            case 6:
                 if (joystickFragment != null)
                     joystickFragment.hide();
                 if (manualControlFragment != null)
@@ -596,7 +603,7 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
                 fragmentsCreatedCounter = fragmentsCreatedCounter + 1;
                 break;
 
-            case 6:
+            case 7:
                 if (joystickFragment != null)
                     joystickFragment.hide();
                 if (manualControlFragment != null)
@@ -756,7 +763,7 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
     public void onPreferencesChanged(SharedPreferences prefs) {
 
         // Warning System
-        warningSystem.setEnabled(prefs.getBoolean(getString(R.string.prefs_warning_checkbox_key), true));
+        warningSystem.setEnabled(prefs.getBoolean(getString(R.string.prefs_warning_checkbox_key), false));
         warningSystem.enableSafemode(prefs.getBoolean(getString(R.string.prefs_warning_safemode_key), true));
 
         // Beep beep
