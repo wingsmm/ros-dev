@@ -124,6 +124,33 @@
     <string name="slam_map_debug_tap_hint">Tap panel to expand/collapse details</string>
     <string name="slam_map_debug_export">Export</string>
     <string name="slam_map_debug_export_done">Diagnostic copied and saved to %1$s</string>
+    <string name="slam_nav_set_a">Set A</string>
+    <string name="slam_nav_set_b">Set B</string>
+    <string name="slam_nav_section_pick">1. Pick points on map</string>
+    <string name="slam_nav_section_go">2. Navigate</string>
+    <string name="slam_nav_section_view">3. Map view</string>
+    <string name="slam_float_menu_anchor">Navigation menu</string>
+    <string name="slam_nav_go_b">Go B</string>
+    <string name="slam_nav_return_a">Return A</string>
+    <string name="slam_nav_round_trip">A-B-A</string>
+    <string name="slam_nav_cancel">Cancel</string>
+    <string name="slam_nav_pick_a">Tap a free cell to set A</string>
+    <string name="slam_nav_pick_b">Tap a free cell to set B</string>
+    <string name="slam_nav_cancel_pick">Cancel pick</string>
+    <string name="slam_nav_pick_canceled">Point picking canceled</string>
+    <string name="slam_nav_goal_rejected">Goal rejected: choose a white free area</string>
+    <string name="slam_nav_missing_a_b">Set both A and B first</string>
+    <string name="slam_nav_goal_sent">Goal sent</string>
+    <string name="slam_nav_cancel_sent">Navigation canceled</string>
+    <string name="slam_nav_state">Navigation: %1$s</string>
+    <string name="slam_nav_state_idle">idle</string>
+    <string name="slam_nav_state_going_b">going to B</string>
+    <string name="slam_nav_state_returning_a">returning to A</string>
+    <string name="slam_nav_state_finished">finished</string>
+    <string name="slam_nav_state_failed">failed</string>
+    <string name="slam_nav_state_canceled">canceled</string>
+    <string name="slam_nav_state_active">active</string>
+    <string name="slam_nav_state_pending">pending</string>
     <string name="laser_scan_detail_pref_summary">Sets the detail level of the laser scan visualization.
         A higher number will draw more laser points\nValue: %s
     </string>
@@ -181,6 +208,7 @@
     <string name="connecting_title">Connecting</string>
     <string name="connecting_message">Connecting to %1$s (%2$s)</string>
     <string name="cannot_connect_ros">Cannot connect to ROS. Please make sure ROS is running and that the Master URI is correct.</string>
+    <string name="ros_connection_lost">Robot connection lost. Please reconnect.</string>
     <string name="invalid_master_uri">Invalid Master URI</string>
     <string name="master_uri_required">Master URI required</string>
     <string name="all_topics_required">All topic names are required</string>
@@ -293,8 +321,8 @@
     <string name="prefs_manual_angular_speed_key">manual_angular_speed</string>
     <string name="manual_linear_speed_pref_title">Manual Linear Speed</string>
     <string name="manual_angular_speed_pref_title">Manual Angular Speed</string>
-    <string name="manual_linear_speed_pref_summary">Hold-button linear speed in m/s (0.02–0.30)\nValue: %s</string>
-    <string name="manual_angular_speed_pref_summary">Hold-button angular speed in rad/s (0.05–0.80)\nValue: %s</string>
+    <string name="manual_linear_speed_pref_summary">Hold-button and SLAM nav linear speed in m/s (0.02–0.30)\nValue: %s</string>
+    <string name="manual_angular_speed_pref_summary">Hold-button and SLAM nav angular speed in rad/s (0.05–0.80)\nValue: %s</string>
     <string name="default_manual_linear_speed">0.10</string>
     <string name="default_manual_angular_speed">0.20</string>
 

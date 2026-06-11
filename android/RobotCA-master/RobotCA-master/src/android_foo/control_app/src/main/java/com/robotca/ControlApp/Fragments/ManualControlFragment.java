@@ -2,7 +2,6 @@ package com.robotca.ControlApp.Fragments;
 
 import android.app.Fragment;
 import android.os.Bundle;
-import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -12,6 +11,7 @@ import android.widget.Button;
 
 import com.robotca.ControlApp.ControlApp;
 import com.robotca.ControlApp.Core.ControlMode;
+import com.robotca.ControlApp.Core.ManualSpeedPreferences;
 import com.robotca.ControlApp.Core.RobotController;
 import com.robotca.ControlApp.R;
 
@@ -19,13 +19,6 @@ import com.robotca.ControlApp.R;
  * Hold-to-drive manual control buttons that publish through RobotController.forceVelocity().
  */
 public class ManualControlFragment extends Fragment {
-
-    private static final double DEFAULT_LINEAR_SPEED = 0.10;
-    private static final double DEFAULT_ANGULAR_SPEED = 0.20;
-    private static final double MIN_LINEAR_SPEED = 0.02;
-    private static final double MAX_LINEAR_SPEED = 0.30;
-    private static final double MIN_ANGULAR_SPEED = 0.05;
-    private static final double MAX_ANGULAR_SPEED = 0.80;
 
     private View view;
     private ControlMode controlMode = ControlMode.Joystick;
@@ -36,10 +29,10 @@ public class ManualControlFragment extends Fragment {
             view = inflater.inflate(R.layout.fragment_manual_control, container, false);
             bindMotionButton((Button) view.findViewById(R.id.manual_btn_forward), 1, 0, 0, true, false, false);
             bindMotionButton((Button) view.findViewById(R.id.manual_btn_backward), -1, 0, 0, true, false, false);
-            bindMotionButton((Button) view.findViewById(R.id.manual_btn_strafe_left), 0, 1, 0, false, true, false);
-            bindMotionButton((Button) view.findViewById(R.id.manual_btn_strafe_right), 0, -1, 0, false, true, false);
-            bindMotionButton((Button) view.findViewById(R.id.manual_btn_turn_left), 0, 0, 1, false, false, true);
-            bindMotionButton((Button) view.findViewById(R.id.manual_btn_turn_right), 0, 0, -1, false, false, true);
+            bindMotionButton((Button) view.findViewById(R.id.manual_btn_strafe_left), 0, -1, 0, false, true, false);
+            bindMotionButton((Button) view.findViewById(R.id.manual_btn_strafe_right), 0, 1, 0, false, true, false);
+            bindMotionButton((Button) view.findViewById(R.id.manual_btn_turn_left), 0, 0, -1, false, false, true);
+            bindMotionButton((Button) view.findViewById(R.id.manual_btn_turn_right), 0, 0, 1, false, false, true);
             bindStopButton((Button) view.findViewById(R.id.manual_btn_stop));
         }
         return view;
@@ -153,31 +146,17 @@ public class ManualControlFragment extends Fragment {
     }
 
     private double getLinearSpeed() {
-        return clampSpeed(readPreferenceDouble(R.string.prefs_manual_linear_speed_key, DEFAULT_LINEAR_SPEED),
-                MIN_LINEAR_SPEED, MAX_LINEAR_SPEED);
+        if (getActivity() == null) {
+            return ManualSpeedPreferences.DEFAULT_LINEAR_SPEED;
+        }
+        return ManualSpeedPreferences.getLinearSpeed(getActivity());
     }
 
     private double getAngularSpeed() {
-        return clampSpeed(readPreferenceDouble(R.string.prefs_manual_angular_speed_key, DEFAULT_ANGULAR_SPEED),
-                MIN_ANGULAR_SPEED, MAX_ANGULAR_SPEED);
-    }
-
-    private double readPreferenceDouble(int keyResId, double defaultValue) {
         if (getActivity() == null) {
-            return defaultValue;
+            return ManualSpeedPreferences.DEFAULT_ANGULAR_SPEED;
         }
-
-        String value = PreferenceManager.getDefaultSharedPreferences(getActivity())
-                .getString(getString(keyResId), String.valueOf(defaultValue));
-        try {
-            return Double.parseDouble(value);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
-    }
-
-    private static double clampSpeed(double value, double min, double max) {
-        return Math.max(min, Math.min(max, value));
+        return ManualSpeedPreferences.getAngularSpeed(getActivity());
     }
 
     @Nullable

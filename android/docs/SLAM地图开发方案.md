@@ -15,7 +15,8 @@
 约束条件：
 
 - A 点和 B 点必须落在已探索的白色可通行区域。
-- A 到 B 的路径必须位于黄色设定区域与绿色已探索区域的有效交集内。
+- A 到 B 的路径优先位于黄色设定区域与绿色已探索区域的有效交集内。
+- 当前 Android 第一版不硬性限制 A/B 必须在黄色框内；它只强制目标点落在白色 free 栅格并通过周边安全半径校验。黄色框用于提示 gmapping 设定区域和调试参考。
 - 不支持让小车主动进入灰色未知区域。
 - 不要求 Android 端自己做路径规划。
 - Android 端只负责显示地图、选择点、下发目标和显示导航状态。
@@ -39,6 +40,15 @@ Android 端已经完成以下能力：
 - 统计整张地图栅格比例。
 - 统计设定区域内的空闲、障碍、未知比例。
 - 订阅并显示 `/scan` 频率、`/odom` 状态、gmapping entropy。
+- 在 SLAM 地图上选择 A 点、B 点。
+- 将触摸像素坐标转换为 `/map` 坐标。
+- 校验 A/B 点是否位于白色可通行栅格，并检查周边安全半径。
+- 在地图上显示 A/B 标记。
+- 发布导航目标到 `/move_base_simple/goal`。
+- 订阅 `/move_base/status` 显示导航状态。
+- 支持取消导航目标。
+- 支持一键执行 `去 B -> 返回 A`。
+- 使用悬浮菜单提供 `设 A`、`设 B`、`去 B`、`返回 A`、`A-B-A`、`取消`、`居中` 操作。
 
 相关文件：
 
@@ -48,27 +58,28 @@ android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/
 android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Core/SlamMapDiagnostics.java
 android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Core/SlamMapStats.java
 android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Core/RobotController.java
-android/run_android.sh
+android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Views/SlamFloatingNavMenu.java
+android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/res/layout/view_slam_floating_nav_menu.xml
+xtark/scripts/run_android.sh
 ```
 
-### 2.2 尚未实现
+### 2.2 尚未实车验证或后续优化
 
-Android 端尚未完成：
+Android 端后续可优化：
 
-- 在 SLAM 地图上选择 A 点、B 点。
-- 将触摸像素坐标转换为 `/map` 坐标。
-- 校验 A/B 点是否位于可通行栅格。
-- 发布导航目标到 `/move_base_simple/goal`。
-- 订阅 `/move_base/status` 显示导航状态。
-- 支持取消导航目标。
-- 支持一键执行 `去 B -> 返回 A`。
+- 若必须限制小车只在 4m x 4m 黄色框内活动，可在 `SlamMapView.isFreeForGoal()` 中额外加入 configured bounds 校验。
+- 可根据 A->B 方向自动设置 goal yaw，当前第一版固定 yaw=0。
+- 可订阅并显示 `/move_base/NavfnROS/plan` 或实际 planner plan，当前第一版不画真实规划路径。
+- 可把 `/move_base_simple/goal`、`/move_base/status`、`/move_base/cancel` 做成 Preferences 配置项，当前第一版写死标准 topic。
 
-机器人端尚未确认完成：
+机器人端尚未实车完成：
 
-- `move_base` 是否可用。
-- costmap 参数是否适合 xtark 小车。
+- `~/ros_ws/scripts/run_android.sh start` 后 `move_base` 是否实际正常运行。
+- costmap 参数是否适合当前 xtark 小车和现场空间。
 - 小车 footprint / inflation / obstacle layer 是否配置正确。
-- 使用 gmapping 在线地图导航，还是保存地图后使用 `map_server + amcl` 导航。
+- Android 发布 B 点后，小车是否能真实从当前位置到 B。
+- `A-B-A` 往返是否能稳定完成。
+- 稳定版本是否切换为保存地图后的 `map_server + amcl + move_base`。
 
 ## 3. 关键结论
 
@@ -96,9 +107,9 @@ gmapping 发布的 `/map` 画布可能自动扩展，实际画布可能远大于
 
 ### 3.3 当前需求只需要局部可通行区域
 
-只要黄色设定区域和绿色已探索区域的交集中存在连续白色通道，就可以做 A-B-A 往返导航测试。
+只要 A/B 点和它们之间的路径附近存在连续白色通道，就可以做 A-B-A 往返导航测试。
 
-不需要整张黄色框全部探索完成。
+不需要整张黄色框全部探索完成。黄色框是推荐活动范围和 gmapping 参数提示；当前 Android 第一版不把黄色框作为硬边界。
 
 ## 4. 推荐总体架构
 
@@ -331,7 +342,7 @@ orientation.w = 1
 点选 A/B 后必须校验：
 
 - 点位在地图范围内。
-- 点位在黄色设定区域内。
+- 点位应优先在黄色设定区域内；当前 APK 第一版不做硬限制。
 - 点位不是灰色未知。
 - 点位不是黑色障碍。
 - 点位周围至少保留一定安全半径。
@@ -344,6 +355,16 @@ orientation.w = 1
 ```
 
 若 `SLAM_DELTA=0.10`，半径 3 个 cell 约等于 0.3m。
+
+当前代码状态：
+
+```text
+SlamMapView.isFreeForGoal()
+  - 目标 cell 必须在地图范围内
+  - 目标 cell 周围 3 格内不能有 unknown
+  - 目标 cell 周围 3 格内不能有 occupied 或概率值 > 50
+  - 未硬性检查黄色 configured bounds
+```
 
 失败提示：
 
@@ -497,6 +518,7 @@ Android 页面提供 `取消` 或复用 `停止`：
 注意：
 
 - 不要把 A/B 点允许放到灰色未知区。
+- 第一版 Android 通过 free 栅格和安全半径阻止灰色/黑色区域；如果现场要求“只能在黄色框内”，后续再加边界硬校验。
 - 不要在 Android 端绘制一条蓝线就当成真实路径。真实路径应以后续 `/move_base/NavfnROS/plan` 或 `/move_base/DWAPlannerROS/local_plan` 为准。
 
 ## 7. RobotController 修改建议
@@ -585,6 +607,8 @@ pose:
 
 ### Phase 3：Android 实现 A/B 点选择
 
+状态：已完成，待实车验证。
+
 目标：
 
 - 在地图上设置 A 点和 B 点。
@@ -600,6 +624,8 @@ pose:
 
 ### Phase 4：Android 下发单目标
 
+状态：已完成，待实车验证。
+
 目标：
 
 - `去 B` 发布 B 点到 `/move_base_simple/goal`。
@@ -612,6 +638,8 @@ pose:
 - Android 能显示 ACTIVE / SUCCEEDED / FAILED。
 
 ### Phase 5：Android 实现 A-B-A 自动往返
+
+状态：已完成，待实车验证。
 
 目标：
 
@@ -654,6 +682,7 @@ pose:
 - A/B 周围 0.2m 到 0.3m 内无黑色障碍。
 - A 到 B 之间存在连续白色通路。
 - 设定区域内未知比例不作为唯一指标，但路径附近不能大片未知。
+- 若按当前 APK 第一版使用，A/B 可在黄色框外的已探索白色区域；若要严格 4m x 4m 活动范围，需要补充黄色框边界硬校验。
 
 建议目标：
 
@@ -699,14 +728,42 @@ pose:
 
 ## 11. 推荐下一步
 
-下一步不要继续扩大地图功能，直接进入 `A-B-A 往返导航 MVP`：
+下一步不要继续扩大地图功能，直接进入实车验证：
 
 ```text
-1. 机器人端先跑通 move_base 命令行 goal
-2. Android 增加 A/B 点选择
-3. Android 发布 /move_base_simple/goal
-4. Android 订阅 /move_base/status
-5. 实现 A-B-A 状态机
+1. 机器人端执行 `~/ros_ws/scripts/run_android.sh start` 启动 gmapping 和 move_base
+2. Android 进入 SLAM 地图并连接 ROS master
+3. 设置 A/B 到白色可通行区域
+4. 先点“去 B”验证单程
+5. 再点“返回 A”验证返程
+6. 最后点“A-B-A”验证自动往返
 ```
 
 第一版只要求在已探索白色区域内可靠往返，不要求任意区域、任意路线、地图管理或复杂巡航。
+
+## 12. 2026-06-11 当前状态补充
+
+今日实车验证表明，SLAM 地图 + A-B-A 导航 MVP 已经跑通：
+
+- Android SLAM 地图能显示 `/map`。
+- A/B 点能在白色 free 区域内设置并显示。
+- Android 能发布 `/move_base_simple/goal`。
+- move_base 能规划、输出 `/cmd_vel` 并返回 `Goal reached`。
+- 机器人端已经具备 `/robot_pose_in_map`，Android 端可显示小车位置和朝向。
+- 手动按钮方向已修正，`左移/右移/左转/右转` 与车头方向保持一致。
+
+后续不再把“是否能导航”作为主要问题，重点转向：
+
+```text
+路径可视化
+导航期间 /cmd_vel 发布权管理
+目标朝向 yaw 优化
+在线 SLAM 漂移下的调参
+保存地图后切换 map_server + amcl
+```
+
+路径可视化单独见：
+
+```text
+android/docs/导航路径可视化开发方案.md
+```

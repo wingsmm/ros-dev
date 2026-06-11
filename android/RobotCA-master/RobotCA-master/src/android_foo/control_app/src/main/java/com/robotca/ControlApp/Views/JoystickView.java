@@ -45,6 +45,7 @@ import android.widget.Toast;
 
 import com.robotca.ControlApp.ControlApp;
 import com.robotca.ControlApp.Core.ControlMode;
+import com.robotca.ControlApp.Core.ManualSpeedPreferences;
 import com.robotca.ControlApp.R;
 
 import org.ros.message.MessageListener;
@@ -982,9 +983,12 @@ public class JoystickView extends RelativeLayout implements AnimationListener,
      */
     private void publishVelocity(double linearVelocityX, double linearVelocityY,
                                  double angularVelocityZ) {
+        double linearSpeed = ManualSpeedPreferences.getLinearSpeed(getContext());
+        double angularSpeed = ManualSpeedPreferences.getAngularSpeed(getContext());
 
         ((ControlApp) getContext()).getRobotController().
-                forceVelocity(linearVelocityX, linearVelocityY, angularVelocityZ);
+                forceVelocity(linearVelocityX * linearSpeed, linearVelocityY * linearSpeed,
+                        angularVelocityZ * angularSpeed);
     }
 
     /**

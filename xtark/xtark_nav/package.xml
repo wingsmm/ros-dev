@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>xtark_nav</name>
+  <version>0.1.0</version>
+  <description>Minimal online SLAM navigation configuration for xtark A-B validation.</description>
+
+  <maintainer email="dev@example.com">xtark</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>base_local_planner</exec_depend>
+  <exec_depend>costmap_2d</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>move_base</exec_depend>
+  <exec_depend>navfn</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>tf</exec_depend>
+
+  <export/>
+</package>

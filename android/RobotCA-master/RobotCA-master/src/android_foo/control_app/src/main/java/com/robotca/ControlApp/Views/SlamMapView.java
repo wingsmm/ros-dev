@@ -23,21 +23,51 @@ import org.jboss.netty.buffer.ChannelBuffer;
  */
 public class SlamMapView extends View {
 
+    public static class MapPoint {
+        public final double x;
+        public final double y;
+
+        public MapPoint(double x, double y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    public interface MapTapListener {
+        void onMapTapped(MapPoint point);
+    }
+
     private static final float MIN_SCALE = 0.1f;
     private static final float MAX_SCALE = 10.0f;
     private static final float MAX_RECENTER_SCALE = 4.0f;
     private static final float OVERLAY_STROKE_PX = 2.0f;
+    private static final float TAP_SLOP_PX = 12.0f;
 
     private Bitmap mapBitmap;
     private final Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
     private final Paint configuredBoundsPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint knownBoundsPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pointAPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pointBPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pointTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint robotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint robotArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    private MapTapListener mapTapListener;
+    private MapPoint pointA;
+    private MapPoint pointB;
+    private MapPoint robotPoint;
+    private double robotYaw;
+    private boolean hasRobotPose;
+    private byte[] lastGridData;
 
     private float scale = 1.0f;
     private float translateX = 0.0f;
     private float translateY = 0.0f;
     private float lastX;
     private float lastY;
+    private float downX;
+    private float downY;
     private boolean dragging;
 
     private int lastBitmapWidth;
@@ -97,6 +127,97 @@ public class SlamMapView extends View {
         knownBoundsPaint.setStyle(Paint.Style.STROKE);
         knownBoundsPaint.setStrokeWidth(2.0f);
         knownBoundsPaint.setColor(Color.rgb(0, 220, 120));
+
+        pointAPaint.setColor(Color.rgb(40, 120, 255));
+        pointAPaint.setStyle(Paint.Style.FILL);
+
+        pointBPaint.setColor(Color.rgb(230, 50, 50));
+        pointBPaint.setStyle(Paint.Style.FILL);
+
+        pointTextPaint.setColor(Color.WHITE);
+        pointTextPaint.setTextAlign(Paint.Align.CENTER);
+        pointTextPaint.setTextSize(14.0f);
+        pointTextPaint.setFakeBoldText(true);
+
+        robotPaint.setColor(Color.rgb(255, 40, 40));
+        robotPaint.setStyle(Paint.Style.FILL);
+
+        robotArrowPaint.setColor(Color.rgb(30, 120, 255));
+        robotArrowPaint.setStyle(Paint.Style.STROKE);
+        robotArrowPaint.setStrokeWidth(3.0f);
+    }
+
+    public void setMapTapListener(MapTapListener listener) {
+        this.mapTapListener = listener;
+    }
+
+    public void setPointA(MapPoint point) {
+        pointA = point;
+        invalidate();
+    }
+
+    public void setPointB(MapPoint point) {
+        pointB = point;
+        invalidate();
+    }
+
+    public void setRobotPose(double x, double y, double yaw) {
+        robotPoint = new MapPoint(x, y);
+        robotYaw = yaw;
+        hasRobotPose = true;
+        invalidate();
+    }
+
+    public void clearRobotPose() {
+        hasRobotPose = false;
+        robotPoint = null;
+        invalidate();
+    }
+
+    public MapPoint screenToMap(float screenX, float screenY) {
+        if (mapBitmap == null || lastResolution <= 0.0) {
+            return null;
+        }
+
+        double bitmapX = (screenX - translateX) / scale;
+        double bitmapY = (screenY - translateY) / scale;
+
+        if (bitmapX < 0 || bitmapY < 0
+                || bitmapX >= mapBitmap.getWidth() || bitmapY >= mapBitmap.getHeight()) {
+            return null;
+        }
+
+        double mapX = lastOriginX + bitmapX * lastResolution;
+        double mapY = lastOriginY + (mapBitmap.getHeight() - bitmapY) * lastResolution;
+        return new MapPoint(mapX, mapY);
+    }
+
+    public boolean isFreeForGoal(MapPoint point) {
+        if (point == null || lastGridData == null || lastResolution <= 0.0) {
+            return false;
+        }
+
+        int gx = (int) Math.floor((point.x - lastOriginX) / lastResolution);
+        int gy = (int) Math.floor((point.y - lastOriginY) / lastResolution);
+
+        if (gx < 0 || gy < 0 || gx >= lastBitmapWidth || gy >= lastBitmapHeight) {
+            return false;
+        }
+
+        int radiusCells = 3;
+        for (int y = gy - radiusCells; y <= gy + radiusCells; y++) {
+            for (int x = gx - radiusCells; x <= gx + radiusCells; x++) {
+                if (x < 0 || y < 0 || x >= lastBitmapWidth || y >= lastBitmapHeight) {
+                    return false;
+                }
+                int value = lastGridData[y * lastBitmapWidth + x];
+                if (value < 0 || value > 50) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     public void setConfiguredBounds(double minX, double maxX, double minY, double maxY) {
@@ -250,6 +371,7 @@ public class SlamMapView extends View {
         int maxKnownX = -1;
         int maxKnownY = -1;
         int[] pixels = new int[width * height];
+        lastGridData = new byte[width * height];
 
         lastResolution = grid.getInfo().getResolution();
         lastOriginX = grid.getInfo().getOrigin().getPosition().getX();
@@ -273,6 +395,7 @@ public class SlamMapView extends View {
             for (int x = 0; x < width; x++) {
                 int index = y * width + x;
                 int value = readOccupancyValue(data, index);
+                lastGridData[index] = (byte) value;
 
                 if (value < 0) {
                     unknownCount++;
@@ -381,7 +504,44 @@ public class SlamMapView extends View {
         knownBoundsPaint.setStrokeWidth(OVERLAY_STROKE_PX / scale);
         drawConfiguredBounds(canvas);
         drawKnownBounds(canvas);
+        drawNavPoint(canvas, pointA, pointAPaint, "A");
+        drawNavPoint(canvas, pointB, pointBPaint, "B");
+        drawRobotPose(canvas);
         canvas.restore();
+    }
+
+    private void drawRobotPose(Canvas canvas) {
+        if (!hasRobotPose || robotPoint == null || mapBitmap == null || lastResolution <= 0.0) {
+            return;
+        }
+
+        float bx = (float) ((robotPoint.x - lastOriginX) / lastResolution);
+        float by = (float) (mapBitmap.getHeight() - (robotPoint.y - lastOriginY) / lastResolution);
+
+        float r = 7.0f / scale;
+        canvas.drawCircle(bx, by, r, robotPaint);
+
+        float len = 18.0f / scale;
+        float endX = bx + (float) (Math.cos(robotYaw) * len);
+        float endY = by - (float) (Math.sin(robotYaw) * len);
+
+        robotArrowPaint.setStrokeWidth(3.0f / scale);
+        canvas.drawLine(bx, by, endX, endY, robotArrowPaint);
+    }
+
+    private void drawNavPoint(Canvas canvas, MapPoint point, Paint fillPaint, String label) {
+        if (point == null || mapBitmap == null || lastResolution <= 0.0) {
+            return;
+        }
+
+        float bx = (float) ((point.x - lastOriginX) / lastResolution);
+        float by = (float) (mapBitmap.getHeight() - (point.y - lastOriginY) / lastResolution);
+
+        float r = 8.0f / scale;
+        canvas.drawCircle(bx, by, r, fillPaint);
+
+        pointTextPaint.setTextSize(12.0f / scale);
+        canvas.drawText(label, bx, by + 4.0f / scale, pointTextPaint);
     }
 
     private void drawConfiguredBounds(Canvas canvas) {
@@ -418,8 +578,10 @@ public class SlamMapView extends View {
 
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
-                lastX = event.getX();
-                lastY = event.getY();
+                downX = event.getX();
+                downY = event.getY();
+                lastX = downX;
+                lastY = downY;
                 dragging = true;
                 break;
             case MotionEvent.ACTION_MOVE:
@@ -435,6 +597,14 @@ public class SlamMapView extends View {
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+                float dx = event.getX() - downX;
+                float dy = event.getY() - downY;
+                if (Math.sqrt(dx * dx + dy * dy) < TAP_SLOP_PX && mapTapListener != null) {
+                    MapPoint point = screenToMap(event.getX(), event.getY());
+                    if (point != null) {
+                        mapTapListener.onMapTapped(point);
+                    }
+                }
                 dragging = false;
                 break;
             default:

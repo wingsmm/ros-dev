@@ -102,6 +102,33 @@
     <string name="slam_map_debug_tap_hint">点击面板展开/收起详情</string>
     <string name="slam_map_debug_export">导出</string>
     <string name="slam_map_debug_export_done">诊断信息已复制并保存到 %1$s</string>
+    <string name="slam_nav_set_a">设 A</string>
+    <string name="slam_nav_set_b">设 B</string>
+    <string name="slam_nav_section_pick">1. 在地图上选点</string>
+    <string name="slam_nav_section_go">2. 发送导航</string>
+    <string name="slam_nav_section_view">3. 地图视图</string>
+    <string name="slam_float_menu_anchor">导航菜单</string>
+    <string name="slam_nav_go_b">去 B</string>
+    <string name="slam_nav_return_a">返回 A</string>
+    <string name="slam_nav_round_trip">A-B-A</string>
+    <string name="slam_nav_cancel">取消</string>
+    <string name="slam_nav_pick_a">点击白色可通行区域设置 A</string>
+    <string name="slam_nav_pick_b">点击白色可通行区域设置 B</string>
+    <string name="slam_nav_cancel_pick">取消选点</string>
+    <string name="slam_nav_pick_canceled">已取消选点</string>
+    <string name="slam_nav_goal_rejected">目标不可用：请选择白色可通行区域</string>
+    <string name="slam_nav_missing_a_b">请先设置 A 和 B</string>
+    <string name="slam_nav_goal_sent">目标已发送</string>
+    <string name="slam_nav_cancel_sent">导航已取消</string>
+    <string name="slam_nav_state">导航状态：%1$s</string>
+    <string name="slam_nav_state_idle">空闲</string>
+    <string name="slam_nav_state_going_b">前往 B</string>
+    <string name="slam_nav_state_returning_a">返回 A</string>
+    <string name="slam_nav_state_finished">完成</string>
+    <string name="slam_nav_state_failed">失败</string>
+    <string name="slam_nav_state_canceled">已取消</string>
+    <string name="slam_nav_state_active">执行中</string>
+    <string name="slam_nav_state_pending">等待中</string>
     <string name="laser_scan_detail_pref_summary">设置激光扫描可视化的细节级别。
         数值越大绘制的激光点越多\n当前值：%s
     </string>
@@ -216,8 +243,8 @@
     <!-- Manual control preferences -->
     <string name="manual_linear_speed_pref_title">人工按钮线速度</string>
     <string name="manual_angular_speed_pref_title">人工按钮角速度</string>
-    <string name="manual_linear_speed_pref_summary">按住按钮时的线速度（m/s，0.02–0.30）\n当前值：%s</string>
-    <string name="manual_angular_speed_pref_summary">按住按钮时的角速度（rad/s，0.05–0.80）\n当前值：%s</string>
+    <string name="manual_linear_speed_pref_summary">按住按钮与 SLAM 导航共用的线速度（m/s，0.02–0.30）\n当前值：%s</string>
+    <string name="manual_angular_speed_pref_summary">按住按钮与 SLAM 导航共用的角速度（rad/s，0.05–0.80）\n当前值：%s</string>
 
     <!-- Notification -->
     <string name="notification_ticker">ROS 遥控</string>
@@ -236,6 +263,7 @@
     <string name="connecting_title">正在连接</string>
     <string name="connecting_message">正在连接 %1$s（%2$s）</string>
     <string name="cannot_connect_ros">无法连接 ROS。请确认 ROS 已运行且 Master URI 正确。</string>
+    <string name="ros_connection_lost">机器人连接已断开，请重新连接</string>
     <string name="invalid_master_uri">Master URI 无效</string>
     <string name="master_uri_required">请填写 Master URI</string>
     <string name="all_topics_required">请填写所有话题名称</string>

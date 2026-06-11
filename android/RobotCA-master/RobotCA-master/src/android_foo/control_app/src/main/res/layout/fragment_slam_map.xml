@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -12,14 +12,16 @@
         android:id="@+id/slam_map_status_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_centerInParent="true"
-        android:text="@string/slam_map_waiting" />
+        android:layout_gravity="center"
+        android:text="@string/slam_map_waiting"
+        android:textColor="#CCFFFFFF"
+        android:textSize="16sp" />
 
     <LinearLayout
         android:id="@+id/slam_map_debug_panel"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
+        android:layout_gravity="top"
         android:background="#80000000"
         android:clickable="true"
         android:focusable="true"
@@ -33,6 +35,15 @@
             android:layout_height="wrap_content"
             android:textColor="@android:color/white"
             android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/slam_map_nav_status_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textColor="#FFEB3B"
+            android:textSize="11sp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/slam_map_debug_detail"
@@ -52,25 +63,11 @@
             android:textSize="10sp" />
     </LinearLayout>
 
-    <LinearLayout
+    <com.robotca.ControlApp.Views.SlamFloatingNavMenu
+        android:id="@+id/slam_floating_nav_menu"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentStart="true"
-        android:orientation="horizontal">
+        android:clickable="true"
+        android:focusable="true" />
 
-        <Button
-            android:id="@+id/slam_map_recenter_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/slam_map_recenter" />
-
-        <Button
-            android:id="@+id/slam_map_export_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/slam_map_debug_export"
-            android:visibility="gone" />
-    </LinearLayout>
-
-</RelativeLayout>
+</FrameLayout>

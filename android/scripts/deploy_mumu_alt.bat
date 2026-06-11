@@ -1,14 +1,15 @@
 @echo off
 setlocal EnableExtensions
-cd /d "%~dp0"
+for %%I in ("%~dp0..") do set "ROOT=%%~fI\"
+cd /d "%ROOT%"
 
-set "APK=%~dp0xtark-control-alt-debug.apk"
+set "APK=%ROOT%xtark-control-alt-debug.apk"
 set "MUMU_CLI=D:\Program Files\Netease\MuMu\nx_main\mumu-cli.exe"
 set "PKG=cn.xtark.robotca"
 
 if not exist "%APK%" (
     echo [ERR] apk missing: %APK%
-    echo run build_robotca_super.bat alt first
+    echo run scripts\build_robotca_super.bat alt first
     exit /b 1
 )
 if not exist "%MUMU_CLI%" (

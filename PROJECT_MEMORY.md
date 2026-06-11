@@ -1,6 +1,6 @@
 # Project Memory / 项目备忘
 
-最后整理日期：2026-06-10
+最后整理日期：2026-06-11
 
 ## 1. 当前主线
 
@@ -178,10 +178,10 @@ android/
 
 ```bat
 cd /d D:\wingsmm\Desktop\other\android
-build_robotca_super.bat
-deploy_mumu_alt.bat
-start_android_169.bat
-status_android_169.bat
+scripts\build_robotca_super.bat
+scripts\deploy_mumu_alt.bat
+scripts\start_android_169.bat
+scripts\status_android_169.bat
 ```
 
 约定：
@@ -189,9 +189,30 @@ status_android_169.bat
 ```text
 默认 APK 包名：cn.xtark.robotca，避免覆盖原 Release 的 com.robotca.ControlApp
 编译依赖保存在 android/tools/jdk8 和 android/tools/rosjava_mvn_repo
-机器人端 Android 专用脚本源文件：android/run_android_xtark.sh
+机器人端 Android 专用脚本源文件：xtark/scripts/run_android.sh
 Android/RobotCA 直接连接 ROS master，不启动 json_base_adapter
 json_base_adapter 只用于 PC Qt client
+```
+
+Android 根目录约定：
+
+```text
+android/scripts/ 保存 Windows 侧构建、部署、远程启动脚本
+android/docs/ 保存 Android/RobotCA 文档
+android/RobotCA-master/ 保存源码
+android/xtark-control-alt-debug.apk 为当前推荐安装包产物
+机器人端 run_android.sh 不再放在 android/ 根目录，统一维护在 xtark/scripts/run_android.sh
+```
+
+Android SLAM / A-B-A 导航当前状态：
+
+```text
+SLAM 地图页面已支持设 A、设 B、去 B、返回 A、A-B-A、取消
+Android 发布 /move_base_simple/goal，订阅 /move_base/status，取消走 /move_base/cancel
+A/B 点会在地图上显示，A 蓝色，B 红色
+目标点使用 SlamMapView.isFreeForGoal() 校验白色 free 栅格和约 3 格安全半径
+当前 APK 不硬性限制 A/B 必须在黄色设定框内；黄色框作为 gmapping 设定区域提示
+该功能已安装到 MuMu，机器人端 run_android.sh 默认启动 move_base，下一步直接 start 后做实车验证
 ```
 
 Android 手动控制注意：
@@ -314,3 +335,50 @@ Android SDK / Gradle / rosjava 这类命令参数复杂时，使用 .bat 更稳�
 保留真正有复用价值的构建脚本，并在结果说明里点明。
 ```
 
+## 11. 2026-06-11 Android A-B-A 导航进展
+
+今日 Android/xtark 自主导航主线进入实车验证阶段：
+
+```text
+Android SLAM 地图
+  -> 设置 A/B
+  -> 发布 /move_base_simple/goal
+  -> move_base 规划
+  -> /cmd_vel 控车
+  -> /move_base/status 返回 SUCCEEDED
+```
+
+已经确认：
+
+- 机器人端 `xtark/scripts/run_android.sh` 默认启用 gmapping + move_base。
+- `SLAM_XMIN/XMAX/YMIN/YMAX` 当前按 4m x 4m 小空间配置。
+- `/map`、`/scan`、`/odom`、TF、`/move_base/status` 正常。
+- `/robot_pose_in_map` 已发布，约 10Hz，用于 Android 显示小车位置。
+- Android SLAM 地图已支持 A/B、去 B、返回 A、A-B-A、取消。
+- A-B-A 实车链路已经跑通，move_base 可返回 `Goal reached`。
+- 手动按钮 `左移/右移/左转/右转` 的符号已修正，避免和车头方向相反。
+
+当前主要问题不是“导航未实现”，而是稳定性和可观测性：
+
+```text
+在线 gmapping 可能导致 map->odom 跳变，路径看起来诡异；
+goal yaw 当前仍可能固定为 0，后续需改为当前车头朝向或目标方向；
+导航期间 Android 仍可能通过摇杆/手动按钮抢 /cmd_vel；
+当前还不能在 SLAM 地图上显示 move_base 规划线。
+```
+
+明日优先实现：
+
+```text
+android/docs/导航路径可视化开发方案.md
+```
+
+推荐后续顺序：
+
+```text
+1. 订阅并绘制 /move_base/NavfnROS/plan
+2. 导航期间锁定 Android 手动 /cmd_vel 输出
+3. goal yaw 使用当前车头朝向或 A->B 方向
+4. 多次实车测试 A-B-A
+5. 稳定后切换到 保存地图 + map_server + amcl + move_base
+```

@@ -24,8 +24,11 @@ import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import actionlib_msgs.GoalID;
+import actionlib_msgs.GoalStatusArray;
 import geometry_msgs.Point;
 import geometry_msgs.Pose;
+import geometry_msgs.PoseStamped;
 import geometry_msgs.Quaternion;
 import geometry_msgs.Twist;
 import nav_msgs.OccupancyGrid;
@@ -41,6 +44,15 @@ import std_msgs.Float64;
  * Created by Michael Brunson on 2/13/16.
  */
 public class RobotController implements NodeMain, Savable {
+
+    /**
+     * Notified when the ROS node connection state changes.
+     */
+    public interface ConnectionStateListener {
+        void onRosConnectionLost(String reason);
+        void onRosConnectionStarted();
+        void onRosConnectionShutdown();
+    }
 
     // Logcat Tag
     private static final String TAG = "RobotController";
@@ -126,6 +138,21 @@ public class RobotController implements NodeMain, Savable {
     private double slamEntropy = Double.NaN;
     private final Object slamEntropyMutex = new Object();
 
+    // move_base navigation topics
+    private Publisher<PoseStamped> moveBaseGoalPublisher;
+    private Publisher<GoalID> moveBaseCancelPublisher;
+    private Publisher<Twist> navSpeedPublisher;
+
+    private static final String NAV_SPEED_TOPIC = "/android/nav_speed";
+    private static final String ROBOT_POSE_IN_MAP_TOPIC = "/robot_pose_in_map";
+    private Subscriber<GoalStatusArray> moveBaseStatusSubscriber;
+    private Subscriber<PoseStamped> robotPoseInMapSubscriber;
+    private PoseStamped robotPoseInMap;
+    private final Object robotPoseInMapMutex = new Object();
+    private final ArrayList<MessageListener<PoseStamped>> robotPoseInMapListeners;
+    private final ArrayList<MessageListener<GoalStatusArray>> moveBaseStatusListeners;
+    private final ArrayList<ConnectionStateListener> connectionStateListeners;
+
     /**
      * LocationProvider subscribers can register to to receive location updates.
      */
@@ -161,6 +188,9 @@ public class RobotController implements NodeMain, Savable {
         this.odometryListeners = new ArrayList<>();
         this.navSatListeners = new ArrayList<>();
         this.mapListeners = new ArrayList<>();
+        this.moveBaseStatusListeners = new ArrayList<>();
+        this.robotPoseInMapListeners = new ArrayList<>();
+        this.connectionStateListeners = new ArrayList<>();
 
         this.LOCATION_PROVIDER = new LocationProvider();
         this.addNavSatFixListener(this.LOCATION_PROVIDER);
@@ -432,10 +462,49 @@ public class RobotController implements NodeMain, Savable {
      * Callback for when the RobotController is connected.
      * @param connectedNode The ConnectedNode the RobotController is connected through
      */
+    public void addConnectionStateListener(ConnectionStateListener listener) {
+        synchronized (connectionStateListeners) {
+            if (listener != null && !connectionStateListeners.contains(listener)) {
+                connectionStateListeners.add(listener);
+            }
+        }
+    }
+
+    public void removeConnectionStateListener(ConnectionStateListener listener) {
+        synchronized (connectionStateListeners) {
+            connectionStateListeners.remove(listener);
+        }
+    }
+
+    private void notifyConnectionLost(String reason) {
+        synchronized (connectionStateListeners) {
+            for (ConnectionStateListener listener : connectionStateListeners) {
+                listener.onRosConnectionLost(reason);
+            }
+        }
+    }
+
+    private void notifyConnectionStarted() {
+        synchronized (connectionStateListeners) {
+            for (ConnectionStateListener listener : connectionStateListeners) {
+                listener.onRosConnectionStarted();
+            }
+        }
+    }
+
+    private void notifyConnectionShutdown() {
+        synchronized (connectionStateListeners) {
+            for (ConnectionStateListener listener : connectionStateListeners) {
+                listener.onRosConnectionShutdown();
+            }
+        }
+    }
+
     @Override
     public void onStart(ConnectedNode connectedNode) {
         this.connectedNode = connectedNode;
         initialize();
+        notifyConnectionStarted();
     }
 
     /*
@@ -628,43 +697,135 @@ public class RobotController implements NodeMain, Savable {
                 }
             });
         }
+
+        if (moveBaseGoalPublisher == null) {
+            moveBaseGoalPublisher = connectedNode.newPublisher(
+                    "/move_base_simple/goal", PoseStamped._TYPE);
+        }
+
+        if (moveBaseCancelPublisher == null) {
+            moveBaseCancelPublisher = connectedNode.newPublisher(
+                    "/move_base/cancel", GoalID._TYPE);
+        }
+
+        if (navSpeedPublisher == null) {
+            navSpeedPublisher = connectedNode.newPublisher(NAV_SPEED_TOPIC, Twist._TYPE);
+        }
+
+        if (moveBaseStatusSubscriber == null) {
+            moveBaseStatusSubscriber = connectedNode.newSubscriber(
+                    "/move_base/status", GoalStatusArray._TYPE);
+            moveBaseStatusSubscriber.addMessageListener(new MessageListener<GoalStatusArray>() {
+                @Override
+                public void onNewMessage(GoalStatusArray message) {
+                    synchronized (moveBaseStatusListeners) {
+                        for (MessageListener<GoalStatusArray> listener : moveBaseStatusListeners) {
+                            listener.onNewMessage(message);
+                        }
+                    }
+                }
+            });
+        }
+
+        if (robotPoseInMapSubscriber == null) {
+            robotPoseInMapSubscriber = connectedNode.newSubscriber(
+                    ROBOT_POSE_IN_MAP_TOPIC, PoseStamped._TYPE);
+            robotPoseInMapSubscriber.addMessageListener(new MessageListener<PoseStamped>() {
+                @Override
+                public void onNewMessage(PoseStamped pose) {
+                    synchronized (robotPoseInMapMutex) {
+                        robotPoseInMap = pose;
+                    }
+                    synchronized (robotPoseInMapListeners) {
+                        for (MessageListener<PoseStamped> listener : robotPoseInMapListeners) {
+                            listener.onNewMessage(pose);
+                        }
+                    }
+                }
+            });
+        }
     }
 
     /**
      * Shuts down all topics.
      */
     public void shutdownTopics() {
-        if(publisherTimer != null) {
+        if (publisherTimer != null) {
             publisherTimer.cancel();
+            publisherTimer = null;
         }
 
         if (movePublisher != null) {
             movePublisher.shutdown();
+            movePublisher = null;
         }
+        currentVelocityCommand = null;
+        publishVelocity = false;
 
         if (navSatFixSubscriber != null) {
             navSatFixSubscriber.shutdown();
+            navSatFixSubscriber = null;
         }
 
         if (laserScanSubscriber != null) {
             laserScanSubscriber.shutdown();
+            laserScanSubscriber = null;
         }
 
-        if(odometrySubscriber != null){
+        if (odometrySubscriber != null) {
             odometrySubscriber.shutdown();
+            odometrySubscriber = null;
         }
 
-        if(poseSubscriber != null){
+        if (poseSubscriber != null) {
             poseSubscriber.shutdown();
+            poseSubscriber = null;
+        }
+
+        if (imageSubscriber != null) {
+            imageSubscriber.shutdown();
+            imageSubscriber = null;
         }
 
         if (mapSubscriber != null) {
             mapSubscriber.shutdown();
+            mapSubscriber = null;
         }
 
         if (slamEntropySubscriber != null) {
             slamEntropySubscriber.shutdown();
+            slamEntropySubscriber = null;
         }
+
+        if (moveBaseGoalPublisher != null) {
+            moveBaseGoalPublisher.shutdown();
+            moveBaseGoalPublisher = null;
+        }
+
+        if (moveBaseCancelPublisher != null) {
+            moveBaseCancelPublisher.shutdown();
+            moveBaseCancelPublisher = null;
+        }
+
+        if (navSpeedPublisher != null) {
+            navSpeedPublisher.shutdown();
+            navSpeedPublisher = null;
+        }
+
+        if (moveBaseStatusSubscriber != null) {
+            moveBaseStatusSubscriber.shutdown();
+            moveBaseStatusSubscriber = null;
+        }
+
+        if (robotPoseInMapSubscriber != null) {
+            robotPoseInMapSubscriber.shutdown();
+            robotPoseInMapSubscriber = null;
+        }
+        synchronized (robotPoseInMapMutex) {
+            robotPoseInMap = null;
+        }
+
+        initialized = false;
     }
 
     /**
@@ -674,6 +835,7 @@ public class RobotController implements NodeMain, Savable {
     @Override
     public void onShutdown(Node node) {
         shutdownTopics();
+        notifyConnectionLost("ROS node shutdown");
     }
 
     /**
@@ -683,6 +845,7 @@ public class RobotController implements NodeMain, Savable {
     @Override
     public void onShutdownComplete(Node node) {
         this.connectedNode = null;
+        notifyConnectionShutdown();
     }
 
     /**
@@ -692,7 +855,9 @@ public class RobotController implements NodeMain, Savable {
      */
     @Override
     public void onError(Node node, Throwable throwable) {
-        Log.e(TAG, "", throwable);
+        Log.e(TAG, "ROS node error", throwable);
+        String message = throwable != null ? throwable.getMessage() : "unknown";
+        notifyConnectionLost("ROS node error: " + message);
     }
 
     /**
@@ -956,5 +1121,112 @@ public class RobotController implements NodeMain, Savable {
             Log.w(TAG, "Failed to read ROS param: " + name, e);
             return fallback;
         }
+    }
+
+    /**
+     * Adds a move_base status listener.
+     */
+    public boolean addMoveBaseStatusListener(MessageListener<GoalStatusArray> listener) {
+        synchronized (moveBaseStatusListeners) {
+            if (!moveBaseStatusListeners.contains(listener)) {
+                return moveBaseStatusListeners.add(listener);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Removes a move_base status listener.
+     */
+    public boolean removeMoveBaseStatusListener(MessageListener<GoalStatusArray> listener) {
+        synchronized (moveBaseStatusListeners) {
+            return moveBaseStatusListeners.remove(listener);
+        }
+    }
+
+    public boolean addRobotPoseInMapListener(MessageListener<PoseStamped> listener) {
+        synchronized (robotPoseInMapListeners) {
+            if (listener != null && !robotPoseInMapListeners.contains(listener)) {
+                return robotPoseInMapListeners.add(listener);
+            }
+        }
+        return false;
+    }
+
+    public boolean removeRobotPoseInMapListener(MessageListener<PoseStamped> listener) {
+        synchronized (robotPoseInMapListeners) {
+            return robotPoseInMapListeners.remove(listener);
+        }
+    }
+
+    /**
+     * Publishes a navigation goal in the map frame.
+     */
+    public boolean publishMoveBaseGoal(double x, double y, double yaw) {
+        if (moveBaseGoalPublisher == null || connectedNode == null) {
+            return false;
+        }
+
+        publishVelocity = false;
+        publishVelocity(0.0, 0.0, 0.0);
+        if (movePublisher != null && currentVelocityCommand != null) {
+            movePublisher.publish(currentVelocityCommand);
+        }
+        syncMoveBaseSpeedFromPreferences();
+
+        PoseStamped goal = moveBaseGoalPublisher.newMessage();
+        goal.getHeader().setFrameId("map");
+        goal.getHeader().setStamp(connectedNode.getCurrentTime());
+        goal.getPose().getPosition().setX(x);
+        goal.getPose().getPosition().setY(y);
+        goal.getPose().getPosition().setZ(0.0);
+
+        double halfYaw = yaw * 0.5;
+        goal.getPose().getOrientation().setX(0.0);
+        goal.getPose().getOrientation().setY(0.0);
+        goal.getPose().getOrientation().setZ(Math.sin(halfYaw));
+        goal.getPose().getOrientation().setW(Math.cos(halfYaw));
+
+        moveBaseGoalPublisher.publish(goal);
+        Log.d(TAG, String.format("Published move_base goal (%.2f, %.2f, %.2f)", x, y, yaw));
+        return true;
+    }
+
+    private void syncMoveBaseSpeedFromPreferences() {
+        if (navSpeedPublisher == null || connectedNode == null) {
+            return;
+        }
+
+        double linearSpeed = ManualSpeedPreferences.getLinearSpeed(context);
+        double angularSpeed = ManualSpeedPreferences.getAngularSpeed(context);
+
+        Twist speed = navSpeedPublisher.newMessage();
+        speed.getLinear().setX(linearSpeed);
+        speed.getLinear().setY(0.0);
+        speed.getLinear().setZ(0.0);
+        speed.getAngular().setX(0.0);
+        speed.getAngular().setY(0.0);
+        speed.getAngular().setZ(angularSpeed);
+        navSpeedPublisher.publish(speed);
+        Log.d(TAG, String.format(
+                "Synced move_base speed from prefs: linear=%.2f angular=%.2f",
+                linearSpeed, angularSpeed));
+    }
+
+    /**
+     * Cancels the current move_base goal and stops manual velocity.
+     */
+    public boolean cancelMoveBaseGoal() {
+        if (moveBaseCancelPublisher == null) {
+            return false;
+        }
+
+        GoalID cancel = moveBaseCancelPublisher.newMessage();
+        cancel.setId("");
+        moveBaseCancelPublisher.publish(cancel);
+
+        forceVelocity(0.0, 0.0, 0.0);
+        Log.d(TAG, "Published move_base cancel");
+        return true;
     }
 }

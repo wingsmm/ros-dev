@@ -15,6 +15,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
@@ -63,6 +64,7 @@ import org.ros.node.NodeConfiguration;
 import org.ros.node.NodeMainExecutor;
 import org.ros.rosjava_geometry.Vector3;
 
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -120,6 +122,39 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
 
     // Log tag String
     private static final String TAG = "ControlApp";
+
+    private static final long ROS_WATCHDOG_INTERVAL_MS = 2000L;
+    private static final long ROS_WATCHDOG_INITIAL_DELAY_MS = 3000L;
+    private static final int ROS_MASTER_FAILURE_THRESHOLD = 3;
+    private static final int ROS_MASTER_SOCKET_TIMEOUT_MS = 800;
+
+    private final Handler rosWatchdogHandler = new Handler();
+    private boolean rosDisconnectHandled;
+    private int masterFailureCount;
+    private final RobotController.ConnectionStateListener connectionStateListener =
+            new RobotController.ConnectionStateListener() {
+                @Override
+                public void onRosConnectionLost(String reason) {
+                    handleRosDisconnected(reason);
+                }
+
+                @Override
+                public void onRosConnectionStarted() {
+                    masterFailureCount = 0;
+                }
+
+                @Override
+                public void onRosConnectionShutdown() {
+                    // Handled via onRosConnectionLost or manual disconnect.
+                }
+            };
+    private final Runnable rosWatchdogRunnable = new Runnable() {
+        @Override
+        public void run() {
+            checkRosMasterAlive();
+            rosWatchdogHandler.postDelayed(this, ROS_WATCHDOG_INTERVAL_MS);
+        }
+    };
 
     // List of waypoints
     private final LinkedList<Vector3> waypoints;
@@ -297,6 +332,7 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
 
         // Refresh the Clear Waypoints button
         waypointsChanged();
+        resumeRosConnectionMonitoring();
     }
 
     @Override
@@ -304,6 +340,8 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
         RobotStorage.update(this, ROBOT_INFO);
 
         Log.d(TAG, "onStop()");
+
+        stopRosWatchdog();
 
         if (controller != null)
             controller.stop();
@@ -322,6 +360,11 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
         super.onDestroy();
 
         Log.d(TAG, "onDestroy()");
+
+        stopRosWatchdog();
+        if (controller != null) {
+            controller.removeConnectionStateListener(connectionStateListener);
+        }
 
         if (controller != null)
             controller.stop();
@@ -374,7 +417,9 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
             });
 
             //controller.setTopicName(PreferenceManager.getDefaultSharedPreferences(this).getString("edittext_joystick_topic", getString(R.string.joy_topic)));
+            controller.addConnectionStateListener(connectionStateListener);
             controller.initialize(nodeMainExecutor, nodeConfiguration);
+            startRosWatchdog(true);
 
             // Add the HUDFragment to the RobotController's odometry listener
             controller.addOdometryListener(hudFragment);
@@ -405,6 +450,100 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         selectItem(position);
+    }
+
+    private void resumeRosConnectionMonitoring() {
+        if (rosDisconnectHandled || controller == null
+                || nodeMainExecutor == null || nodeConfiguration == null) {
+            return;
+        }
+        controller.addConnectionStateListener(connectionStateListener);
+        startRosWatchdog(false);
+    }
+
+    private void startRosWatchdog(boolean resetDisconnectState) {
+        stopRosWatchdog();
+        if (resetDisconnectState) {
+            rosDisconnectHandled = false;
+            masterFailureCount = 0;
+        }
+        rosWatchdogHandler.postDelayed(rosWatchdogRunnable, ROS_WATCHDOG_INITIAL_DELAY_MS);
+    }
+
+    private void stopRosWatchdog() {
+        rosWatchdogHandler.removeCallbacks(rosWatchdogRunnable);
+    }
+
+    private void checkRosMasterAlive() {
+        if (rosDisconnectHandled || getMasterUri() == null) {
+            return;
+        }
+
+        new AsyncTask<Void, Void, Boolean>() {
+            @Override
+            protected Boolean doInBackground(Void... params) {
+                try {
+                    java.net.Socket socket = new java.net.Socket();
+                    socket.connect(new InetSocketAddress(
+                            getMasterUri().getHost(),
+                            getMasterUri().getPort()),
+                            ROS_MASTER_SOCKET_TIMEOUT_MS);
+                    socket.close();
+                    return true;
+                } catch (Exception e) {
+                    return false;
+                }
+            }
+
+            @Override
+            protected void onPostExecute(Boolean ok) {
+                if (rosDisconnectHandled) {
+                    return;
+                }
+                if (ok != null && ok) {
+                    masterFailureCount = 0;
+                } else {
+                    masterFailureCount++;
+                    if (masterFailureCount >= ROS_MASTER_FAILURE_THRESHOLD) {
+                        handleRosDisconnected("ROS Master disconnected");
+                    }
+                }
+            }
+        }.execute();
+    }
+
+    private void handleRosDisconnected(final String reason) {
+        if (rosDisconnectHandled) {
+            return;
+        }
+        rosDisconnectHandled = true;
+        stopRosWatchdog();
+        Log.w(TAG, "ROS disconnected: " + reason);
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (isFinishing()) {
+                    return;
+                }
+
+                Toast.makeText(ControlApp.this, R.string.ros_connection_lost, Toast.LENGTH_LONG).show();
+
+                try {
+                    if (controller != null) {
+                        controller.removeConnectionStateListener(connectionStateListener);
+                        controller.stop();
+                        if (nodeMainExecutor != null) {
+                            nodeMainExecutor.shutdownNodeMain(controller);
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to shutdown ROS node after disconnect", e);
+                }
+
+                finish();
+            }
+        });
     }
 
     /**
@@ -535,6 +674,12 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
             case 0:
                 Log.d(TAG, "Drawer item 0 selected, finishing");
 
+                rosDisconnectHandled = true;
+                stopRosWatchdog();
+                if (controller != null) {
+                    controller.removeConnectionStateListener(connectionStateListener);
+                }
+
                 fragmentsCreatedCounter = 0;
 
                 int count = fragmentManager.getBackStackEntryCount();
@@ -543,8 +688,6 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
                 }
 
                 if (controller != null) {
-                    controller.shutdownTopics();
-
                     new AsyncTask<Void, Void, Void>() {
                         @Override
                         protected Void doInBackground(Void... params) {

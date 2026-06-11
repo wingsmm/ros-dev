@@ -1,8 +1,8 @@
 @echo off
 setlocal EnableExtensions
-cd /d "%~dp0"
+for %%I in ("%~dp0..") do set "ROOT=%%~fI\"
+cd /d "%ROOT%"
 
-set "ROOT=%~dp0"
 set "MODE=%~1"
 if "%MODE%"=="" set "MODE=alt"
 set "JDK=%ROOT%tools\jdk8"
