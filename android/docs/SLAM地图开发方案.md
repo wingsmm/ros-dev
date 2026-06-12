@@ -60,7 +60,7 @@ android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/
 android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Core/RobotController.java
 android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/java/com/robotca/ControlApp/Views/SlamFloatingNavMenu.java
 android/RobotCA-master/RobotCA-master/src/android_foo/control_app/src/main/res/layout/view_slam_floating_nav_menu.xml
-xtark/scripts/run_android.sh
+xtark/scripts/android_stack.sh
 ```
 
 ### 2.2 尚未实车验证或后续优化
@@ -74,7 +74,7 @@ Android 端后续可优化：
 
 机器人端尚未实车完成：
 
-- `~/ros_ws/scripts/run_android.sh start` 后 `move_base` 是否实际正常运行。
+- `~/ros_ws/scripts/android_stack.sh start` 后 `move_base` 是否实际正常运行。
 - costmap 参数是否适合当前 xtark 小车和现场空间。
 - 小车 footprint / inflation / obstacle layer 是否配置正确。
 - Android 发布 B 点后，小车是否能真实从当前位置到 B。
@@ -731,7 +731,7 @@ pose:
 下一步不要继续扩大地图功能，直接进入实车验证：
 
 ```text
-1. 机器人端执行 `~/ros_ws/scripts/run_android.sh start` 启动 gmapping 和 move_base
+1. 机器人端执行 `~/ros_ws/scripts/android_stack.sh start` 启动 gmapping 和 move_base
 2. Android 进入 SLAM 地图并连接 ROS master
 3. 设置 A/B 到白色可通行区域
 4. 先点“去 B”验证单程

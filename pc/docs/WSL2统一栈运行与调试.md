@@ -86,21 +86,21 @@ frame_id: laser
 启动脚本已放在小车：
 
 ```bash
-~/ros_ws/scripts/run_xtark.sh
+~/ros_ws/scripts/json_stack.sh
 ```
 
 常用命令：
 
 ```bash
-~/ros_ws/scripts/run_xtark.sh start
-~/ros_ws/scripts/run_xtark.sh status
-~/ros_ws/scripts/run_xtark.sh stop
+~/ros_ws/scripts/json_stack.sh start
+~/ros_ws/scripts/json_stack.sh status
+~/ros_ws/scripts/json_stack.sh stop
 ```
 
 `logs` 会持续跟随日志：
 
 ```bash
-~/ros_ws/scripts/run_xtark.sh logs
+~/ros_ws/scripts/json_stack.sh logs
 ```
 
 当前验收：

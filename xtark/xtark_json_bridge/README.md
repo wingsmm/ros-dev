@@ -19,12 +19,12 @@ ROS1 /odom /voltage -> JSON odom_base / base_status
 
 ## 启动
 
-推荐 `xtark/scripts/run_xtark.sh`（见 [DEPLOY.md](DEPLOY.md)）：
+推荐 `xtark/scripts/json_stack.sh`（见 [DEPLOY.md](DEPLOY.md)）：
 
 ```bash
-~/ros_ws/scripts/run_xtark.sh start    # 后台一键
-~/ros_ws/scripts/run_xtark.sh bringup  # 前台终端 1
-~/ros_ws/scripts/run_xtark.sh json     # 前台终端 2
+~/ros_ws/scripts/json_stack.sh start    # 后台一键
+~/ros_ws/scripts/json_stack.sh bringup  # 前台终端 1
+~/ros_ws/scripts/json_stack.sh json     # 前台终端 2
 ```
 
 手工等价命令：

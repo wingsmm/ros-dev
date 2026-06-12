@@ -1,0 +1,15 @@
+<launch>
+  <arg name="map_frame" default="map" />
+  <arg name="base_frame" default="base_footprint" />
+  <arg name="pose_topic" default="/robot_pose_in_map" />
+  <arg name="rate" default="10.0" />
+  <arg name="transform_timeout" default="0.3" />
+
+  <node pkg="xtark_nav" type="publish_robot_pose_in_map.py" name="robot_pose_in_map_publisher" output="screen">
+    <param name="map_frame" type="str" value="$(arg map_frame)" />
+    <param name="base_frame" type="str" value="$(arg base_frame)" />
+    <param name="pose_topic" type="str" value="$(arg pose_topic)" />
+    <param name="rate" type="double" value="$(arg rate)" />
+    <param name="transform_timeout" type="double" value="$(arg transform_timeout)" />
+  </node>
+</launch>

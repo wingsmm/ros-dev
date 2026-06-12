@@ -51,7 +51,7 @@ wait_for_odom() {
 
 usage() {
   cat <<'EOF'
-Usage: run_xtark.sh <command>
+Usage: json_stack.sh <command>
 
 Commands:
   bringup   Foreground: xtark_driver bringup (terminal 1)
@@ -68,7 +68,7 @@ Environment:
 
 Copy to xtark (example):
   scp -r xtark/scripts xtark@192.168.1.169:~/ros_ws/
-  ssh xtark@192.168.1.169 '~/ros_ws/scripts/run_xtark.sh start'
+  ssh xtark@192.168.1.169 '~/ros_ws/scripts/json_stack.sh start'
 EOF
 }
 

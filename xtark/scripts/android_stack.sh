@@ -13,19 +13,23 @@ CAMERA_PKG="${CAMERA_PKG:-xtark_driver}"
 CAMERA_LAUNCH="${CAMERA_LAUNCH:-xtark_camera.launch}"
 SLAM_ENABLE="${SLAM_ENABLE:-1}"
 SLAM_SCAN_TOPIC="${SLAM_SCAN_TOPIC:-/scan}"
-# xtark 使用 base_footprint，不是 ROS 默认的 base_link
+# xtark 使用 base_footprint，不�?ROS 默认�?base_link
 SLAM_BASE_FRAME="${SLAM_BASE_FRAME:-base_footprint}"
 SLAM_MAP_TOPIC="${SLAM_MAP_TOPIC:-/map}"
 NAV_ENABLE="${NAV_ENABLE:-1}"
 NAV_PKG="${NAV_PKG:-xtark_nav}"
 NAV_LAUNCH="${NAV_LAUNCH:-online_slam_move_base.launch}"
 NAV_SPEED_SYNC_MARKER="run_android_nav_speed_sync"
-ROBOT_POSE_SCRIPT="${ROBOT_POSE_SCRIPT:-$HOME/ros_ws/scripts/publish_robot_pose_in_map.py}"
+ROBOT_POSE_PKG="${ROBOT_POSE_PKG:-xtark_nav}"
+ROBOT_POSE_LAUNCH="${ROBOT_POSE_LAUNCH:-robot_pose_in_map.launch}"
+ROBOT_POSE_NODE="${ROBOT_POSE_NODE:-robot_pose_in_map_publisher}"
+ROBOT_POSE_TOPIC="${ROBOT_POSE_TOPIC:-/robot_pose_in_map}"
+ROBOT_POSE_RATE="${ROBOT_POSE_RATE:-10}"
+ROBOT_POSE_TF_TIMEOUT="${ROBOT_POSE_TF_TIMEOUT:-0.3}"
 
-# ===== gmapping 地图参数（直接改下面几行即可）=====
-# 物理尺寸 ≈ (xmax-xmin) × (ymax-ymin)；栅格数 ≈ 尺寸 / SLAM_DELTA
-# 当前 4×4 m @ delta=0.1 → 约 40×40 格；Android 黄框从 /slam_gmapping/xmin 等自动读取
-SLAM_XMIN=-2
+# ===== gmapping 地图参数（直接改下面几行即可�?====
+# 物理尺寸 �?(xmax-xmin) × (ymax-ymin)；栅格数 �?尺寸 / SLAM_DELTA
+# 当前 4×4 m @ delta=0.1 �?�?40×40 格；Android 黄框�?/slam_gmapping/xmin 等自动读�?SLAM_XMIN=-2
 SLAM_XMAX=2
 SLAM_YMIN=-2
 SLAM_YMAX=2
@@ -41,7 +45,7 @@ SLAM_MAP_UPDATE_INTERVAL=1.0
 
 usage() {
   cat <<EOF
-Usage: run_android.sh <command>
+Usage: android_stack.sh <command>
 
 Commands:
   start      Start roscore + bringup + camera + gmapping + move_base
@@ -324,18 +328,21 @@ start_robot_pose_in_map() {
     return 0
   fi
 
-  if [ ! -f "$ROBOT_POSE_SCRIPT" ]; then
-    echo "[WARN] publish_robot_pose_in_map.py missing: $ROBOT_POSE_SCRIPT"
+  if ! rospack find "$ROBOT_POSE_PKG" >/dev/null 2>&1; then
+    echo "[WARN] robot pose package missing: $ROBOT_POSE_PKG"
     return 0
   fi
 
-  pkill -f 'publish_robot_pose_in_map.py' || true
+  pkill -f "$ROBOT_POSE_LAUNCH" || true
+  pkill -f "$ROBOT_POSE_NODE" || true
   sleep 1
-  echo "Starting robot_pose_in_map: python $ROBOT_POSE_SCRIPT"
-  nohup python "$ROBOT_POSE_SCRIPT" \
-    _map_frame:=map \
-    _base_frame:=base_footprint \
-    _rate:=10 \
+  echo "Starting robot_pose_in_map: roslaunch $ROBOT_POSE_PKG $ROBOT_POSE_LAUNCH"
+  nohup roslaunch "$ROBOT_POSE_PKG" "$ROBOT_POSE_LAUNCH" \
+    map_frame:=map \
+    base_frame:=base_footprint \
+    pose_topic:="$ROBOT_POSE_TOPIC" \
+    rate:="$ROBOT_POSE_RATE" \
+    transform_timeout:="$ROBOT_POSE_TF_TIMEOUT" \
     >"$XTARK_LOG_DIR/robot_pose_in_map.log" 2>&1 &
   echo "robot_pose_in_map started pid=$! log=$XTARK_LOG_DIR/robot_pose_in_map.log"
 }
@@ -389,6 +396,12 @@ verify_startup() {
       ok=0
     else
       echo "[OK] $SLAM_MAP_TOPIC publishing"
+    fi
+    if ! timeout 5 rostopic echo "$ROBOT_POSE_TOPIC" -n 1 >/dev/null 2>&1; then
+      echo "[FAIL] $ROBOT_POSE_TOPIC not publishing"
+      ok=0
+    else
+      echo "[OK] $ROBOT_POSE_TOPIC publishing"
     fi
   fi
 
@@ -450,15 +463,15 @@ status() {
   timeout 3 rostopic echo /cmd_vel -n 1 2>&1 || true
 
   echo "---robot_pose_in_map---"
-  rostopic info /robot_pose_in_map 2>&1 || true
-  timeout 3 rostopic echo /robot_pose_in_map -n 1 2>&1 || true
-  timeout 5 rostopic hz /robot_pose_in_map 2>&1 || true
+  rostopic info "$ROBOT_POSE_TOPIC" 2>&1 || true
+  timeout 3 rostopic echo "$ROBOT_POSE_TOPIC" -n 1 2>&1 || true
+  timeout 5 rostopic hz "$ROBOT_POSE_TOPIC" 2>&1 || true
 
   echo "---tf map base_footprint---"
   timeout 5 rosrun tf tf_echo map base_footprint 2>&1 | head -40 || true
 
   echo "---processes---"
-  pgrep -af 'roscore|rosmaster|roslaunch xtark_driver xtark_bringup.launch|roslaunch xtark_driver xtark_camera.launch|uvc_camera_node|web_video_server|image_transport.*republish|rosrun gmapping slam_gmapping|slam_gmapping scan:=|online_slam_move_base.launch|[ /]move_base([ ]|$)|run_android_nav_speed_sync|publish_robot_pose_in_map.py' || true
+  pgrep -af 'roscore|rosmaster|roslaunch xtark_driver xtark_bringup.launch|roslaunch xtark_driver xtark_camera.launch|uvc_camera_node|web_video_server|image_transport.*republish|rosrun gmapping slam_gmapping|slam_gmapping scan:=|online_slam_move_base.launch|[ /]move_base([ ]|$)|run_android_nav_speed_sync|robot_pose_in_map.launch|robot_pose_in_map_publisher' || true
 
   verify_startup || true
 }
@@ -536,7 +549,8 @@ start() {
 }
 
 stop() {
-  pkill -f 'publish_robot_pose_in_map.py' || true
+  pkill -f "$ROBOT_POSE_LAUNCH" || true
+  pkill -f "$ROBOT_POSE_NODE" || true
   pkill -f "$NAV_SPEED_SYNC_MARKER" || true
   pkill -f "$NAV_LAUNCH" || true
   pkill -f '[ /]move_base([ ]|$)' || true
