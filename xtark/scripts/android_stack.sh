@@ -13,7 +13,7 @@ CAMERA_PKG="${CAMERA_PKG:-xtark_driver}"
 CAMERA_LAUNCH="${CAMERA_LAUNCH:-xtark_camera.launch}"
 SLAM_ENABLE="${SLAM_ENABLE:-1}"
 SLAM_SCAN_TOPIC="${SLAM_SCAN_TOPIC:-/scan}"
-# xtark 使用 base_footprint，不�?ROS 默认�?base_link
+# xtark uses base_footprint, not ROS default base_link
 SLAM_BASE_FRAME="${SLAM_BASE_FRAME:-base_footprint}"
 SLAM_MAP_TOPIC="${SLAM_MAP_TOPIC:-/map}"
 NAV_ENABLE="${NAV_ENABLE:-1}"
@@ -27,14 +27,15 @@ ROBOT_POSE_TOPIC="${ROBOT_POSE_TOPIC:-/robot_pose_in_map}"
 ROBOT_POSE_RATE="${ROBOT_POSE_RATE:-10}"
 ROBOT_POSE_TF_TIMEOUT="${ROBOT_POSE_TF_TIMEOUT:-0.3}"
 
-# ===== gmapping 地图参数（直接改下面几行即可�?====
-# 物理尺寸 �?(xmax-xmin) × (ymax-ymin)；栅格数 �?尺寸 / SLAM_DELTA
-# 当前 4×4 m @ delta=0.1 �?�?40×40 格；Android 黄框�?/slam_gmapping/xmin 等自动读�?SLAM_XMIN=-2
+# ===== gmapping map params (edit below) =====
+# physical size (m): (xmax-xmin) x (ymax-ymin); cells ~= size / SLAM_DELTA
+# default 4x4 m @ delta=0.1 -> ~40x40 cells; Android yellow box reads /slam_gmapping/xmin etc.
+SLAM_XMIN=-2
 SLAM_XMAX=2
 SLAM_YMIN=-2
 SLAM_YMAX=2
 SLAM_DELTA=0.10
-# 小空间建图：限制激光有效距离，避免地图被远距离回波撑大
+# small-space mapping: limit laser range to avoid map blow-up from distant returns
 SLAM_MAX_URANGE=2.0
 SLAM_MAX_RANGE=2.5
 SLAM_LINEAR_UPDATE=0.20
@@ -70,13 +71,38 @@ Environment exported before launch:
   NAV_ENABLE=${NAV_ENABLE}
   NAV_PKG=${NAV_PKG}
   NAV_LAUNCH=${NAV_LAUNCH}
+  ROS_SETUP=${ROS_SETUP:-/opt/ros/melodic/setup.bash}
+  WS_SETUP=${WS_SETUP:-$HOME/ros_ws/devel/setup.bash}
 EOF
 }
 
+ROS_SETUP="${ROS_SETUP:-/opt/ros/melodic/setup.bash}"
+WS_SETUP="${WS_SETUP:-$HOME/ros_ws/devel/setup.bash}"
+STEP_N=0
+
+step_banner() {
+  STEP_N=$((STEP_N + 1))
+  echo ""
+  echo "------------------------------------------------------------"
+  echo "[STEP ${STEP_N}] $*"
+  echo "------------------------------------------------------------"
+}
+
 source_ros() {
+  if [ ! -f "$ROS_SETUP" ]; then
+    echo "[ERR] ROS setup not found: $ROS_SETUP"
+    exit 1
+  fi
+  if [ ! -f "$WS_SETUP" ]; then
+    echo "[ERR] workspace setup not found: $WS_SETUP"
+    echo "      run: cd ~/ros_ws && catkin_make && source devel/setup.bash"
+    exit 1
+  fi
   set +u
-  source /opt/ros/melodic/setup.bash
-  source "$HOME/ros_ws/devel/setup.bash"
+  # shellcheck disable=SC1090
+  source "$ROS_SETUP"
+  # shellcheck disable=SC1090
+  source "$WS_SETUP"
   set -u
 }
 
@@ -329,8 +355,9 @@ start_robot_pose_in_map() {
   fi
 
   if ! rospack find "$ROBOT_POSE_PKG" >/dev/null 2>&1; then
-    echo "[WARN] robot pose package missing: $ROBOT_POSE_PKG"
-    return 0
+    echo "[ERR] robot pose package missing: $ROBOT_POSE_PKG"
+    echo "      sync xtark_nav to ~/ros_ws/src and run catkin_make"
+    return 1
   fi
 
   pkill -f "$ROBOT_POSE_LAUNCH" || true
@@ -345,6 +372,10 @@ start_robot_pose_in_map() {
     transform_timeout:="$ROBOT_POSE_TF_TIMEOUT" \
     >"$XTARK_LOG_DIR/robot_pose_in_map.log" 2>&1 &
   echo "robot_pose_in_map started pid=$! log=$XTARK_LOG_DIR/robot_pose_in_map.log"
+
+  echo "--- wait for $ROBOT_POSE_TOPIC ---"
+  wait_for_topic "$ROBOT_POSE_TOPIC" 30
+  wait_topic_once "$ROBOT_POSE_TOPIC" 15
 }
 
 start_slam_and_nav() {
@@ -495,10 +526,21 @@ watch_nav() {
   wait
 }
 
+finish_start() {
+  local rc=0
+  verify_startup || rc=$?
+  echo ""
+  echo "--- quick status (run: $0 status | watch-nav for live goal/cmd_vel) ---"
+  status
+  return $rc
+}
+
 start() {
+  STEP_N=0
   source_ros
   mkdir -p "$XTARK_LOG_DIR"
 
+  step_banner "roscore"
   if ! is_listening_11311; then
     echo "Starting roscore with ROS_IP=$ROS_IP"
     nohup roscore >"$XTARK_LOG_DIR/roscore.log" 2>&1 &
@@ -511,24 +553,25 @@ start() {
 
   if pgrep -af "roslaunch $BRINGUP_PKG $BRINGUP_LAUNCH" >/dev/null; then
     echo "xtark bringup already running"
+    step_banner "SLAM and navigation"
     start_slam_and_nav
-    local rc=0
-    verify_startup || rc=$?
-    echo ""
-    echo "--- quick status (run: $0 status | watch-nav for live goal/cmd_vel) ---"
-    status
-    return $rc
+    step_banner "verify startup"
+    finish_start
+    return $?
   fi
 
   echo "Android app Master URI: $ROS_MASTER_URI"
+
+  step_banner "xtark bringup"
   echo "Starting xtark bringup with ROS_IP=$ROS_IP"
   nohup roslaunch "$BRINGUP_PKG" "$BRINGUP_LAUNCH" \
     >"$XTARK_LOG_DIR/bringup.log" 2>&1 &
   echo "bringup started pid=$! log=$XTARK_LOG_DIR/bringup.log"
 
   if [ "$CAMERA_ENABLE" = "1" ]; then
+    step_banner "camera"
     if [ ! -e /dev/video0 ]; then
-      echo "WARN: /dev/video0 not found; camera not started"
+      echo "[WARN] /dev/video0 not found; camera not started"
     elif pgrep -af "roslaunch $CAMERA_PKG $CAMERA_LAUNCH" >/dev/null; then
       echo "camera already running"
     else
@@ -539,13 +582,12 @@ start() {
     fi
   fi
 
+  step_banner "SLAM and navigation"
   start_slam_and_nav
-  local rc=0
-  verify_startup || rc=$?
-  echo ""
-  echo "--- quick status (run: $0 status | watch-nav for live goal/cmd_vel) ---"
-  status
-  return $rc
+
+  step_banner "verify startup"
+  finish_start
+  return $?
 }
 
 stop() {

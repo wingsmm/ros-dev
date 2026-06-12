@@ -1,6 +1,6 @@
-> 归档说明：这是 RK3568 / xtark / PC 联调的临时讨论稿。关键结论已整理到 `pc/docs/WSL2统一栈运行与调试.md`、`pc/docs/移动平台外挂感知建图导航方案.md` 和 `xtark/docs/JSON控制适配方案.md`。本文件仅保留参考。
+> 归档说明：这是 RK3568 / xtark / PC 联调的临时讨论稿。关键结论已整理到 `pc/docs/WSL2统一栈运行与调试.md`、`pc/docs/移动平台外挂感知建图导航方案.md` 和 `xtark/docs/archive/JSON控制适配方案.md`。本文件仅保留参考。
 
-你的计划方向是对的：**RK3568 和 xtark 解耦，PC 做汇聚中心**，这和仓库里 `JSON控制适配方案.md` 第 11 节、RK3568 外挂感知方案一致。我会按「先独立、再汇聚、先可视化、后 SLAM」来试，每步都有明确验收，不过线不往下走。
+你的计划方向是对的：**RK3568 和 xtark 解耦，PC 做汇聚中心**，这和仓库里 `xtark/docs/archive/JSON控制适配方案.md` 第 11 节、RK3568 外挂感知方案一致。我会按「先独立、再汇聚、先可视化、后 SLAM」来试，每步都有明确验收，不过线不往下走。
 
 ---
 
@@ -217,6 +217,6 @@ PC 上最小配置：
 
 1. **`pc/ros2_bridge/`** — JSON → `/odom_base` + TF（第二步）
 2. **`pc/ros2_bridge/launch/`** — 静态 `base_link→laser` + bridge 一键起
-3. **文档** — 在 `JSON控制适配方案.md` 补 PC 环境变量和验收命令（你文档里第 11 节已有骨架）
+3. **文档** — 在 `xtark/docs/archive/JSON控制适配方案.md` 补 PC 环境变量和验收命令（你文档里第 11 节已有骨架）
 
 如果你愿意，我可以下一步直接帮你搭 `pc/ros2_bridge` 的最小 `json_odom_bridge` 节点（`rclpy` + 复用现有 TCP 客户端），把第二步落地。

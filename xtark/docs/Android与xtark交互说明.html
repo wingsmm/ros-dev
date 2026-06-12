@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>xtark 与 Android 交互说明</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f8fa;
+      --card: #ffffff;
+      --text: #1f2328;
+      --muted: #656d76;
+      --border: #d0d7de;
+      --accent: #0969da;
+      --accent-soft: #ddf4ff;
+      --ok: #1a7f37;
+      --warn: #9a6700;
+      --code-bg: #f3f4f6;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+    }
+
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+
+    header {
+      background: linear-gradient(135deg, #0550ae 0%, #0969da 100%);
+      color: #fff;
+      border-radius: 14px;
+      padding: 28px 32px;
+      margin-bottom: 28px;
+      box-shadow: 0 8px 24px rgba(9, 105, 218, 0.18);
+    }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+
+    header p {
+      margin: 0;
+      opacity: 0.92;
+      font-size: 0.98rem;
+    }
+
+    nav.toc {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 22px;
+      margin-bottom: 28px;
+    }
+
+    nav.toc h2 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    nav.toc ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    nav.toc a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    nav.toc a:hover { text-decoration: underline; }
+
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 24px;
+    }
+
+    section h2 {
+      margin: 0 0 6px;
+      font-size: 1.45rem;
+      border-bottom: 2px solid var(--accent-soft);
+      padding-bottom: 10px;
+    }
+
+    section h3 {
+      margin: 28px 0 10px;
+      font-size: 1.12rem;
+      color: #0550ae;
+    }
+
+    section h4 {
+      margin: 20px 0 8px;
+      font-size: 1rem;
+    }
+
+    p, li { font-size: 0.97rem; }
+
+    .lead {
+      color: var(--muted);
+      margin: 8px 0 18px;
+    }
+
+    .note {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      border-radius: 0 8px 8px 0;
+      margin: 16px 0;
+      font-size: 0.94rem;
+    }
+
+    .warn {
+      background: #fff8c5;
+      border-left: 4px solid var(--warn);
+      padding: 12px 14px;
+      border-radius: 0 8px 8px 0;
+      margin: 16px 0;
+      font-size: 0.94rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 18px;
+      font-size: 0.93rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 9px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f6f8fa;
+      font-weight: 600;
+    }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      overflow-x: auto;
+      font-size: 0.88rem;
+      line-height: 1.5;
+      margin: 12px 0;
+    }
+
+    code {
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 0.9em;
+      background: var(--code-bg);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    .mermaid {
+      background: #fafbfc;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin: 16px 0;
+      overflow-x: auto;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>xtark 与 Android 交互说明</h1>
+      <p>当前实现说明：Android 在已走过地图区域内做 A/B 两点导航验证，文档需随代码同步更新。</p>
+    </header>
+
+    <nav class="toc">
+      <h2>目录</h2>
+      <ol>
+        <li><a href="#part1">一、当前 Android 两点导航链路</a></li>
+        <li><a href="#part2">二、11311 做什么？/scan 在哪里？</a></li>
+        <li><a href="#deploy">三、部署与测试顺序</a></li>
+      </ol>
+    </nav>
+
+  <!-- ============================================================ -->
+  <section id="part1">
+    <h2>一、当前 Android 两点导航链路</h2>
+    <p class="lead">当前目标是让 Android App 在 gmapping 已走过的可通行区域里设置 A/B 点，并通过 move_base 完成两点导航验证。xtark 小车和 Android App 不直接通信，而是在同一套 ROS 网络里通过话题交互。</p>
+
+    <h3>1.1 连接前提</h3>
+    <table>
+      <tr><th>项</th><th>值</th></tr>
+      <tr><td>小车 IP</td><td><code>192.168.1.169</code></td></tr>
+      <tr><td>App Master URI</td><td><code>http://192.168.1.169:11311</code></td></tr>
+      <tr><td>网络</td><td>手机/模拟器与小车在同一局域网</td></tr>
+      <tr><td>小车启动脚本</td><td><code>xtark/scripts/android_stack.sh start</code></td></tr>
+      <tr><td>Windows 同步启动</td><td><code>xtark/scripts/start_android.bat</code></td></tr>
+    </table>
+
+    <div class="warn">
+      <strong>注意：</strong><code>android_stack.sh</code> 故意不启动 <code>json_base_adapter</code>（PC/Qt JSON 控制用）。两套栈同时抢 <code>/cmd_vel</code> 会冲突。
+    </div>
+
+    <h3>1.2 小车端提供什么（android_stack.sh）</h3>
+    <table>
+      <tr><th>组件</th><th>作用</th></tr>
+      <tr><td><code>roscore</code></td><td>ROS 主节点，监听 11311</td></tr>
+      <tr><td><code>xtark_bringup.launch</code></td><td>底盘驱动：发布 <code>/scan</code>、<code>/odom</code>，订阅 <code>/cmd_vel</code></td></tr>
+      <tr><td><code>xtark_camera.launch</code></td><td>摄像头 → <code>/image_raw/compressed</code></td></tr>
+      <tr><td><code>gmapping</code></td><td>激光建图 → <code>/map</code></td></tr>
+      <tr><td><code>move_base</code></td><td>自主导航，处理目标点并下发 <code>/cmd_vel</code></td></tr>
+      <tr><td><code>xtark_nav/launch/robot_pose_in_map.launch</code></td><td>TF <code>map→base_footprint</code> 转成 <code>/robot_pose_in_map</code></td></tr>
+      <tr><td><code>nav_speed_sync</code></td><td>读 App 发来的 <code>/android/nav_speed</code>，动态调整 move_base 自主导航速度上限</td></tr>
+    </table>
+
+    <h3>1.3 Android 端做什么（RobotController）</h3>
+    <p>App 通过 rosjava 注册节点 <code>android/robot_controller</code>。</p>
+
+    <h4>订阅（感知与显示）</h4>
+    <table>
+      <tr><th>话题</th><th>用途</th></tr>
+      <tr><td><code>/map</code></td><td>SLAM 地图页面栅格图</td></tr>
+      <tr><td><code>/scan</code></td><td>激光雷达显示、SafeMode 前方障碍检测</td></tr>
+      <tr><td><code>/odom</code></td><td>里程计</td></tr>
+      <tr><td><code>/image_raw/compressed</code></td><td>相机画面</td></tr>
+      <tr><td><code>/robot_pose_in_map</code></td><td>地图上画小车位置和朝向</td></tr>
+      <tr><td><code>/move_base/status</code></td><td>A-B-A 导航状态（成功/失败/取消）</td></tr>
+    </table>
+
+    <h4>发布（控制与导航）</h4>
+    <table>
+      <tr><th>话题</th><th>用途</th></tr>
+      <tr><td><code>/cmd_vel</code></td><td>摇杆、手动按钮 → 直接控底盘</td></tr>
+      <tr><td><code>/move_base_simple/goal</code></td><td>SLAM 地图点选目标 → 自主导航</td></tr>
+      <tr><td><code>/move_base/cancel</code></td><td>取消当前导航</td></tr>
+      <tr><td><code>/android/nav_speed</code></td><td>发 A/B 导航目标前，把 App 当前速度设置同步给 move_base</td></tr>
+    </table>
+
+    <div class="note">
+      <strong>速度设置的真实含义：</strong>App 里的线速度/角速度设置是同一份偏好。手动跑图时，摇杆/按钮按这份设置直接发布 <code>/cmd_vel</code>；切到 A/B 自主导航时，App 会在发送目标前把当前这份设置通过 <code>/android/nav_speed</code> 推给小车端，让 move_base 按相同速度上限规划。
+    </div>
+
+    <h3>1.4 三条典型交互路径</h3>
+
+    <h4>手动遥控</h4>
+    <pre>摇杆 / 手动按钮
+  → 读取 App 当前线速度 / 角速度设置
+  → RobotController.forceVelocity()
+  → /cmd_vel
+  → xtark_driver
+  → 电机转动</pre>
+    <p>SafeMode 在 App 内根据 <code>/scan</code> 前方扇区（约 ±40°）减速，<strong>不是</strong>小车端完整避障。</p>
+
+    <h4>已走过地图 + 车标</h4>
+    <pre>gmapping → /map          → App 画已走过地图
+gmapping → TF(map→base)  → robot_pose_in_map.launch → /robot_pose_in_map → App 画车标</pre>
+    <p>App 不直接读 TF，因此小车端通过 <code>xtark_nav/launch/robot_pose_in_map.launch</code> 启动桥接节点。</p>
+
+    <h4>A/B 两点导航</h4>
+    <pre>App 在地图上选白格
+  → 坐标转换 + 空闲格校验
+  → 发目标前同步当前速度设置到 /android/nav_speed
+  → /move_base_simple/goal
+  → move_base 在当前在线地图上规划路径
+  → /cmd_vel → xtark_driver
+  → /move_base/status 回 App 更新 UI</pre>
+
+    <h3>1.5 与 PC/Qt 控制的区别</h3>
+    <table>
+      <tr><th></th><th>Android 验证栈</th><th>PC/Qt 栈</th></tr>
+      <tr><td>启动脚本</td><td><code>android_stack.sh</code></td><td><code>json_stack.sh</code></td></tr>
+      <tr><td>控制方式</td><td>ROS 话题（<code>/cmd_vel</code> 等）</td><td>JSON TCP 8765</td></tr>
+      <tr><td>冲突点</td><td colspan="2">两套栈不要同时占 <code>/cmd_vel</code></td></tr>
+    </table>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="part2">
+    <h2>二、11311 做什么？/scan 在哪里？</h2>
+    <p class="lead">上一版架构图容易让人误以为所有数据都走 11311。实际上要区分 <strong>控制面</strong>（11311）和 <strong>数据面</strong>（话题直连）。</p>
+
+    <h3>2.1 11311 做什么、不做什么</h3>
+    <p><code>11311</code> 是 <strong>roscore（ROS Master）</strong> 端口，负责注册与协调，<strong>不承载</strong>激光、地图、图像等大数据。</p>
+
+    <table>
+      <tr><th>11311 负责</th><th>11311 不负责</th></tr>
+      <tr><td>节点注册（谁在线）</td><td>传输激光点云、地图栅格</td></tr>
+      <tr><td>话题匹配（谁发布/谁订阅 <code>/scan</code>）</td><td>传输 <code>/cmd_vel</code> 速度指令本体</td></tr>
+      <tr><td>参数服务器（如 gmapping 的 <code>xmin</code>）</td><td>传输相机压缩图</td></tr>
+      <tr><td>告诉订阅方发布方的 TCP 地址</td><td>代替 move_base 做路径规划</td></tr>
+    </table>
+
+    <h4>连接建立过程</h4>
+    <pre>1. Android App 连接 http://192.168.1.169:11311
+2. 向 Master 注册节点 android/robot_controller
+3. 声明：我要订阅 /scan、/map、/robot_pose_in_map …
+4. Master 回复：/scan 的发布者在 169 的某个 TCP 端口
+5. App 与发布节点直连，激光数据走局域网，不经 11311</pre>
+
+    <div class="note">
+      <strong>一句话：</strong>11311 = 电话簿 + 接线员；话题数据 = 节点之间直连。
+    </div>
+
+    <h3>2.2 修正后的总体架构（含 /scan）</h3>
+    <p>为了避免一张图里线条交叉，下面按功能拆成四条链路看；完整话题关系在后面的表格里，没有省略。</p>
+
+    <h4>控制面：11311 只负责发现节点</h4>
+    <div class="mermaid">
+flowchart LR
+  APP["Android App<br/>RobotController rosjava"]
+  MASTER["169:11311 roscore<br/>节点注册 / 话题匹配 / 参数服务"]
+  ROBOT["小车 ROS 节点<br/>xtark_bringup / gmapping / move_base"]
+
+  APP -. "注册节点 / 查询话题" .-> MASTER
+  ROBOT -. "注册发布者 / 订阅者" .-> MASTER
+    </div>
+
+    <h4>地图与车标：/scan、/odom 生成 /map 和车身位姿</h4>
+    <div class="mermaid">
+flowchart LR
+  LIDAR["激光雷达 USB"]
+  BASE["底盘里程计"]
+  BRINGUP["xtark_bringup / xtark_driver<br/>发布 /scan + /odom"]
+  GMAP["gmapping<br/>订阅 /scan + /odom"]
+  MAP["/map"]
+  TF["TF map->base_footprint"]
+  POSE["robot_pose_in_map.launch<br/>TF -> /robot_pose_in_map"]
+  MAPUI["Android SLAM 地图页<br/>显示地图 + 车标"]
+
+  LIDAR --> BRINGUP
+  BASE --> BRINGUP
+  BRINGUP --> GMAP
+  GMAP --> MAP
+  MAP --> MAPUI
+  GMAP --> TF
+  TF --> POSE
+  POSE --> MAPUI
+    </div>
+
+    <h4>A/B 两点导航：App 下目标，move_base 控底盘</h4>
+    <div class="mermaid">
+flowchart LR
+  MAPUI["Android SLAM 地图页<br/>选择已走过白色区域"]
+  GOAL["/move_base_simple/goal<br/>/move_base/cancel"]
+  MOVE["move_base<br/>订阅 /map + /scan + /odom"]
+  VEL["/cmd_vel"]
+  DRIVER["xtark_driver"]
+  MOTOR["底盘电机"]
+  STATUS["/move_base/status"]
+  NAVUI["Android A/B 导航 UI"]
+  SPEED["/android/nav_speed<br/>发 goal 前推当前速度设置"]
+  SYNC["nav_speed_sync<br/>更新 move_base 速度上限"]
+
+  MAPUI --> GOAL
+  GOAL --> MOVE
+  MOVE --> VEL
+  VEL --> DRIVER
+  DRIVER --> MOTOR
+  MOVE --> STATUS
+  STATUS --> NAVUI
+  NAVUI --> SPEED
+  SPEED --> SYNC
+  SYNC --> MOVE
+    </div>
+
+    <h4>手动、HUD、相机：辅助显示和人工接管</h4>
+    <div class="mermaid">
+flowchart LR
+  MANUAL["Android 手动控制<br/>摇杆 / 按钮"]
+  CMD["/cmd_vel"]
+  DRIVER["xtark_driver"]
+  LIDAR["/scan"]
+  HUD["HUD 激光显示<br/>SafeMode 前方检测"]
+  CAMERA["camera 节点"]
+  IMAGE["/image_raw/compressed"]
+  VIDEO["Android 相机显示"]
+
+  MANUAL --> CMD
+  CMD --> DRIVER
+  LIDAR --> HUD
+  CAMERA --> IMAGE
+  IMAGE --> VIDEO
+    </div>
+
+    <p>读图顺序：先看 11311 只做注册和匹配，再看 <code>/scan</code>、<code>/odom</code> 如何生成 <code>/map</code> 与 <code>/robot_pose_in_map</code>，最后看 Android 如何下发 A/B 目标或手动速度。实线是话题数据直连；虚线只表示向 11311 注册和查询话题。</p>
+
+    <table>
+      <tr><th>链路</th><th>实际数据/话题</th><th>说明</th></tr>
+      <tr><td>雷达与里程计</td><td><code>/scan</code>、<code>/odom</code></td><td><code>xtark_bringup / xtark_driver</code> 提供，gmapping 和 move_base 都依赖。</td></tr>
+      <tr><td>地图显示</td><td><code>/map</code></td><td>gmapping 发布，Android SLAM 地图页订阅。</td></tr>
+      <tr><td>车标显示</td><td><code>/robot_pose_in_map</code></td><td><code>robot_pose_in_map.launch</code> 把 TF <code>map→base_footprint</code> 转成 PoseStamped。</td></tr>
+      <tr><td>A/B 目标</td><td><code>/move_base_simple/goal</code>、<code>/move_base/cancel</code></td><td>Android 在已走过白色区域选点后发布给 move_base。</td></tr>
+      <tr><td>导航状态</td><td><code>/move_base/status</code></td><td>move_base 回传成功、失败、取消等状态，Android 更新 UI。</td></tr>
+      <tr><td>底盘速度</td><td><code>/cmd_vel</code></td><td>自动导航时由 move_base 发布；手动模式下由 Android 摇杆/按钮发布。</td></tr>
+      <tr><td>速度同步</td><td><code>/android/nav_speed</code></td><td>Android 在发 A/B 目标前发布当前速度设置，<code>nav_speed_sync</code> 动态调整 move_base 参数；手动 <code>/cmd_vel</code> 不经过它。</td></tr>
+      <tr><td>相机显示</td><td><code>/image_raw/compressed</code></td><td>camera 节点发布，Android 可订阅显示；两点导航主链路不依赖它。</td></tr>
+    </table>
+
+    <h3>2.3 /scan 在各处的角色</h3>
+    <p><code>/scan</code>（<code>sensor_msgs/LaserScan</code>）是整条链路的 <strong>核心传感器话题</strong>：</p>
+
+    <table>
+      <tr><th>环节</th><th>谁发布</th><th>谁订阅</th><th>用途</th></tr>
+      <tr><td>采集</td><td><code>rplidar</code>（bringup 内）</td><td>—</td><td>雷达 USB → 点云</td></tr>
+      <tr><td>滤波</td><td>滤波节点（若有）</td><td>—</td><td><code>/scan_raw</code> → <code>/scan</code></td></tr>
+      <tr><td>建图</td><td>—</td><td><strong>gmapping</strong></td><td>根据 <code>/scan</code> + <code>/odom</code> 更新 <code>/map</code> 和 TF</td></tr>
+      <tr><td>导航</td><td>—</td><td><strong>move_base</strong> costmap</td><td>局部/全局代价地图避障</td></tr>
+      <tr><td>显示</td><td>—</td><td><strong>Android</strong></td><td>HUD 激光扇形</td></tr>
+      <tr><td>安全</td><td>—</td><td><strong>Android SafeMode</strong></td><td>读前方 ±40° 减速（非完整避障）</td></tr>
+    </table>
+
+    <p><code>android_stack.sh</code> 启动时会先等待 <code>/scan</code>，再启动 gmapping：</p>
+    <pre>wait_for_topic /scan  →  start_gmapping</pre>
+    <p>没有 <code>/scan</code>，gmapping、move_base、App 激光显示都会出问题。</p>
+
+    <h3>2.4 按功能再看数据流</h3>
+
+    <h4>感知链（含 scan）</h4>
+    <pre>激光雷达
+  → rplidar（bringup）
+  → /scan
+      ├→ gmapping        → /map + TF
+      ├→ move_base       → 代价地图避障
+      └→ Android App     → HUD + SafeMode</pre>
+
+    <h4>地图 + 车标</h4>
+    <pre>/scan + /odom → gmapping → /map → App 画已走过地图
+                gmapping → TF(map→base_footprint)
+                      → robot_pose_in_map.launch
+                      → /robot_pose_in_map → App 画车标</pre>
+
+    <h4>手动遥控</h4>
+    <pre>App 当前速度设置
+  → 摇杆 / 手动按钮
+  → /cmd_vel
+  → xtark_driver
+  → 电机
+（与 nav_speed_sync 无关；SafeMode 会先读 /scan 再决定是否减速）</pre>
+
+    <h4>自主导航</h4>
+    <pre>App 当前速度设置
+  → /android/nav_speed
+  → nav_speed_sync
+  → dynamic_reconfigure 调整 move_base 速度上限
+App → /move_base_simple/goal → move_base
+move_base 用当前 /scan + /map + /odom 规划
+move_base → /cmd_vel → xtark_driver
+move_base → /move_base/status → App</pre>
+  </section>
+
+  <!-- ============================================================ -->
+  <section id="deploy">
+    <h2>三、部署与测试顺序</h2>
+    <p class="lead">从 Windows 部署到小车并验证 Android 联调时的推荐流程。</p>
+
+    <table>
+      <tr><th>步骤</th><th>命令</th><th>说明</th></tr>
+      <tr><td>1. 编译 APK</td><td><code>android\scripts\build_app.bat</code></td><td>生成 <code>android\apks\xtark-control-alt-debug.apk</code></td></tr>
+      <tr><td>2. 安装 APK</td><td><code>android\scripts\install_mumu.bat</code></td><td>安装到 MuMu；真机可按需手动安装 APK</td></tr>
+      <tr><td>3. 清理远端</td><td><code>xtark\scripts\start_android.bat stop</code></td><td>停掉远端旧 ROS 进程；会中断当前运行，执行前需确认</td></tr>
+      <tr><td>4. 同步并启动</td><td><code>xtark\scripts\start_android.bat</code></td><td>scp <code>android_stack.sh</code> + <code>xtark_nav</code> 到 169，并启动 Android 验证栈</td></tr>
+      <tr><td>5. 状态</td><td><code>xtark\scripts\status_android.bat</code></td><td>检查 <code>/map</code>、<code>/robot_pose_in_map</code>、move_base</td></tr>
+      <tr><td>6. App</td><td>MuMu / 手机</td><td>Master URI 填 <code>http://192.168.1.169:11311</code>，在已走过白色区域设置 A/B 点</td></tr>
+    </table>
+
+    <div class="note">
+      远端脚本只负责机器人 ROS 栈；Android APK 构建和安装分别由 <code>android/scripts/build_app.bat</code>、<code>android/scripts/install_mumu.bat</code> 负责。
+    </div>
+  </section>
+
+    <footer>
+      xtark/docs/Android与xtark交互说明.html · 用浏览器直接打开即可阅读
+    </footer>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "neutral",
+      flowchart: { curve: "basis", htmlLabels: true }
+    });
+  </script>
+</body>
+</html>

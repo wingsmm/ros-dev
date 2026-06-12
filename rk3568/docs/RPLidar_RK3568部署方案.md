@@ -309,7 +309,7 @@ docker exec astra-camera bash -lc '
 
 - Slamtec ROS2：<https://github.com/Slamtec/sllidar_ros2>
 - 板端深度相机验收：`rk3568/docs/Astra_RK3568部署方案.md`
-- xtark 雷达硬件说明：`xtark/远端硬件与传感器.md` §3.1（ROS1 仅供参考）
+- xtark 雷达硬件说明：`xtark/docs/README.md`（ROS1 仅供参考）
 
 ---
 
