@@ -81,8 +81,8 @@ docker images | grep -E 'astra|humble'
 
 ```powershell
 docker pull osrf/ros:humble-desktop-full
-docker save -o D:\wingsmm\Desktop\ros-humble-desktop-full.tar osrf/ros:humble-desktop-full
-scp D:\wingsmm\Desktop\ros-humble-desktop-full.tar wingsmm@192.168.211.129:~/
+docker save -o D:\Downloads\work\ros-dev\ros-humble-desktop-full.tar osrf/ros:humble-desktop-full
+scp D:\Downloads\work\ros-dev\ros-humble-desktop-full.tar wingsmm@192.168.211.129:~/
 ```
 
 ### 3.2 VM：Docker、Compose、导入镜像

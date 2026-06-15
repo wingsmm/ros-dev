@@ -11,9 +11,10 @@ import com.robotca.ControlApp.R;
  */
 public final class ManualSpeedPreferences {
 
-    public static final double DEFAULT_LINEAR_SPEED = 0.10;
-    public static final double DEFAULT_ANGULAR_SPEED = 0.20;
-    public static final double MIN_LINEAR_SPEED = 0.02;
+    // Match xtark_nav/config/move_base_params.yaml TrajectoryPlannerROS defaults.
+    public static final double DEFAULT_LINEAR_SPEED = 0.12;
+    public static final double DEFAULT_ANGULAR_SPEED = 0.50;
+    public static final double MIN_LINEAR_SPEED = 0.03;
     public static final double MAX_LINEAR_SPEED = 0.30;
     public static final double MIN_ANGULAR_SPEED = 0.05;
     public static final double MAX_ANGULAR_SPEED = 0.80;

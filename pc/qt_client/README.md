@@ -8,7 +8,7 @@
 ## 依赖
 
 ```bash
-cd /mnt/d/wingsmm/Desktop/other/pc/qt_client
+cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -34,7 +34,7 @@ sudo apt-get install -y \
 ## 启动
 
 ```bash
-cd /mnt/d/wingsmm/Desktop/other/pc/qt_client
+cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 ./run.sh
 ```
 

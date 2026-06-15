@@ -151,6 +151,10 @@
     <string name="slam_nav_state_canceled">canceled</string>
     <string name="slam_nav_state_active">active</string>
     <string name="slam_nav_state_pending">pending</string>
+    <string name="slam_nav_state_with_plan">Navigation: %1$s | Plan: %2$s</string>
+    <string name="slam_nav_plan_none">Global plan: none</string>
+    <string name="slam_nav_plan_points">Global plan: %1$d points</string>
+    <string name="slam_nav_plan_points_age">Global plan: %1$d points, updated %2$d s ago</string>
     <string name="laser_scan_detail_pref_summary">Sets the detail level of the laser scan visualization.
         A higher number will draw more laser points\nValue: %s
     </string>
@@ -321,9 +325,9 @@
     <string name="prefs_manual_angular_speed_key">manual_angular_speed</string>
     <string name="manual_linear_speed_pref_title">Manual Linear Speed</string>
     <string name="manual_angular_speed_pref_title">Manual Angular Speed</string>
-    <string name="manual_linear_speed_pref_summary">Hold-button and SLAM nav linear speed in m/s (0.02–0.30)\nValue: %s</string>
+    <string name="manual_linear_speed_pref_summary">Hold-button and SLAM nav linear speed in m/s (0.03–0.30)\nValue: %s</string>
     <string name="manual_angular_speed_pref_summary">Hold-button and SLAM nav angular speed in rad/s (0.05–0.80)\nValue: %s</string>
-    <string name="default_manual_linear_speed">0.10</string>
-    <string name="default_manual_angular_speed">0.20</string>
+    <string name="default_manual_linear_speed">0.12</string>
+    <string name="default_manual_angular_speed">0.50</string>
 
 </resources>

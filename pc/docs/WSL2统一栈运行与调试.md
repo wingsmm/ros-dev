@@ -120,7 +120,7 @@ TCP 0.0.0.0:8765 正在监听
 启动：
 
 ```bash
-cd /mnt/d/wingsmm/Desktop/other/pc/qt_client
+cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 ./run.sh
 ```
 

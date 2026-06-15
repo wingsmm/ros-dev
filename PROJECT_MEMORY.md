@@ -1,6 +1,6 @@
 # Project Memory / 项目备忘
 
-最后整理日期：2026-06-11
+最后整理日期：2026-06-15
 
 ## 1. 当前主线
 
@@ -35,7 +35,7 @@ pc/qt_client/README.md
 日常启动：
 
 ```bash
-cd /mnt/d/wingsmm/Desktop/other/pc/qt_client
+cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 ./run.sh
 ```
 
@@ -177,7 +177,7 @@ android/
 日常入口：
 
 ```bat
-cd /d D:\wingsmm\Desktop\other\android
+cd /d D:\Downloads\work\ros-dev\android
 scripts\build_app.bat
 scripts\install_mumu.bat
 ..\xtark\scripts\start_android.bat
@@ -266,7 +266,7 @@ git diff --stat
 1. 打开仓库：
 
 ```text
-D:\wingsmm\Desktop\other
+D:\Downloads\work\ros-dev
 ```
 
 2. 先读：
@@ -288,7 +288,7 @@ WSL2 原生 ROS2 可见 /scan
 4. 启动 WSL2 统一客户端：
 
 ```bash
-cd /mnt/d/wingsmm/Desktop/other/pc/qt_client
+cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 ./run.sh
 ```
 

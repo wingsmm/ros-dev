@@ -194,7 +194,7 @@
   <div class="wrap">
     <header>
       <h1>xtark 与 Android 交互说明</h1>
-      <p>当前实现说明：Android 在已走过地图区域内做 A/B 两点导航验证，文档需随代码同步更新。</p>
+      <p>当前实现说明：Android 在已走过地图区域内做 A/B 两点导航验证；本文同时作为 Android ↔ 小车的交接契约，文档需随代码同步更新。</p>
     </header>
 
     <nav class="toc">
@@ -202,7 +202,8 @@
       <ol>
         <li><a href="#part1">一、当前 Android 两点导航链路</a></li>
         <li><a href="#part2">二、11311 做什么？/scan 在哪里？</a></li>
-        <li><a href="#deploy">三、部署与测试顺序</a></li>
+        <li><a href="#contract">三、Android ↔ 小车交接契约</a></li>
+        <li><a href="#deploy">四、部署与测试顺序</a></li>
       </ol>
     </nav>
 
@@ -473,8 +474,87 @@ move_base → /move_base/status → App</pre>
   </section>
 
   <!-- ============================================================ -->
+  <section id="contract">
+    <h2>三、Android ↔ 小车交接契约</h2>
+    <p class="lead">这部分是当前 Android、后续 Qt/PC、未来 ROS2/网关实现都应对齐的行为契约。UI 可以自研，底层交接尽量保持标准 ROS topic 和清晰状态语义。</p>
+
+    <h3>3.1 启动边界</h3>
+    <table>
+      <tr><th>模块</th><th>负责内容</th><th>不负责内容</th></tr>
+      <tr><td>小车端 <code>android_stack.sh</code></td><td>启动 roscore、底盘、相机、gmapping、move_base、车标 pose、速度同步</td><td>不保存 Android 任务队列，不维护多航点状态机</td></tr>
+      <tr><td>Android App</td><td>显示地图/车标/规划路径，点选目标，发送 goal/cancel，维护 A/B 或多航点任务状态</td><td>不做全局路径规划，不直接替代 move_base 避障</td></tr>
+      <tr><td>PC/Qt 后续实现</td><td>按同一套 topic 和状态语义实现控制/显示</td><td>不另起一套与 Android 不一致的任务完成判据</td></tr>
+    </table>
+
+    <h3>3.2 必须稳定的 ROS 接口</h3>
+    <table>
+      <tr><th>方向</th><th>Topic / 接口</th><th>类型</th><th>契约</th></tr>
+      <tr><td>小车 → App</td><td><code>/map</code></td><td><code>nav_msgs/OccupancyGrid</code></td><td>SLAM 地图；Android 只允许在已探索 free 区域点选目标。</td></tr>
+      <tr><td>小车 → App</td><td><code>/scan</code></td><td><code>sensor_msgs/LaserScan</code></td><td>HUD 和 SafeMode 辅助显示；不作为 Android 全局规划输入。</td></tr>
+      <tr><td>小车 → App</td><td><code>/robot_pose_in_map</code></td><td><code>geometry_msgs/PoseStamped</code></td><td>机器人在 <code>map</code> 坐标系下的位置和朝向，用于地图车标。</td></tr>
+      <tr><td>小车 → App</td><td><code>/move_base/status</code></td><td><code>actionlib_msgs/GoalStatusArray</code></td><td>导航状态来源；任务推进必须基于它。</td></tr>
+      <tr><td>小车 → App</td><td><code>/move_base/NavfnROS/plan</code></td><td><code>nav_msgs/Path</code></td><td>move_base 当前全局规划意图；只表示计划路线，不表示实际轨迹。</td></tr>
+      <tr><td>App → 小车</td><td><code>/move_base_simple/goal</code></td><td><code>geometry_msgs/PoseStamped</code></td><td>导航目标；<code>frame_id</code> 必须是 <code>map</code>。</td></tr>
+      <tr><td>App → 小车</td><td><code>/move_base/cancel</code></td><td><code>actionlib_msgs/GoalID</code></td><td>取消当前 move_base 目标；停止/暂停任务都应先取消当前目标。</td></tr>
+      <tr><td>App → 小车</td><td><code>/android/nav_speed</code></td><td><code>geometry_msgs/Twist</code></td><td>发导航 goal 前同步当前速度设置，只影响 move_base 速度上限。</td></tr>
+      <tr><td>App 或 move_base → 小车</td><td><code>/cmd_vel</code></td><td><code>geometry_msgs/Twist</code></td><td>底盘速度命令；手动和导航不要同时抢占。</td></tr>
+    </table>
+
+    <h3>3.3 Frame 与坐标</h3>
+    <table>
+      <tr><th>项</th><th>约定</th></tr>
+      <tr><td>地图坐标系</td><td><code>map</code></td></tr>
+      <tr><td>底盘坐标系</td><td><code>base_footprint</code></td></tr>
+      <tr><td>车标来源</td><td>小车端把 TF <code>map→base_footprint</code> 转成 <code>/robot_pose_in_map</code></td></tr>
+      <tr><td>目标点 frame</td><td>Android 发布 <code>/move_base_simple/goal</code> 时使用 <code>map</code></td></tr>
+      <tr><td>地图点选</td><td>屏幕坐标必须先转换为 <code>map</code> 坐标，再做 free 栅格校验。</td></tr>
+    </table>
+
+    <h3>3.4 导航状态语义</h3>
+    <table>
+      <tr><th>Status</th><th>含义</th><th>App 行为</th></tr>
+      <tr><td><code>PENDING</code> / <code>ACTIVE</code></td><td>当前 goal 已进入 move_base 执行链路</td><td>标记当前目标已被接管，允许后续接受完成状态。</td></tr>
+      <tr><td><code>SUCCEEDED</code></td><td>当前 goal 到达</td><td>A/B 可进入完成；多航点任务推进到下一个航点。</td></tr>
+      <tr><td><code>ABORTED</code> / <code>REJECTED</code></td><td>规划或执行失败</td><td>停止当前任务，显示失败，不盲目发下一个点。</td></tr>
+      <tr><td><code>PREEMPTED</code></td><td>目标被取消或被新目标覆盖</td><td>标记取消/暂停，清理当前规划路径显示。</td></tr>
+    </table>
+
+    <div class="warn">
+      <strong>状态防误判：</strong>发出新 goal 后，App 不能立刻把收到的 <code>SUCCEEDED</code> 当成当前目标完成；必须先看到该目标进入 <code>PENDING</code> 或 <code>ACTIVE</code>，再接受后续完成状态。
+    </div>
+
+    <h3>3.5 任务编排边界</h3>
+    <table>
+      <tr><th>功能</th><th>当前归属</th><th>说明</th></tr>
+      <tr><td>A/B、A-B-A</td><td>Android</td><td>App 内维护状态，逐次发送标准 move_base goal。</td></tr>
+      <tr><td>多航点队列</td><td>Android</td><td>下周实现：App 维护 <code>List&lt;Waypoint&gt;</code>，SUCCEEDED 后发下一个 goal。</td></tr>
+      <tr><td>路径规划</td><td>move_base</td><td>Android 只显示 <code>/move_base/NavfnROS/plan</code>，不自己规划。</td></tr>
+      <tr><td>避障与速度输出</td><td>move_base + xtark_driver</td><td>导航期间由 move_base 输出 <code>/cmd_vel</code>。</td></tr>
+      <tr><td>手动遥控</td><td>Android</td><td>直接发布 <code>/cmd_vel</code>；导航期间应避免与 move_base 同时发布。</td></tr>
+    </table>
+
+    <h3>3.6 Android 与 Qt/PC 对齐要求</h3>
+    <p>Qt/PC 后续不要求复用 Android 代码，但应复用同一套行为定义：</p>
+    <table>
+      <tr><th>行为</th><th>统一约定</th></tr>
+      <tr><td>目标坐标系</td><td>所有导航 goal 均使用 <code>map</code>。</td></tr>
+      <tr><td>完成判据</td><td>以 <code>/move_base/status</code> 的 <code>SUCCEEDED</code> 为准，不以 UI 距离估算为准。</td></tr>
+      <tr><td>失败处理</td><td><code>ABORTED</code> / <code>REJECTED</code> 停止当前任务，不自动跳过。</td></tr>
+      <tr><td>取消/暂停</td><td>发送 <code>/move_base/cancel</code>，并清理当前任务显示。</td></tr>
+      <tr><td>路径显示</td><td>显示 move_base 发布的 <code>nav_msgs/Path</code>，明确它是规划意图。</td></tr>
+    </table>
+
+    <h3>3.7 ROS2/网关迁移原则</h3>
+    <p>未来如果引入 ROS2、Nav2、rosbridge 或自定义网关，优先保持上述契约不变，只替换底层传输和机器人端实现。</p>
+    <pre>Android / Qt UI 行为
+  -> 目标、状态、路径、速度这些契约不变
+  -> ROS1 topic / rosbridge / ROS2 action 只是底层实现差异</pre>
+    <p>短期不建议直接迁移 Android 到原生 ROS2/DDS；更稳的路线是先把 ROS1 标准 topic 行为做稳定，再评估 PC/Qt 或网关层承接 ROS2/Nav2。</p>
+  </section>
+
+  <!-- ============================================================ -->
   <section id="deploy">
-    <h2>三、部署与测试顺序</h2>
+    <h2>四、部署与测试顺序</h2>
     <p class="lead">从 Windows 部署到小车并验证 Android 联调时的推荐流程。</p>
 
     <table>

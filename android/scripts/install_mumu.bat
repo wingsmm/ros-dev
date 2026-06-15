@@ -21,7 +21,7 @@ set "APK=%ROOT%apks\xtark-control-alt-debug.apk"
 set "MUMU_CLI=D:\Program Files\Netease\MuMu\nx_main\mumu-cli.exe"
 set "PKG=cn.xtark.robotca"
 set "VMINDEX=0"
-set "STEP_TOTAL=5"
+set "STEP_TOTAL=4"
 set "MUMU_OUT=%TEMP%\mumu_deploy_%RANDOM%.txt"
 
 echo ============================================================
@@ -142,22 +142,22 @@ if errorlevel 1 goto :fail
 echo [OK]
 call :show_output
 
-REM step 4: uninstall old package if present
-set "STEP_N=4"
-call :step_banner "uninstall old package"
-call :mumu_run "uninstall %PKG%"
-call :output_has "Success"
-if not errorlevel 1 (
-  echo [OK] old package removed
-) else (
-  echo [OK] package not installed, skip uninstall
-  call :show_output
-)
+REM step 4: uninstall old package if present (disabled: keep app data on upgrade)
+REM set "STEP_N=4"
+REM call :step_banner "uninstall old package"
+REM call :mumu_run "uninstall %PKG%"
+REM call :output_has "Success"
+REM if not errorlevel 1 (
+REM   echo [OK] old package removed
+REM ) else (
+REM   echo [OK] package not installed, skip uninstall
+REM   call :show_output
+REM )
 
-REM step 5: install apk and verify package name
-set "STEP_N=5"
+REM step 4: install apk and verify package name (-r replaces existing package)
+set "STEP_N=4"
 call :step_banner "install and verify"
-call :mumu_run "install \"%APK%\""
+call :mumu_run "install -r \"%APK%\""
 if errorlevel 1 goto :fail
 call :assert_output_contains "Success" "install did not report Success"
 if errorlevel 1 goto :fail

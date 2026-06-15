@@ -16,7 +16,12 @@ import com.robotca.ControlApp.Core.SlamMapDiagnostics;
 import com.robotca.ControlApp.Core.SlamMapStats;
 
 import nav_msgs.OccupancyGrid;
+import nav_msgs.Path;
 import org.jboss.netty.buffer.ChannelBuffer;
+
+import java.util.List;
+
+import geometry_msgs.PoseStamped;
 
 /**
  * Custom View for rendering a SLAM occupancy grid as a cached Bitmap.
@@ -41,6 +46,8 @@ public class SlamMapView extends View {
     private static final float MAX_SCALE = 10.0f;
     private static final float MAX_RECENTER_SCALE = 4.0f;
     private static final float OVERLAY_STROKE_PX = 2.0f;
+    private static final float PLAN_STROKE_PX = 3.0f;
+    private static final int PLAN_COLOR = Color.argb(200, 40, 120, 255);
     private static final float TAP_SLOP_PX = 12.0f;
 
     private Bitmap mapBitmap;
@@ -52,6 +59,7 @@ public class SlamMapView extends View {
     private final Paint pointTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint robotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint robotArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint planPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private MapTapListener mapTapListener;
     private MapPoint pointA;
@@ -59,6 +67,10 @@ public class SlamMapView extends View {
     private MapPoint robotPoint;
     private double robotYaw;
     private boolean hasRobotPose;
+    private nav_msgs.Path lastMoveBasePlanRos;
+    private android.graphics.Path cachedPlanPath;
+    private int moveBasePlanPoseCount;
+    private long moveBasePlanUpdatedMs;
     private byte[] lastGridData;
 
     private float scale = 1.0f;
@@ -145,6 +157,12 @@ public class SlamMapView extends View {
         robotArrowPaint.setColor(Color.rgb(30, 120, 255));
         robotArrowPaint.setStyle(Paint.Style.STROKE);
         robotArrowPaint.setStrokeWidth(3.0f);
+
+        planPaint.setColor(PLAN_COLOR);
+        planPaint.setStyle(Paint.Style.STROKE);
+        planPaint.setStrokeWidth(PLAN_STROKE_PX);
+        planPaint.setStrokeJoin(Paint.Join.ROUND);
+        planPaint.setStrokeCap(Paint.Cap.ROUND);
     }
 
     public void setMapTapListener(MapTapListener listener) {
@@ -172,6 +190,32 @@ public class SlamMapView extends View {
         hasRobotPose = false;
         robotPoint = null;
         invalidate();
+    }
+
+    public void updateMoveBasePlan(Path path) {
+        lastMoveBasePlanRos = path;
+        moveBasePlanUpdatedMs = SystemClock.elapsedRealtime();
+        rebuildCachedPlanPath();
+        invalidate();
+    }
+
+    public void clearMoveBasePlan() {
+        lastMoveBasePlanRos = null;
+        cachedPlanPath = null;
+        moveBasePlanPoseCount = 0;
+        moveBasePlanUpdatedMs = 0;
+        invalidate();
+    }
+
+    public int getMoveBasePlanPoseCount() {
+        return moveBasePlanPoseCount;
+    }
+
+    public long getMoveBasePlanAgeMs() {
+        if (moveBasePlanUpdatedMs <= 0) {
+            return -1;
+        }
+        return SystemClock.elapsedRealtime() - moveBasePlanUpdatedMs;
     }
 
     public MapPoint screenToMap(float screenX, float screenY) {
@@ -470,7 +514,53 @@ public class SlamMapView extends View {
         updateCount++;
         lastRenderDurationMs = SystemClock.elapsedRealtime() - renderStart;
 
+        rebuildCachedPlanPath();
         invalidate();
+    }
+
+    private void rebuildCachedPlanPath() {
+        if (lastMoveBasePlanRos == null || mapBitmap == null || lastResolution <= 0.0) {
+            cachedPlanPath = null;
+            moveBasePlanPoseCount = 0;
+            return;
+        }
+
+        List<PoseStamped> poses = lastMoveBasePlanRos.getPoses();
+        if (poses == null || poses.isEmpty()) {
+            cachedPlanPath = null;
+            moveBasePlanPoseCount = 0;
+            return;
+        }
+
+        android.graphics.Path path = new android.graphics.Path();
+        int validPoints = 0;
+        boolean hasStart = false;
+        for (PoseStamped pose : poses) {
+            if (pose == null || pose.getPose() == null || pose.getPose().getPosition() == null) {
+                continue;
+            }
+            float[] bitmapPoint = mapWorldToBitmap(
+                    pose.getPose().getPosition().getX(),
+                    pose.getPose().getPosition().getY());
+            if (bitmapPoint == null) {
+                continue;
+            }
+            if (!hasStart) {
+                path.moveTo(bitmapPoint[0], bitmapPoint[1]);
+                hasStart = true;
+            } else {
+                path.lineTo(bitmapPoint[0], bitmapPoint[1]);
+            }
+            validPoints++;
+        }
+
+        if (validPoints < 2) {
+            cachedPlanPath = null;
+            moveBasePlanPoseCount = 0;
+        } else {
+            cachedPlanPath = path;
+            moveBasePlanPoseCount = validPoints;
+        }
     }
 
     private int readOccupancyValue(ChannelBuffer data, int index) {
@@ -504,6 +594,7 @@ public class SlamMapView extends View {
         knownBoundsPaint.setStrokeWidth(OVERLAY_STROKE_PX / scale);
         drawConfiguredBounds(canvas);
         drawKnownBounds(canvas);
+        drawMoveBasePlan(canvas);
         drawNavPoint(canvas, pointA, pointAPaint, "A");
         drawNavPoint(canvas, pointB, pointBPaint, "B");
         drawRobotPose(canvas);
@@ -515,8 +606,12 @@ public class SlamMapView extends View {
             return;
         }
 
-        float bx = (float) ((robotPoint.x - lastOriginX) / lastResolution);
-        float by = (float) (mapBitmap.getHeight() - (robotPoint.y - lastOriginY) / lastResolution);
+        float[] bitmapPoint = mapWorldToBitmap(robotPoint.x, robotPoint.y);
+        if (bitmapPoint == null) {
+            return;
+        }
+        float bx = bitmapPoint[0];
+        float by = bitmapPoint[1];
 
         float r = 7.0f / scale;
         canvas.drawCircle(bx, by, r, robotPaint);
@@ -529,13 +624,35 @@ public class SlamMapView extends View {
         canvas.drawLine(bx, by, endX, endY, robotArrowPaint);
     }
 
+    private void drawMoveBasePlan(Canvas canvas) {
+        if (cachedPlanPath == null || moveBasePlanPoseCount < 2) {
+            return;
+        }
+
+        planPaint.setStrokeWidth(PLAN_STROKE_PX / scale);
+        canvas.drawPath(cachedPlanPath, planPaint);
+    }
+
+    private float[] mapWorldToBitmap(double worldX, double worldY) {
+        if (mapBitmap == null || lastResolution <= 0.0) {
+            return null;
+        }
+        float bx = (float) ((worldX - lastOriginX) / lastResolution);
+        float by = (float) (mapBitmap.getHeight() - (worldY - lastOriginY) / lastResolution);
+        return new float[]{bx, by};
+    }
+
     private void drawNavPoint(Canvas canvas, MapPoint point, Paint fillPaint, String label) {
         if (point == null || mapBitmap == null || lastResolution <= 0.0) {
             return;
         }
 
-        float bx = (float) ((point.x - lastOriginX) / lastResolution);
-        float by = (float) (mapBitmap.getHeight() - (point.y - lastOriginY) / lastResolution);
+        float[] bitmapPoint = mapWorldToBitmap(point.x, point.y);
+        if (bitmapPoint == null) {
+            return;
+        }
+        float bx = bitmapPoint[0];
+        float by = bitmapPoint[1];
 
         float r = 8.0f / scale;
         canvas.drawCircle(bx, by, r, fillPaint);

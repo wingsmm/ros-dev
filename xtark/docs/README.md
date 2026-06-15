@@ -6,7 +6,7 @@
 
 | 文档 | 定位 |
 |------|------|
-| `Android与xtark交互说明.html` | 当前 Android 两点导航链路说明：11311、/scan、/map、/robot_pose_in_map、move_base、部署顺序。 |
+| `Android与xtark交互说明.html` | 当前 Android ↔ 小车主契约文档：11311、/scan、/map、/robot_pose_in_map、move_base、状态语义、路径显示、速度同步、部署顺序。 |
 | `远端登录.md` | 给 agent/开发者用的远端登录与开发手册：SSH、plink、ROS 环境、远程检查。 |
 | `远端硬件与传感器.md` | 远端设备总结：硬件、传感器、设备节点、ROS 话题，方便 agent 快速了解小车。 |
 

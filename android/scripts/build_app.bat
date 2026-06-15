@@ -95,7 +95,7 @@ exit /b 0
 
 :check_rosjava_repo
 REM verify local rosjava Maven repo and required artifacts
-call :require_path "%ROSJAVA%\.git" "rosjava repo missing, run fetch_rosjava.bat first"
+call :require_path "%ROSJAVA%\.git" "rosjava repo missing, populate android\tools\rosjava_mvn_repo first"
 if errorlevel 1 exit /b 1
 call :require_path "%ROSJAVA%\org\ros\android_core\android_10\0.2.1" "missing android_10 0.2.1 in rosjava repo"
 if errorlevel 1 exit /b 1

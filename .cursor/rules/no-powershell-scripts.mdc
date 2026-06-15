@@ -14,7 +14,7 @@ alwaysApply: true
 
 ## 必须使用的替代方案
 
-1. **Windows 批处理**：`.bat`（首选），例如 `fetch_rosjava.bat`、`build_xtark.bat`
+1. **Windows 批处理**：`.bat`（首选），例如 `android/scripts/build_app.bat`
 2. **直接命令**：在终端逐条执行 `set JAVA_HOME=...`、`gradlew.bat assembleDebug` 等
 3. **Gradle / Make**：能用项目内构建工具解决的，不另写脚本
 
@@ -26,8 +26,9 @@ alwaysApply: true
 
 ## Android / RobotCA 编译约定
 
-- 拉 rosjava：`other/android/fetch_rosjava.bat`
-- 编译 APK：`other/android/build_xtark.bat`
+- 仓库根目录：`D:\Downloads\work\ros-dev`（WSL：`/mnt/d/Downloads/work/ros-dev`）
+- 编译 APK：`android/scripts/build_app.bat`（在 `android/` 下执行 `scripts\build_app.bat`）
+- rosjava 本地 Maven 仓库：`android/tools/rosjava_mvn_repo/`（未纳入 git，需从旧环境拷贝或自行拉取）
 - 执行前先检查前置条件（jdk8、rosjava releases、android-25），失败则明确报错，不要盲跑
 
 ## 例外

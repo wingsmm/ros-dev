@@ -33,6 +33,7 @@ import geometry_msgs.Quaternion;
 import geometry_msgs.Twist;
 import nav_msgs.OccupancyGrid;
 import nav_msgs.Odometry;
+import nav_msgs.Path;
 import sensor_msgs.CompressedImage;
 import sensor_msgs.LaserScan;
 import sensor_msgs.NavSatFix;
@@ -145,12 +146,15 @@ public class RobotController implements NodeMain, Savable {
 
     private static final String NAV_SPEED_TOPIC = "/android/nav_speed";
     private static final String ROBOT_POSE_IN_MAP_TOPIC = "/robot_pose_in_map";
+    private static final String MOVE_BASE_PLAN_TOPIC = "/move_base/NavfnROS/plan";
     private Subscriber<GoalStatusArray> moveBaseStatusSubscriber;
+    private Subscriber<Path> moveBasePlanSubscriber;
     private Subscriber<PoseStamped> robotPoseInMapSubscriber;
     private PoseStamped robotPoseInMap;
     private final Object robotPoseInMapMutex = new Object();
     private final ArrayList<MessageListener<PoseStamped>> robotPoseInMapListeners;
     private final ArrayList<MessageListener<GoalStatusArray>> moveBaseStatusListeners;
+    private final ArrayList<MessageListener<Path>> moveBasePlanListeners;
     private final ArrayList<ConnectionStateListener> connectionStateListeners;
 
     /**
@@ -189,6 +193,7 @@ public class RobotController implements NodeMain, Savable {
         this.navSatListeners = new ArrayList<>();
         this.mapListeners = new ArrayList<>();
         this.moveBaseStatusListeners = new ArrayList<>();
+        this.moveBasePlanListeners = new ArrayList<>();
         this.robotPoseInMapListeners = new ArrayList<>();
         this.connectionStateListeners = new ArrayList<>();
 
@@ -744,6 +749,21 @@ public class RobotController implements NodeMain, Savable {
                 }
             });
         }
+
+        if (moveBasePlanSubscriber == null) {
+            moveBasePlanSubscriber = connectedNode.newSubscriber(
+                    MOVE_BASE_PLAN_TOPIC, Path._TYPE);
+            moveBasePlanSubscriber.addMessageListener(new MessageListener<Path>() {
+                @Override
+                public void onNewMessage(Path path) {
+                    synchronized (moveBasePlanListeners) {
+                        for (MessageListener<Path> listener : moveBasePlanListeners) {
+                            listener.onNewMessage(path);
+                        }
+                    }
+                }
+            });
+        }
     }
 
     /**
@@ -823,6 +843,11 @@ public class RobotController implements NodeMain, Savable {
         }
         synchronized (robotPoseInMapMutex) {
             robotPoseInMap = null;
+        }
+
+        if (moveBasePlanSubscriber != null) {
+            moveBasePlanSubscriber.shutdown();
+            moveBasePlanSubscriber = null;
         }
 
         initialized = false;
@@ -1141,6 +1166,21 @@ public class RobotController implements NodeMain, Savable {
     public boolean removeMoveBaseStatusListener(MessageListener<GoalStatusArray> listener) {
         synchronized (moveBaseStatusListeners) {
             return moveBaseStatusListeners.remove(listener);
+        }
+    }
+
+    public boolean addMoveBasePlanListener(MessageListener<Path> listener) {
+        synchronized (moveBasePlanListeners) {
+            if (listener != null && !moveBasePlanListeners.contains(listener)) {
+                return moveBasePlanListeners.add(listener);
+            }
+        }
+        return false;
+    }
+
+    public boolean removeMoveBasePlanListener(MessageListener<Path> listener) {
+        synchronized (moveBasePlanListeners) {
+            return moveBasePlanListeners.remove(listener);
         }
     }
 

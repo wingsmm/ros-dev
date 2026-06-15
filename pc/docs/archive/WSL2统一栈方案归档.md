@@ -156,7 +156,7 @@ export ROS_DOMAIN_ID=0   # 与 RK3568 一致
 ```bash
 source /opt/ros/humble/setup.bash
 export ROS_DOMAIN_ID=0
-cd /mnt/d/wingsmm/Desktop/other/pc/qt_client
+cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 ./run.sh
 ```
 

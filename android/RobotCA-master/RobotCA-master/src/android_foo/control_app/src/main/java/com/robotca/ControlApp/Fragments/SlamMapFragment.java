@@ -32,6 +32,7 @@ import actionlib_msgs.GoalStatusArray;
 import geometry_msgs.PoseStamped;
 import nav_msgs.OccupancyGrid;
 import nav_msgs.Odometry;
+import nav_msgs.Path;
 import sensor_msgs.LaserScan;
 
 /**
@@ -57,6 +58,9 @@ public class SlamMapFragment extends SimpleFragment {
     private static final String TAG = "SlamMapFragment";
     private static final long TOPIC_STALE_MS = 2000L;
     private static final long UI_REFRESH_MS = 1000L;
+    private static final long MAP_UI_MIN_INTERVAL_MS = 1000L;
+    private static final long ROBOT_POSE_UI_MIN_INTERVAL_MS = 200L;
+    private static final long MOVE_BASE_PLAN_UI_MIN_INTERVAL_MS = 500L;
     private static final int SCAN_HZ_WINDOW = 20;
 
     private SlamMapView slamMapView;
@@ -73,6 +77,7 @@ public class SlamMapFragment extends SimpleFragment {
     private MessageListener<LaserScan> laserListener;
     private MessageListener<Odometry> odometryListener;
     private MessageListener<GoalStatusArray> moveBaseStatusListener;
+    private MessageListener<Path> moveBasePlanListener;
     private MessageListener<PoseStamped> robotPoseInMapListener;
 
     private final Handler uiHandler = new Handler();
@@ -93,6 +98,65 @@ public class SlamMapFragment extends SimpleFragment {
     private long lastScanTimeMs;
     private long lastOdomTimeMs;
     private final LinkedList<Long> scanTimestamps = new LinkedList<>();
+
+    private OccupancyGrid pendingMapGrid;
+    private boolean mapUiUpdatePosted;
+    private long lastMapUiUpdateMs;
+
+    private PoseStamped pendingRobotPose;
+    private boolean robotPoseUiPosted;
+    private long lastRobotPoseUiMs;
+
+    private Path pendingMoveBasePlan;
+    private boolean moveBasePlanUiPosted;
+    private long lastMoveBasePlanUiMs;
+
+    private final Runnable mapUiUpdateRunnable = new Runnable() {
+        @Override
+        public void run() {
+            mapUiUpdatePosted = false;
+            if (slamMapView == null || pendingMapGrid == null) {
+                return;
+            }
+            lastMapUiUpdateMs = SystemClock.elapsedRealtime();
+            OccupancyGrid grid = pendingMapGrid;
+            applyConfiguredBounds();
+            slamMapView.updateMap(grid);
+            updateWaitingState();
+        }
+    };
+
+    private final Runnable robotPoseUiUpdateRunnable = new Runnable() {
+        @Override
+        public void run() {
+            robotPoseUiPosted = false;
+            if (slamMapView == null || pendingRobotPose == null) {
+                return;
+            }
+            lastRobotPoseUiMs = SystemClock.elapsedRealtime();
+            PoseStamped pose = pendingRobotPose;
+            double x = pose.getPose().getPosition().getX();
+            double y = pose.getPose().getPosition().getY();
+            double yaw = quaternionToYaw(
+                    pose.getPose().getOrientation().getX(),
+                    pose.getPose().getOrientation().getY(),
+                    pose.getPose().getOrientation().getZ(),
+                    pose.getPose().getOrientation().getW());
+            slamMapView.setRobotPose(x, y, yaw);
+        }
+    };
+
+    private final Runnable moveBasePlanUiUpdateRunnable = new Runnable() {
+        @Override
+        public void run() {
+            moveBasePlanUiPosted = false;
+            if (slamMapView == null || pendingMoveBasePlan == null) {
+                return;
+            }
+            lastMoveBasePlanUiMs = SystemClock.elapsedRealtime();
+            slamMapView.updateMoveBasePlan(pendingMoveBasePlan);
+        }
+    };
 
     private final Runnable refreshUiRunnable = new Runnable() {
         @Override
@@ -180,6 +244,7 @@ public class SlamMapFragment extends SimpleFragment {
                 roundTripState = RoundTripState.CANCELED;
                 autoReturnEnabled = false;
                 resetGoalTracking();
+                clearMoveBasePlanOverlay();
                 showToast(R.string.slam_nav_cancel_sent);
                 updateNavigationStatusText();
             }
@@ -244,19 +309,9 @@ public class SlamMapFragment extends SimpleFragment {
 
         mapListener = new MessageListener<OccupancyGrid>() {
             @Override
-            public void onNewMessage(final OccupancyGrid grid) {
-                if (slamMapView == null) {
-                    return;
-                }
-                slamMapView.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        applyConfiguredBounds();
-                        slamMapView.updateMap(grid);
-                        updateWaitingState();
-                        refreshDebugPanel();
-                    }
-                });
+            public void onNewMessage(OccupancyGrid grid) {
+                pendingMapGrid = grid;
+                scheduleMapUiUpdate();
             }
         };
 
@@ -290,29 +345,19 @@ public class SlamMapFragment extends SimpleFragment {
             }
         };
 
+        moveBasePlanListener = new MessageListener<Path>() {
+            @Override
+            public void onNewMessage(Path path) {
+                pendingMoveBasePlan = path;
+                scheduleMoveBasePlanUiUpdate();
+            }
+        };
+
         robotPoseInMapListener = new MessageListener<PoseStamped>() {
             @Override
-            public void onNewMessage(final PoseStamped pose) {
-                final Activity activity = getActivity();
-                if (activity == null) {
-                    return;
-                }
-                activity.runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        if (slamMapView == null || pose == null) {
-                            return;
-                        }
-                        double x = pose.getPose().getPosition().getX();
-                        double y = pose.getPose().getPosition().getY();
-                        double yaw = quaternionToYaw(
-                                pose.getPose().getOrientation().getX(),
-                                pose.getPose().getOrientation().getY(),
-                                pose.getPose().getOrientation().getZ(),
-                                pose.getPose().getOrientation().getW());
-                        slamMapView.setRobotPose(x, y, yaw);
-                    }
-                });
+            public void onNewMessage(PoseStamped pose) {
+                pendingRobotPose = pose;
+                scheduleRobotPoseUiUpdate();
             }
         };
 
@@ -326,6 +371,8 @@ public class SlamMapFragment extends SimpleFragment {
 
                 OccupancyGrid cached = controller.getOccupancyGrid();
                 if (cached != null) {
+                    pendingMapGrid = cached;
+                    lastMapUiUpdateMs = SystemClock.elapsedRealtime();
                     applyConfiguredBounds();
                     slamMapView.updateMap(cached);
                 } else {
@@ -354,6 +401,9 @@ public class SlamMapFragment extends SimpleFragment {
                 if (moveBaseStatusListener != null) {
                     controller.addMoveBaseStatusListener(moveBaseStatusListener);
                 }
+                if (moveBasePlanListener != null) {
+                    controller.addMoveBasePlanListener(moveBasePlanListener);
+                }
                 if (robotPoseInMapListener != null) {
                     controller.addRobotPoseInMapListener(robotPoseInMapListener);
                 }
@@ -370,6 +420,9 @@ public class SlamMapFragment extends SimpleFragment {
                 if (moveBaseStatusListener != null) {
                     controller.removeMoveBaseStatusListener(moveBaseStatusListener);
                 }
+                if (moveBasePlanListener != null) {
+                    controller.removeMoveBasePlanListener(moveBasePlanListener);
+                }
                 if (robotPoseInMapListener != null) {
                     controller.removeRobotPoseInMapListener(robotPoseInMapListener);
                 }
@@ -381,6 +434,15 @@ public class SlamMapFragment extends SimpleFragment {
     @Override
     public void onDestroyView() {
         uiHandler.removeCallbacks(refreshUiRunnable);
+        uiHandler.removeCallbacks(mapUiUpdateRunnable);
+        uiHandler.removeCallbacks(robotPoseUiUpdateRunnable);
+        uiHandler.removeCallbacks(moveBasePlanUiUpdateRunnable);
+        mapUiUpdatePosted = false;
+        robotPoseUiPosted = false;
+        moveBasePlanUiPosted = false;
+        pendingMapGrid = null;
+        pendingRobotPose = null;
+        pendingMoveBasePlan = null;
 
         ControlApp activity = getControlApp();
         if (activity != null) {
@@ -405,6 +467,7 @@ public class SlamMapFragment extends SimpleFragment {
         laserListener = null;
         odometryListener = null;
         moveBaseStatusListener = null;
+        moveBasePlanListener = null;
         robotPoseInMapListener = null;
         slamMapView = null;
         statusText = null;
@@ -424,6 +487,51 @@ public class SlamMapFragment extends SimpleFragment {
         if (activity != null) {
             Toast.makeText(activity, resId, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void scheduleMapUiUpdate() {
+        if (slamMapView == null || mapUiUpdatePosted) {
+            return;
+        }
+        mapUiUpdatePosted = true;
+        long delay = 0;
+        if (lastMapUiUpdateMs > 0) {
+            long elapsed = SystemClock.elapsedRealtime() - lastMapUiUpdateMs;
+            if (elapsed < MAP_UI_MIN_INTERVAL_MS) {
+                delay = MAP_UI_MIN_INTERVAL_MS - elapsed;
+            }
+        }
+        uiHandler.postDelayed(mapUiUpdateRunnable, delay);
+    }
+
+    private void scheduleRobotPoseUiUpdate() {
+        if (slamMapView == null || robotPoseUiPosted) {
+            return;
+        }
+        robotPoseUiPosted = true;
+        long delay = 0;
+        if (lastRobotPoseUiMs > 0) {
+            long elapsed = SystemClock.elapsedRealtime() - lastRobotPoseUiMs;
+            if (elapsed < ROBOT_POSE_UI_MIN_INTERVAL_MS) {
+                delay = ROBOT_POSE_UI_MIN_INTERVAL_MS - elapsed;
+            }
+        }
+        uiHandler.postDelayed(robotPoseUiUpdateRunnable, delay);
+    }
+
+    private void scheduleMoveBasePlanUiUpdate() {
+        if (slamMapView == null || moveBasePlanUiPosted) {
+            return;
+        }
+        moveBasePlanUiPosted = true;
+        long delay = 0;
+        if (lastMoveBasePlanUiMs > 0) {
+            long elapsed = SystemClock.elapsedRealtime() - lastMoveBasePlanUiMs;
+            if (elapsed < MOVE_BASE_PLAN_UI_MIN_INTERVAL_MS) {
+                delay = MOVE_BASE_PLAN_UI_MIN_INTERVAL_MS - elapsed;
+            }
+        }
+        uiHandler.postDelayed(moveBasePlanUiUpdateRunnable, delay);
     }
 
     private void enterPickMode(PickMode mode) {
@@ -463,6 +571,32 @@ public class SlamMapFragment extends SimpleFragment {
     private void resetGoalTracking() {
         waitingForCurrentGoalActive = false;
         currentGoalSawActive = false;
+    }
+
+    private void clearMoveBasePlanOverlay() {
+        pendingMoveBasePlan = null;
+        moveBasePlanUiPosted = false;
+        uiHandler.removeCallbacks(moveBasePlanUiUpdateRunnable);
+        if (slamMapView != null) {
+            slamMapView.clearMoveBasePlan();
+        }
+    }
+
+    private String formatMoveBasePlanStatus() {
+        ControlApp activity = getControlApp();
+        if (activity == null || slamMapView == null) {
+            return "";
+        }
+        int poseCount = slamMapView.getMoveBasePlanPoseCount();
+        if (poseCount <= 0) {
+            return activity.getString(R.string.slam_nav_plan_none);
+        }
+        long ageMs = slamMapView.getMoveBasePlanAgeMs();
+        if (ageMs < 0) {
+            return activity.getString(R.string.slam_nav_plan_points, poseCount);
+        }
+        long ageSec = Math.max(0, ageMs / 1000);
+        return activity.getString(R.string.slam_nav_plan_points_age, poseCount, ageSec);
     }
 
     private void sendGoalTo(SlamMapView.MapPoint point, RoundTripState state, boolean autoReturn) {
@@ -529,10 +663,12 @@ public class SlamMapFragment extends SimpleFragment {
             resetGoalTracking();
             roundTripState = RoundTripState.FAILED;
             autoReturnEnabled = false;
+            clearMoveBasePlanOverlay();
         } else if (status == GoalStatus.PREEMPTED) {
             resetGoalTracking();
             roundTripState = RoundTripState.CANCELED;
             autoReturnEnabled = false;
+            clearMoveBasePlanOverlay();
         }
 
         updateNavigationStatusText();
@@ -577,7 +713,12 @@ public class SlamMapFragment extends SimpleFragment {
                 break;
         }
 
-        navStatusText.setText(activity.getString(R.string.slam_nav_state, stateLabel));
+        String planStatus = formatMoveBasePlanStatus();
+        if (planStatus.isEmpty()) {
+            navStatusText.setText(activity.getString(R.string.slam_nav_state, stateLabel));
+        } else {
+            navStatusText.setText(activity.getString(R.string.slam_nav_state_with_plan, stateLabel, planStatus));
+        }
         navStatusText.setVisibility(View.VISIBLE);
     }
 
@@ -689,6 +830,7 @@ public class SlamMapFragment extends SimpleFragment {
         detail += "\n" + activity.getString(boundsFromRos
                 ? R.string.slam_map_bounds_source_ros
                 : R.string.slam_map_bounds_source_prefs);
+        detail += "\n" + formatMoveBasePlanStatus();
         return detail;
     }
 

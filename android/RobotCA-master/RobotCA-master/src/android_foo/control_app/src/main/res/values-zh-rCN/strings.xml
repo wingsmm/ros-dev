@@ -129,6 +129,10 @@
     <string name="slam_nav_state_canceled">已取消</string>
     <string name="slam_nav_state_active">执行中</string>
     <string name="slam_nav_state_pending">等待中</string>
+    <string name="slam_nav_state_with_plan">导航：%1$s | 规划路径：%2$s</string>
+    <string name="slam_nav_plan_none">规划路径：未收到</string>
+    <string name="slam_nav_plan_points">规划路径：已收到 %1$d 点</string>
+    <string name="slam_nav_plan_points_age">规划路径：%1$d 点，%2$d 秒前更新</string>
     <string name="laser_scan_detail_pref_summary">设置激光扫描可视化的细节级别。
         数值越大绘制的激光点越多\n当前值：%s
     </string>
@@ -243,7 +247,7 @@
     <!-- Manual control preferences -->
     <string name="manual_linear_speed_pref_title">人工按钮线速度</string>
     <string name="manual_angular_speed_pref_title">人工按钮角速度</string>
-    <string name="manual_linear_speed_pref_summary">按住按钮与 SLAM 导航共用的线速度（m/s，0.02–0.30）\n当前值：%s</string>
+    <string name="manual_linear_speed_pref_summary">按住按钮与 SLAM 导航共用的线速度（m/s，0.03–0.30）\n当前值：%s</string>
     <string name="manual_angular_speed_pref_summary">按住按钮与 SLAM 导航共用的角速度（rad/s，0.05–0.80）\n当前值：%s</string>
 
     <!-- Notification -->

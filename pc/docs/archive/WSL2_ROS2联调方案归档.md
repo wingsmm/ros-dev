@@ -152,7 +152,7 @@ roslaunch xtark_json_bridge json_base_adapter.launch
 ### 4.4 WSL2 测 xtark JSON
 
 ```bash
-cd /mnt/d/wingsmm/Desktop/other/pc/tools
+cd /mnt/d/Downloads/work/ros-dev/pc/tools
 python3 check_links.py
 ```
 
