@@ -19,6 +19,7 @@ import nav_msgs.OccupancyGrid;
 import nav_msgs.Path;
 import org.jboss.netty.buffer.ChannelBuffer;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import geometry_msgs.PoseStamped;
@@ -27,6 +28,27 @@ import geometry_msgs.PoseStamped;
  * Custom View for rendering a SLAM occupancy grid as a cached Bitmap.
  */
 public class SlamMapView extends View {
+
+    public enum MissionWaypointState {
+        PENDING,
+        CURRENT,
+        COMPLETED,
+        FAILED
+    }
+
+    public static class MissionWaypointMarker {
+        public final int number;
+        public final double x;
+        public final double y;
+        public final MissionWaypointState state;
+
+        public MissionWaypointMarker(int number, double x, double y, MissionWaypointState state) {
+            this.number = number;
+            this.x = x;
+            this.y = y;
+            this.state = state;
+        }
+    }
 
     public static class MapPoint {
         public final double x;
@@ -48,6 +70,10 @@ public class SlamMapView extends View {
     private static final float OVERLAY_STROKE_PX = 2.0f;
     private static final float PLAN_STROKE_PX = 3.0f;
     private static final int PLAN_COLOR = Color.argb(200, 40, 120, 255);
+    private static final int MISSION_PENDING_COLOR = Color.rgb(40, 120, 255);
+    private static final int MISSION_CURRENT_COLOR = Color.rgb(255, 210, 40);
+    private static final int MISSION_COMPLETED_COLOR = Color.rgb(40, 180, 80);
+    private static final int MISSION_FAILED_COLOR = Color.rgb(230, 50, 50);
     private static final float TAP_SLOP_PX = 12.0f;
 
     private Bitmap mapBitmap;
@@ -60,6 +86,12 @@ public class SlamMapView extends View {
     private final Paint robotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint robotArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint planPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint missionPendingPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint missionCurrentFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint missionCurrentStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint missionCompletedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint missionFailedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint missionNumberPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private MapTapListener mapTapListener;
     private MapPoint pointA;
@@ -67,6 +99,7 @@ public class SlamMapView extends View {
     private MapPoint robotPoint;
     private double robotYaw;
     private boolean hasRobotPose;
+    private final ArrayList<MissionWaypointMarker> missionWaypoints = new ArrayList<>();
     private nav_msgs.Path lastMoveBasePlanRos;
     private android.graphics.Path cachedPlanPath;
     private int moveBasePlanPoseCount;
@@ -163,6 +196,26 @@ public class SlamMapView extends View {
         planPaint.setStrokeWidth(PLAN_STROKE_PX);
         planPaint.setStrokeJoin(Paint.Join.ROUND);
         planPaint.setStrokeCap(Paint.Cap.ROUND);
+
+        missionPendingPaint.setColor(MISSION_PENDING_COLOR);
+        missionPendingPaint.setStyle(Paint.Style.FILL);
+
+        missionCurrentFillPaint.setColor(MISSION_PENDING_COLOR);
+        missionCurrentFillPaint.setStyle(Paint.Style.FILL);
+
+        missionCurrentStrokePaint.setColor(MISSION_CURRENT_COLOR);
+        missionCurrentStrokePaint.setStyle(Paint.Style.STROKE);
+
+        missionCompletedPaint.setColor(MISSION_COMPLETED_COLOR);
+        missionCompletedPaint.setStyle(Paint.Style.FILL);
+
+        missionFailedPaint.setColor(MISSION_FAILED_COLOR);
+        missionFailedPaint.setStyle(Paint.Style.FILL);
+
+        missionNumberPaint.setColor(Color.WHITE);
+        missionNumberPaint.setTextAlign(Paint.Align.CENTER);
+        missionNumberPaint.setTextSize(14.0f);
+        missionNumberPaint.setFakeBoldText(true);
     }
 
     public void setMapTapListener(MapTapListener listener) {
@@ -205,6 +258,27 @@ public class SlamMapView extends View {
         moveBasePlanPoseCount = 0;
         moveBasePlanUpdatedMs = 0;
         invalidate();
+    }
+
+    public void setMissionWaypoints(List<MissionWaypointMarker> markers) {
+        missionWaypoints.clear();
+        if (markers != null) {
+            missionWaypoints.addAll(markers);
+        }
+        invalidate();
+    }
+
+    public void clearMissionWaypoints() {
+        missionWaypoints.clear();
+        invalidate();
+    }
+
+    public double getRobotYaw() {
+        return robotYaw;
+    }
+
+    public boolean hasRobotYaw() {
+        return hasRobotPose;
     }
 
     public int getMoveBasePlanPoseCount() {
@@ -597,8 +671,48 @@ public class SlamMapView extends View {
         drawMoveBasePlan(canvas);
         drawNavPoint(canvas, pointA, pointAPaint, "A");
         drawNavPoint(canvas, pointB, pointBPaint, "B");
+        drawMissionWaypoints(canvas);
         drawRobotPose(canvas);
         canvas.restore();
+    }
+
+    private void drawMissionWaypoints(Canvas canvas) {
+        if (missionWaypoints.isEmpty() || mapBitmap == null || lastResolution <= 0.0) {
+            return;
+        }
+
+        for (MissionWaypointMarker marker : missionWaypoints) {
+            float[] bitmapPoint = mapWorldToBitmap(marker.x, marker.y);
+            if (bitmapPoint == null) {
+                continue;
+            }
+            float bx = bitmapPoint[0];
+            float by = bitmapPoint[1];
+            float r = 8.0f / scale;
+            Paint fillPaint;
+            switch (marker.state) {
+                case CURRENT:
+                    fillPaint = missionCurrentFillPaint;
+                    break;
+                case COMPLETED:
+                    fillPaint = missionCompletedPaint;
+                    break;
+                case FAILED:
+                    fillPaint = missionFailedPaint;
+                    break;
+                case PENDING:
+                default:
+                    fillPaint = missionPendingPaint;
+                    break;
+            }
+            canvas.drawCircle(bx, by, r, fillPaint);
+            if (marker.state == MissionWaypointState.CURRENT) {
+                missionCurrentStrokePaint.setStrokeWidth(3.0f / scale);
+                canvas.drawCircle(bx, by, r + 3.0f / scale, missionCurrentStrokePaint);
+            }
+            missionNumberPaint.setTextSize(12.0f / scale);
+            canvas.drawText(String.valueOf(marker.number), bx, by + 4.0f / scale, missionNumberPaint);
+        }
     }
 
     private void drawRobotPose(Canvas canvas) {

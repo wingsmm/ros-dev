@@ -133,6 +133,24 @@
     <string name="slam_nav_plan_none">规划路径：未收到</string>
     <string name="slam_nav_plan_points">规划路径：已收到 %1$d 点</string>
     <string name="slam_nav_plan_points_age">规划路径：%1$d 点，%2$d 秒前更新</string>
+    <string name="slam_nav_section_multi">4. 多点导航</string>
+    <string name="slam_nav_mode_ab">A/B</string>
+    <string name="slam_nav_mode_multi">多点</string>
+    <string name="slam_multi_clear">清空</string>
+    <string name="slam_multi_start">开始</string>
+    <string name="slam_multi_stop">停止</string>
+    <string name="slam_multi_loop">循环</string>
+    <string name="slam_multi_pick_hint">点击地图添加航点</string>
+    <string name="slam_multi_added">已添加航点 %1$d</string>
+    <string name="slam_multi_cleared">航点已清空</string>
+    <string name="slam_multi_need_points">请至少添加一个航点</string>
+    <string name="slam_multi_running">多点导航：%1$s</string>
+    <string name="slam_multi_state_ready">就绪</string>
+    <string name="slam_multi_state_navigating">前往 %1$d</string>
+    <string name="slam_multi_state_completed">任务完成</string>
+    <string name="slam_multi_state_failed">第 %1$d 点失败</string>
+    <string name="slam_multi_state_canceled">已取消</string>
+    <string name="slam_multi_manual_locked">导航中，手动控制已禁用</string>
     <string name="laser_scan_detail_pref_summary">设置激光扫描可视化的细节级别。
         数值越大绘制的激光点越多\n当前值：%s
     </string>

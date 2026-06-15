@@ -157,6 +157,8 @@ public class RobotController implements NodeMain, Savable {
     private final ArrayList<MessageListener<Path>> moveBasePlanListeners;
     private final ArrayList<ConnectionStateListener> connectionStateListeners;
 
+    private volatile boolean manualCmdVelBlocked;
+
     /**
      * LocationProvider subscribers can register to to receive location updates.
      */
@@ -451,8 +453,34 @@ public class RobotController implements NodeMain, Savable {
      */
     public void forceVelocity(double linearVelocityX, double linearVelocityY,
                               double angularVelocityZ) {
+        if (manualCmdVelBlocked
+                && (linearVelocityX != 0.0 || linearVelocityY != 0.0 || angularVelocityZ != 0.0)) {
+            return;
+        }
         publishVelocity = true;
         publishVelocity(linearVelocityX, linearVelocityY, angularVelocityZ);
+    }
+
+    public void setManualCmdVelBlocked(boolean blocked) {
+        manualCmdVelBlocked = blocked;
+        if (blocked) {
+            stopMotion();
+        }
+    }
+
+    public boolean isManualCmdVelBlocked() {
+        return manualCmdVelBlocked;
+    }
+
+    /**
+     * Publishes zero velocity immediately, even when manual control is blocked.
+     */
+    public void stopMotion() {
+        publishVelocity = false;
+        publishVelocity(0.0, 0.0, 0.0);
+        if (movePublisher != null && currentVelocityCommand != null) {
+            movePublisher.publish(currentVelocityCommand);
+        }
     }
 
     /**
@@ -1265,7 +1293,7 @@ public class RobotController implements NodeMain, Savable {
         cancel.setId("");
         moveBaseCancelPublisher.publish(cancel);
 
-        forceVelocity(0.0, 0.0, 0.0);
+        stopMotion();
         Log.d(TAG, "Published move_base cancel");
         return true;
     }

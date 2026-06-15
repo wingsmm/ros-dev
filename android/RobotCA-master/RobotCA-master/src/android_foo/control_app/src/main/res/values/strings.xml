@@ -155,6 +155,24 @@
     <string name="slam_nav_plan_none">Global plan: none</string>
     <string name="slam_nav_plan_points">Global plan: %1$d points</string>
     <string name="slam_nav_plan_points_age">Global plan: %1$d points, updated %2$d s ago</string>
+    <string name="slam_nav_section_multi">4. Multi-waypoint</string>
+    <string name="slam_nav_mode_ab">A/B</string>
+    <string name="slam_nav_mode_multi">Multi</string>
+    <string name="slam_multi_clear">Clear</string>
+    <string name="slam_multi_start">Start</string>
+    <string name="slam_multi_stop">Stop</string>
+    <string name="slam_multi_loop">Loop</string>
+    <string name="slam_multi_pick_hint">Tap map to add waypoint</string>
+    <string name="slam_multi_added">Waypoint %1$d added</string>
+    <string name="slam_multi_cleared">Waypoints cleared</string>
+    <string name="slam_multi_need_points">Add at least one waypoint</string>
+    <string name="slam_multi_running">Multi-nav: %1$s</string>
+    <string name="slam_multi_state_ready">ready</string>
+    <string name="slam_multi_state_navigating">going to %1$d</string>
+    <string name="slam_multi_state_completed">completed</string>
+    <string name="slam_multi_state_failed">failed at %1$d</string>
+    <string name="slam_multi_state_canceled">canceled</string>
+    <string name="slam_multi_manual_locked">Navigation active — manual drive disabled</string>
     <string name="laser_scan_detail_pref_summary">Sets the detail level of the laser scan visualization.
         A higher number will draw more laser points\nValue: %s
     </string>

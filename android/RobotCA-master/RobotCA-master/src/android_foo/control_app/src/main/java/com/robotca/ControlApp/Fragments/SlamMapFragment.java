@@ -10,11 +10,15 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.robotca.ControlApp.ControlApp;
+import com.robotca.ControlApp.Core.Navigation.MoveBaseMissionRunner;
+import com.robotca.ControlApp.Core.Navigation.Waypoint;
+import com.robotca.ControlApp.Core.Navigation.WaypointMission;
 import com.robotca.ControlApp.Core.RobotController;
 import com.robotca.ControlApp.Core.SlamMapDiagnostics;
 import com.robotca.ControlApp.Core.SlamMapStats;
@@ -24,6 +28,7 @@ import com.robotca.ControlApp.Views.SlamMapView;
 
 import org.ros.message.MessageListener;
 
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -44,6 +49,11 @@ public class SlamMapFragment extends SimpleFragment {
         NONE,
         SET_A,
         SET_B
+    }
+
+    private enum MapNavMode {
+        AB,
+        MULTI_WAYPOINT
     }
 
     private enum RoundTripState {
@@ -71,7 +81,18 @@ public class SlamMapFragment extends SimpleFragment {
     private TextView navStatusText;
     private Button exportButton;
     private Button cancelPickButton;
+    private Button modeAbButton;
+    private Button modeMultiButton;
+    private Button multiClearButton;
+    private Button multiStartButton;
+    private Button multiStopButton;
+    private CheckBox multiLoopCheckbox;
     private SlamFloatingNavMenu floatingNavMenu;
+
+    private final WaypointMission multiWaypointMission = new WaypointMission();
+    private final ArrayList<SlamMapView.MissionWaypointState> multiWaypointStates = new ArrayList<>();
+    private MoveBaseMissionRunner missionRunner;
+    private MoveBaseMissionRunner.State multiMissionState = MoveBaseMissionRunner.State.IDLE;
 
     private MessageListener<OccupancyGrid> mapListener;
     private MessageListener<LaserScan> laserListener;
@@ -83,6 +104,7 @@ public class SlamMapFragment extends SimpleFragment {
     private final Handler uiHandler = new Handler();
     private boolean debugExpanded;
     private PickMode pickMode = PickMode.NONE;
+    private MapNavMode mapNavMode = MapNavMode.AB;
     private RoundTripState roundTripState = RoundTripState.IDLE;
     private boolean autoReturnEnabled;
     private SlamMapView.MapPoint pointA;
@@ -187,6 +209,118 @@ public class SlamMapFragment extends SimpleFragment {
         Button cancelNavButton = (Button) floatingNavMenu.findViewById(R.id.slam_cancel_nav_button);
         Button recenterButton = (Button) floatingNavMenu.findViewById(R.id.slam_map_recenter_button);
         cancelPickButton = (Button) floatingNavMenu.findViewById(R.id.slam_cancel_pick_button);
+        modeAbButton = (Button) floatingNavMenu.findViewById(R.id.slam_mode_ab_button);
+        modeMultiButton = (Button) floatingNavMenu.findViewById(R.id.slam_mode_multi_button);
+        multiClearButton = (Button) floatingNavMenu.findViewById(R.id.slam_multi_clear_button);
+        multiStartButton = (Button) floatingNavMenu.findViewById(R.id.slam_multi_start_button);
+        multiStopButton = (Button) floatingNavMenu.findViewById(R.id.slam_multi_stop_button);
+        multiLoopCheckbox = (CheckBox) floatingNavMenu.findViewById(R.id.slam_multi_loop_checkbox);
+
+        ControlApp activityForRunner = getControlApp();
+        if (activityForRunner != null && activityForRunner.getRobotController() != null) {
+            missionRunner = new MoveBaseMissionRunner(
+                    activityForRunner.getRobotController(),
+                    new MoveBaseMissionRunner.Listener() {
+                        @Override
+                        public void onStateChanged(MoveBaseMissionRunner.State state, int waypointIndex) {
+                            multiMissionState = state;
+                            if (waypointIndex >= 0 && waypointIndex < multiWaypointStates.size()) {
+                                if (state == MoveBaseMissionRunner.State.WAITING_ACTIVE
+                                        || state == MoveBaseMissionRunner.State.NAVIGATING
+                                        || state == MoveBaseMissionRunner.State.SENDING_GOAL) {
+                                    setMultiWaypointState(waypointIndex,
+                                            SlamMapView.MissionWaypointState.CURRENT);
+                                }
+                            }
+                            updateMultiMissionUi();
+                            updateNavigationStatusText();
+                        }
+
+                        @Override
+                        public void onWaypointReached(int waypointIndex) {
+                            setMultiWaypointState(waypointIndex,
+                                    SlamMapView.MissionWaypointState.COMPLETED);
+                            refreshMissionWaypointMarkers();
+                            updateNavigationStatusText();
+                        }
+
+                        @Override
+                        public void onMissionCompleted() {
+                            multiMissionState = MoveBaseMissionRunner.State.COMPLETED;
+                            showToast(R.string.slam_multi_state_completed);
+                            updateMultiMissionUi();
+                            updateNavigationStatusText();
+                        }
+
+                        @Override
+                        public void onMissionFailed(int waypointIndex, byte status) {
+                            if (waypointIndex >= 0 && waypointIndex < multiWaypointStates.size()) {
+                                setMultiWaypointState(waypointIndex,
+                                        SlamMapView.MissionWaypointState.FAILED);
+                            }
+                            multiMissionState = MoveBaseMissionRunner.State.FAILED;
+                            showToast(R.string.slam_multi_state_failed, waypointIndex + 1);
+                            clearMoveBasePlanOverlay();
+                            updateMultiMissionUi();
+                            updateNavigationStatusText();
+                        }
+
+                        @Override
+                        public void onMissionCanceled() {
+                            multiMissionState = MoveBaseMissionRunner.State.CANCELED;
+                            showToast(R.string.slam_multi_state_canceled);
+                            clearMoveBasePlanOverlay();
+                            updateMultiMissionUi();
+                            updateNavigationStatusText();
+                        }
+                    });
+            missionRunner.setYawProvider(new MoveBaseMissionRunner.YawProvider() {
+                @Override
+                public double getCurrentYaw() {
+                    return slamMapView != null ? slamMapView.getRobotYaw() : 0.0;
+                }
+
+                @Override
+                public boolean hasCurrentYaw() {
+                    return slamMapView != null && slamMapView.hasRobotYaw();
+                }
+            });
+        }
+
+        modeAbButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                setMapNavMode(MapNavMode.AB);
+            }
+        });
+
+        modeMultiButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                setMapNavMode(MapNavMode.MULTI_WAYPOINT);
+            }
+        });
+
+        multiClearButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                clearMultiWaypoints();
+            }
+        });
+
+        multiStartButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startMultiWaypointMission();
+            }
+        });
+
+        multiStopButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                stopMultiWaypointMission();
+            }
+        });
 
         setAButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -253,6 +387,11 @@ public class SlamMapFragment extends SimpleFragment {
         slamMapView.setMapTapListener(new SlamMapView.MapTapListener() {
             @Override
             public void onMapTapped(SlamMapView.MapPoint point) {
+                if (mapNavMode == MapNavMode.MULTI_WAYPOINT) {
+                    appendMultiWaypoint(point);
+                    return;
+                }
+
                 if (pickMode == PickMode.NONE) {
                     return;
                 }
@@ -385,6 +524,8 @@ public class SlamMapFragment extends SimpleFragment {
 
         updateWaitingState();
         updateNavigationStatusText();
+        updateMapNavModeUi();
+        updateMultiMissionUi();
         refreshDebugPanel();
         uiHandler.postDelayed(refreshUiRunnable, UI_REFRESH_MS);
 
@@ -477,7 +618,14 @@ public class SlamMapFragment extends SimpleFragment {
         navStatusText = null;
         exportButton = null;
         cancelPickButton = null;
+        modeAbButton = null;
+        modeMultiButton = null;
+        multiClearButton = null;
+        multiStartButton = null;
+        multiStopButton = null;
+        multiLoopCheckbox = null;
         floatingNavMenu = null;
+        missionRunner = null;
         scanTimestamps.clear();
         super.onDestroyView();
     }
@@ -486,6 +634,13 @@ public class SlamMapFragment extends SimpleFragment {
         ControlApp activity = getControlApp();
         if (activity != null) {
             Toast.makeText(activity, resId, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showToast(int resId, Object... args) {
+        ControlApp activity = getControlApp();
+        if (activity != null) {
+            Toast.makeText(activity, activity.getString(resId, args), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -638,6 +793,11 @@ public class SlamMapFragment extends SimpleFragment {
         byte status = statusList.get(statusList.size() - 1).getStatus();
         lastMoveBaseStatus = status;
 
+        if (missionRunner != null && missionRunner.isRunning()) {
+            missionRunner.onMoveBaseStatus(status);
+            return;
+        }
+
         if (waitingForCurrentGoalActive) {
             if (status == GoalStatus.PENDING || status == GoalStatus.ACTIVE) {
                 currentGoalSawActive = true;
@@ -681,6 +841,19 @@ public class SlamMapFragment extends SimpleFragment {
 
         ControlApp activity = getControlApp();
         if (activity == null) {
+            return;
+        }
+
+        if (mapNavMode == MapNavMode.MULTI_WAYPOINT) {
+            String multiLabel = formatMultiMissionStateLabel(activity);
+            String planStatus = formatMoveBasePlanStatus();
+            if (planStatus.isEmpty()) {
+                navStatusText.setText(activity.getString(R.string.slam_multi_running, multiLabel));
+            } else {
+                navStatusText.setText(activity.getString(R.string.slam_nav_state_with_plan,
+                        activity.getString(R.string.slam_multi_running, multiLabel), planStatus));
+            }
+            navStatusText.setVisibility(View.VISIBLE);
             return;
         }
 
@@ -945,5 +1118,199 @@ public class SlamMapFragment extends SimpleFragment {
             return;
         }
         statusText.setVisibility(slamMapView.hasMap() ? View.GONE : View.VISIBLE);
+    }
+
+    private void setMapNavMode(MapNavMode mode) {
+        if (missionRunner != null && missionRunner.isRunning()) {
+            showToast(R.string.slam_multi_manual_locked);
+            return;
+        }
+        mapNavMode = mode;
+        if (mode == MapNavMode.AB) {
+            cancelPickMode();
+        }
+        updateMapNavModeUi();
+        if (mode == MapNavMode.MULTI_WAYPOINT) {
+            showToast(R.string.slam_multi_pick_hint);
+        }
+    }
+
+    private void updateMapNavModeUi() {
+        if (modeAbButton == null || modeMultiButton == null) {
+            return;
+        }
+        modeAbButton.setAlpha(mapNavMode == MapNavMode.AB ? 1.0f : 0.5f);
+        modeMultiButton.setAlpha(mapNavMode == MapNavMode.MULTI_WAYPOINT ? 1.0f : 0.5f);
+    }
+
+    private boolean isMultiMissionRunning() {
+        return missionRunner != null && missionRunner.isRunning();
+    }
+
+    private void updateMultiMissionUi() {
+        boolean running = isMultiMissionRunning();
+        if (multiClearButton != null) {
+            multiClearButton.setEnabled(!running);
+        }
+        if (multiStartButton != null) {
+            multiStartButton.setEnabled(!running);
+        }
+        if (multiStopButton != null) {
+            multiStopButton.setEnabled(running);
+        }
+        if (modeAbButton != null) {
+            modeAbButton.setEnabled(!running);
+        }
+        if (modeMultiButton != null) {
+            modeMultiButton.setEnabled(!running);
+        }
+        if (multiLoopCheckbox != null) {
+            multiLoopCheckbox.setEnabled(!running);
+        }
+    }
+
+    private void appendMultiWaypoint(SlamMapView.MapPoint point) {
+        if (isMultiMissionRunning()) {
+            return;
+        }
+        if (slamMapView == null || point == null) {
+            return;
+        }
+        if (!slamMapView.isFreeForGoal(point)) {
+            showToast(R.string.slam_nav_goal_rejected);
+            return;
+        }
+
+        int number = multiWaypointMission.size() + 1;
+        double yaw = slamMapView.hasRobotYaw() ? slamMapView.getRobotYaw() : 0.0;
+        multiWaypointMission.add(new Waypoint(
+                "wp-" + number, point.x, point.y, yaw, String.valueOf(number)));
+        multiWaypointStates.add(SlamMapView.MissionWaypointState.PENDING);
+        refreshMissionWaypointMarkers();
+        showToast(R.string.slam_multi_added, number);
+        updateNavigationStatusText();
+    }
+
+    private void clearMultiWaypoints() {
+        if (isMultiMissionRunning()) {
+            return;
+        }
+        multiWaypointMission.clear();
+        multiWaypointStates.clear();
+        multiMissionState = MoveBaseMissionRunner.State.IDLE;
+        if (slamMapView != null) {
+            slamMapView.clearMissionWaypoints();
+        }
+        showToast(R.string.slam_multi_cleared);
+        updateNavigationStatusText();
+    }
+
+    private void startMultiWaypointMission() {
+        if (missionRunner == null || multiWaypointMission.isEmpty()) {
+            showToast(R.string.slam_multi_need_points);
+            return;
+        }
+        if (isMultiMissionRunning()) {
+            return;
+        }
+
+        multiWaypointMission.setLoop(multiLoopCheckbox != null && multiLoopCheckbox.isChecked());
+        resetMultiWaypointStates(SlamMapView.MissionWaypointState.PENDING);
+        multiMissionState = MoveBaseMissionRunner.State.READY;
+        clearMoveBasePlanOverlay();
+        showToast(R.string.slam_multi_manual_locked);
+
+        WaypointMission missionCopy = new WaypointMission();
+        missionCopy.setLoop(multiWaypointMission.isLoop());
+        for (Waypoint waypoint : multiWaypointMission.getWaypoints()) {
+            missionCopy.add(waypoint);
+        }
+
+        if (!missionRunner.start(missionCopy)) {
+            showToast(R.string.slam_nav_goal_rejected);
+            multiMissionState = MoveBaseMissionRunner.State.FAILED;
+            updateMultiMissionUi();
+            return;
+        }
+        updateMultiMissionUi();
+        updateNavigationStatusText();
+    }
+
+    private void stopMultiWaypointMission() {
+        if (missionRunner == null) {
+            return;
+        }
+        missionRunner.cancel();
+        multiMissionState = MoveBaseMissionRunner.State.CANCELED;
+        clearMoveBasePlanOverlay();
+        updateMultiMissionUi();
+        updateNavigationStatusText();
+    }
+
+    private void resetMultiWaypointStates(SlamMapView.MissionWaypointState state) {
+        multiWaypointStates.clear();
+        for (int i = 0; i < multiWaypointMission.size(); i++) {
+            multiWaypointStates.add(state);
+        }
+        refreshMissionWaypointMarkers();
+    }
+
+    private void setMultiWaypointState(int index, SlamMapView.MissionWaypointState state) {
+        if (index < 0 || index >= multiWaypointStates.size()) {
+            return;
+        }
+        for (int i = 0; i < index; i++) {
+            if (multiWaypointStates.get(i) == SlamMapView.MissionWaypointState.PENDING
+                    || multiWaypointStates.get(i) == SlamMapView.MissionWaypointState.CURRENT) {
+                multiWaypointStates.set(i, SlamMapView.MissionWaypointState.COMPLETED);
+            }
+        }
+        multiWaypointStates.set(index, state);
+        refreshMissionWaypointMarkers();
+    }
+
+    private void refreshMissionWaypointMarkers() {
+        if (slamMapView == null) {
+            return;
+        }
+        ArrayList<SlamMapView.MissionWaypointMarker> markers = new ArrayList<>();
+        for (int i = 0; i < multiWaypointMission.size(); i++) {
+            Waypoint waypoint = multiWaypointMission.get(i);
+            SlamMapView.MissionWaypointState state = multiWaypointStates.get(i);
+            markers.add(new SlamMapView.MissionWaypointMarker(
+                    i + 1, waypoint.x, waypoint.y, state));
+        }
+        slamMapView.setMissionWaypoints(markers);
+    }
+
+    private String formatMultiMissionStateLabel(ControlApp activity) {
+        switch (multiMissionState) {
+            case NAVIGATING:
+            case WAITING_ACTIVE:
+            case SENDING_GOAL:
+            case GOAL_REACHED:
+                int current = missionRunner != null ? missionRunner.getCurrentWaypointIndex() : -1;
+                if (current >= 0) {
+                    return activity.getString(R.string.slam_multi_state_navigating, current + 1);
+                }
+                return activity.getString(R.string.slam_multi_state_ready);
+            case COMPLETED:
+                return activity.getString(R.string.slam_multi_state_completed);
+            case FAILED:
+                int failed = missionRunner != null ? missionRunner.getCurrentWaypointIndex() : -1;
+                if (failed < 0) {
+                    failed = 0;
+                }
+                return activity.getString(R.string.slam_multi_state_failed, failed + 1);
+            case CANCELED:
+                return activity.getString(R.string.slam_multi_state_canceled);
+            case READY:
+            case IDLE:
+            default:
+                if (multiWaypointMission.isEmpty()) {
+                    return activity.getString(R.string.slam_nav_state_idle);
+                }
+                return activity.getString(R.string.slam_multi_state_ready);
+        }
     }
 }

@@ -161,6 +161,106 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:paddingBottom="3dp"
+            android:text="@string/slam_nav_section_multi"
+            android:textColor="#99FFFFFF"
+            android:textSize="10sp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/slam_mode_ab_button"
+                android:layout_width="72dp"
+                android:layout_height="30dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/slam_btn_neutral"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="@string/slam_nav_mode_ab"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/slam_mode_multi_button"
+                android:layout_width="72dp"
+                android:layout_height="30dp"
+                android:background="@drawable/slam_btn_neutral"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="@string/slam_nav_mode_multi"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/slam_multi_clear_button"
+                android:layout_width="68dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/slam_btn_neutral"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="@string/slam_multi_clear"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/slam_multi_start_button"
+                android:layout_width="68dp"
+                android:layout_height="32dp"
+                android:background="@drawable/slam_btn_nav"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="@string/slam_multi_start"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/slam_multi_stop_button"
+                android:layout_width="68dp"
+                android:layout_height="32dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/slam_btn_cancel"
+                android:minHeight="0dp"
+                android:minWidth="0dp"
+                android:text="@string/slam_multi_stop"
+                android:textAllCaps="false"
+                android:textColor="@android:color/white"
+                android:textSize="11sp" />
+
+            <CheckBox
+                android:id="@+id/slam_multi_loop_checkbox"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:text="@string/slam_multi_loop"
+                android:textColor="@android:color/white"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:paddingBottom="3dp"
             android:text="@string/slam_nav_section_view"
             android:textColor="#99FFFFFF"
             android:textSize="10sp" />

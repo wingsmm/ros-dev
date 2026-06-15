@@ -132,7 +132,7 @@ public class ManualControlFragment extends Fragment {
         }
 
         RobotController controller = app.getRobotController();
-        if (controller == null) {
+        if (controller == null || controller.isManualCmdVelBlocked()) {
             return;
         }
 
