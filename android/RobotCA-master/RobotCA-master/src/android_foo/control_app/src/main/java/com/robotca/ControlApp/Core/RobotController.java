@@ -455,6 +455,8 @@ public class RobotController implements NodeMain, Savable {
                               double angularVelocityZ) {
         if (manualCmdVelBlocked
                 && (linearVelocityX != 0.0 || linearVelocityY != 0.0 || angularVelocityZ != 0.0)) {
+            AppTrace.dThrottle("manual_blocked", 1000L, "manual",
+                    "cmd_vel ignored while navigation owns the robot");
             return;
         }
         publishVelocity = true;
@@ -462,6 +464,9 @@ public class RobotController implements NodeMain, Savable {
     }
 
     public void setManualCmdVelBlocked(boolean blocked) {
+        if (manualCmdVelBlocked != blocked) {
+            AppTrace.i("manual", blocked ? "cmd_vel locked" : "cmd_vel unlocked");
+        }
         manualCmdVelBlocked = blocked;
         if (blocked) {
             stopMotion();
@@ -1232,6 +1237,7 @@ public class RobotController implements NodeMain, Savable {
      */
     public boolean publishMoveBaseGoal(double x, double y, double yaw) {
         if (moveBaseGoalPublisher == null || connectedNode == null) {
+            AppTrace.w("nav", "goal rejected: ROS publisher not ready");
             return false;
         }
 
@@ -1256,6 +1262,8 @@ public class RobotController implements NodeMain, Savable {
         goal.getPose().getOrientation().setW(Math.cos(halfYaw));
 
         moveBaseGoalPublisher.publish(goal);
+        AppTrace.i("nav", String.format(
+                "goal sent map%s yaw=%.2f", AppTrace.point(x, y), yaw));
         Log.d(TAG, String.format("Published move_base goal (%.2f, %.2f, %.2f)", x, y, yaw));
         return true;
     }
@@ -1286,6 +1294,7 @@ public class RobotController implements NodeMain, Savable {
      */
     public boolean cancelMoveBaseGoal() {
         if (moveBaseCancelPublisher == null) {
+            AppTrace.w("nav", "cancel rejected: ROS publisher not ready");
             return false;
         }
 
@@ -1294,6 +1303,7 @@ public class RobotController implements NodeMain, Savable {
         moveBaseCancelPublisher.publish(cancel);
 
         stopMotion();
+        AppTrace.i("nav", "cancel sent");
         Log.d(TAG, "Published move_base cancel");
         return true;
     }

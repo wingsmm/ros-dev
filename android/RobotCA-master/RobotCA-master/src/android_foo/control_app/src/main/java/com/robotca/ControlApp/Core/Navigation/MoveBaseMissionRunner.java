@@ -2,6 +2,7 @@ package com.robotca.ControlApp.Core.Navigation;
 
 import android.util.Log;
 
+import com.robotca.ControlApp.Core.AppTrace;
 import com.robotca.ControlApp.Core.RobotController;
 
 import actionlib_msgs.GoalStatus;
@@ -38,15 +39,8 @@ public class MoveBaseMissionRunner {
         void onMissionCanceled();
     }
 
-    public interface YawProvider {
-        double getCurrentYaw();
-
-        boolean hasCurrentYaw();
-    }
-
     private final RobotController controller;
     private final Listener listener;
-    private YawProvider yawProvider;
 
     private WaypointMission mission;
     private State state = State.IDLE;
@@ -56,10 +50,6 @@ public class MoveBaseMissionRunner {
     public MoveBaseMissionRunner(RobotController controller, Listener listener) {
         this.controller = controller;
         this.listener = listener;
-    }
-
-    public void setYawProvider(YawProvider yawProvider) {
-        this.yawProvider = yawProvider;
     }
 
     public State getState() {
@@ -87,6 +77,7 @@ public class MoveBaseMissionRunner {
         }
 
         this.mission = mission;
+        AppTrace.i("mission", "start waypoints=" + mission.size() + " loop=" + mission.isLoop());
         mission.reset();
         waitingForGoalActive = false;
         currentGoalSawActive = false;
@@ -138,6 +129,7 @@ public class MoveBaseMissionRunner {
             }
 
             int reachedIndex = mission.getCurrentIndex();
+            AppTrace.i("mission", "waypoint reached #" + (reachedIndex + 1));
             setState(State.GOAL_REACHED);
             if (listener != null) {
                 listener.onWaypointReached(reachedIndex);
@@ -159,6 +151,7 @@ public class MoveBaseMissionRunner {
             }
 
             setManualBlocked(false);
+            AppTrace.i("mission", "completed");
             setState(State.COMPLETED);
             if (listener != null) {
                 listener.onMissionCompleted();
@@ -168,8 +161,8 @@ public class MoveBaseMissionRunner {
 
         if (status == GoalStatus.ABORTED
                 || status == GoalStatus.REJECTED
-                || status == 8
-                || status == 9) {
+                || status == 8   // GoalStatus.RECALLED (not exposed in rosjava binding)
+                || status == 9) { // GoalStatus.LOST    (not exposed in rosjava binding)
             if (waitingForGoalActive && !currentGoalSawActive) {
                 return;
             }
@@ -196,6 +189,7 @@ public class MoveBaseMissionRunner {
         Waypoint waypoint = mission.current();
         if (waypoint == null) {
             setManualBlocked(false);
+            AppTrace.i("mission", "completed");
             setState(State.COMPLETED);
             if (listener != null) {
                 listener.onMissionCompleted();
@@ -204,9 +198,6 @@ public class MoveBaseMissionRunner {
         }
 
         double yaw = waypoint.yaw;
-        if (yawProvider != null && yawProvider.hasCurrentYaw()) {
-            yaw = yawProvider.getCurrentYaw();
-        }
 
         setState(State.SENDING_GOAL);
         boolean sent = controller.publishMoveBaseGoal(waypoint.x, waypoint.y, yaw);
@@ -218,6 +209,9 @@ public class MoveBaseMissionRunner {
         waitingForGoalActive = true;
         currentGoalSawActive = false;
         setState(State.WAITING_ACTIVE);
+        AppTrace.i("mission", String.format(
+                "send #%d %s yaw=%.2f", mission.getCurrentIndex() + 1,
+                AppTrace.point(waypoint.x, waypoint.y), yaw));
         Log.d(TAG, String.format(
                 "Sent waypoint %d (%s) at (%.2f, %.2f, %.2f)",
                 mission.getCurrentIndex() + 1,
@@ -232,6 +226,9 @@ public class MoveBaseMissionRunner {
         waitingForGoalActive = false;
         currentGoalSawActive = false;
         setManualBlocked(false);
+        AppTrace.w("mission", "failed waypoint="
+                + (waypointIndex >= 0 ? String.valueOf(waypointIndex + 1) : "none")
+                + " status=" + status);
         setState(State.FAILED);
         if (listener != null) {
             listener.onMissionFailed(waypointIndex, status);

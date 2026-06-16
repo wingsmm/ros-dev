@@ -326,7 +326,7 @@ public class SlamMapView extends View {
         for (int y = gy - radiusCells; y <= gy + radiusCells; y++) {
             for (int x = gx - radiusCells; x <= gx + radiusCells; x++) {
                 if (x < 0 || y < 0 || x >= lastBitmapWidth || y >= lastBitmapHeight) {
-                    return false;
+                    continue;
                 }
                 int value = lastGridData[y * lastBitmapWidth + x];
                 if (value < 0 || value > 50) {

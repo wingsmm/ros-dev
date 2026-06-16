@@ -20,6 +20,9 @@ NAV_ENABLE="${NAV_ENABLE:-1}"
 NAV_PKG="${NAV_PKG:-xtark_nav}"
 NAV_LAUNCH="${NAV_LAUNCH:-online_slam_move_base.launch}"
 NAV_SPEED_SYNC_MARKER="run_android_nav_speed_sync"
+# dynamic_reconfigure namespace for the local planner used by nav_speed_sync.
+# Change to TrajectoryPlannerROS, DWAPlannerROS, etc. to match move_base_params.yaml.
+NAV_PLANNER_NAME="${NAV_PLANNER_NAME:-TrajectoryPlannerROS}"
 ROBOT_POSE_PKG="${ROBOT_POSE_PKG:-xtark_nav}"
 ROBOT_POSE_LAUNCH="${ROBOT_POSE_LAUNCH:-robot_pose_in_map.launch}"
 ROBOT_POSE_NODE="${ROBOT_POSE_NODE:-robot_pose_in_map_publisher}"
@@ -49,9 +52,9 @@ usage() {
 Usage: android_stack.sh <command>
 
 Commands:
-  start      Start roscore + bringup + camera + gmapping + move_base
+  start      Start roscore + bringup + camera + gmapping + move_base; light verify only
   stop       Stop all Android-test processes
-  status     Diagnostic output for /map, move_base, cmd_vel, TF
+  status     Full diagnostics (/map, hz, TF; may take ~30s)
   watch-nav  Live echo of goal, status, cmd_vel (for A-B-A debugging)
   logs       Tail roscore/bringup/gmapping/move_base logs
 
@@ -71,6 +74,7 @@ Environment exported before launch:
   NAV_ENABLE=${NAV_ENABLE}
   NAV_PKG=${NAV_PKG}
   NAV_LAUNCH=${NAV_LAUNCH}
+  NAV_PLANNER_NAME=${NAV_PLANNER_NAME}  (must match base_local_planner in move_base_params.yaml)
   ROS_SETUP=${ROS_SETUP:-/opt/ros/melodic/setup.bash}
   WS_SETUP=${WS_SETUP:-$HOME/ros_ws/devel/setup.bash}
 EOF
@@ -283,8 +287,10 @@ start_nav_speed_sync() {
   pkill -f "$NAV_SPEED_SYNC_MARKER" || true
   sleep 1
 
+  export NAV_PLANNER_NAME
   nohup python - <<'PY' >"$XTARK_LOG_DIR/nav_speed_sync.log" 2>&1 &
 # run_android_nav_speed_sync
+import os
 import rospy
 from dynamic_reconfigure.client import Client
 from geometry_msgs.msg import Twist
@@ -294,10 +300,16 @@ MAX_LINEAR = 0.30
 MIN_ANGULAR = 0.05
 MAX_ANGULAR = 0.80
 
+# Read planner name from environment so it can be changed without editing this script.
+# Must match base_local_planner in move_base_params.yaml (e.g. TrajectoryPlannerROS, DWAPlannerROS).
+_PLANNER_NAME = os.environ.get("NAV_PLANNER_NAME", "TrajectoryPlannerROS")
+_PLANNER_NS = "/move_base/" + _PLANNER_NAME
+
 
 class NavSpeedSync(object):
     def __init__(self):
         rospy.init_node("nav_speed_sync", anonymous=False)
+        rospy.loginfo("nav_speed_sync planner namespace: %s", _PLANNER_NS)
         self._client = None
         self._last_linear = None
         self._last_angular = None
@@ -308,10 +320,10 @@ class NavSpeedSync(object):
         if self._client is not None:
             return
         try:
-            self._client = Client("/move_base/TrajectoryPlannerROS", timeout=2.0)
-            rospy.loginfo("nav_speed_sync connected to TrajectoryPlannerROS")
+            self._client = Client(_PLANNER_NS, timeout=2.0)
+            rospy.loginfo("nav_speed_sync connected to %s", _PLANNER_NS)
         except Exception as exc:
-            rospy.logwarn_throttle(10.0, "nav_speed_sync waiting for move_base: %s", exc)
+            rospy.logwarn_throttle(10.0, "nav_speed_sync waiting for move_base (%s): %s", _PLANNER_NS, exc)
 
     def _on_speed(self, msg):
         linear = max(MIN_LINEAR, min(MAX_LINEAR, abs(msg.linear.x)))
@@ -422,12 +434,14 @@ verify_startup() {
     else
       echo "[OK] gmapping running"
     fi
+    echo "[verify] waiting for $SLAM_MAP_TOPIC once (timeout 8s) ..."
     if ! timeout 8 rostopic echo "$SLAM_MAP_TOPIC" -n 1 >/dev/null 2>&1; then
       echo "[FAIL] $SLAM_MAP_TOPIC not publishing"
       ok=0
     else
       echo "[OK] $SLAM_MAP_TOPIC publishing"
     fi
+    echo "[verify] waiting for $ROBOT_POSE_TOPIC once (timeout 5s) ..."
     if ! timeout 5 rostopic echo "$ROBOT_POSE_TOPIC" -n 1 >/dev/null 2>&1; then
       echo "[FAIL] $ROBOT_POSE_TOPIC not publishing"
       ok=0
@@ -437,6 +451,7 @@ verify_startup() {
   fi
 
   if [ "$NAV_ENABLE" = "1" ]; then
+    echo "[verify] checking move_base node and /move_base/status ..."
     if ! is_move_base_node_up; then
       echo "[FAIL] /move_base node missing"
       ok=0
@@ -472,14 +487,17 @@ status() {
 
   echo "---map---"
   rostopic info "$SLAM_MAP_TOPIC" 2>&1 || true
+  echo "[status] probing $SLAM_MAP_TOPIC hz (timeout 5s) ..."
   timeout 5 rostopic hz "$SLAM_MAP_TOPIC" 2>&1 || true
 
   echo "---scan---"
   rostopic info /scan 2>&1 || true
+  echo "[status] probing /scan hz (timeout 5s) ..."
   timeout 5 rostopic hz /scan 2>&1 || true
 
   echo "---odom---"
   rostopic info /odom 2>&1 || true
+  echo "[status] probing /odom hz (timeout 5s) ..."
   timeout 5 rostopic hz /odom 2>&1 || true
 
   echo "---move_base goal---"
@@ -487,18 +505,23 @@ status() {
 
   echo "---move_base status---"
   rostopic info /move_base/status 2>&1 || true
+  echo "[status] waiting for /move_base/status once (timeout 3s) ..."
   timeout 3 rostopic echo /move_base/status -n 1 2>&1 || true
 
   echo "---cmd_vel---"
   rostopic info /cmd_vel 2>&1 || true
+  echo "[status] waiting for /cmd_vel once (timeout 3s) ..."
   timeout 3 rostopic echo /cmd_vel -n 1 2>&1 || true
 
   echo "---robot_pose_in_map---"
   rostopic info "$ROBOT_POSE_TOPIC" 2>&1 || true
+  echo "[status] waiting for $ROBOT_POSE_TOPIC once (timeout 3s) ..."
   timeout 3 rostopic echo "$ROBOT_POSE_TOPIC" -n 1 2>&1 || true
+  echo "[status] probing $ROBOT_POSE_TOPIC hz (timeout 5s) ..."
   timeout 5 rostopic hz "$ROBOT_POSE_TOPIC" 2>&1 || true
 
   echo "---tf map base_footprint---"
+  echo "[status] probing tf map->base_footprint (timeout 5s) ..."
   timeout 5 rosrun tf tf_echo map base_footprint 2>&1 | head -40 || true
 
   echo "---processes---"
@@ -530,8 +553,8 @@ finish_start() {
   local rc=0
   verify_startup || rc=$?
   echo ""
-  echo "--- quick status (run: $0 status | watch-nav for live goal/cmd_vel) ---"
-  status
+  echo "[OK] start finished. For full diagnostics run: $0 status"
+  echo "     For live navigation debug run: $0 watch-nav"
   return $rc
 }
 
@@ -605,6 +628,19 @@ stop() {
   pkill -f 'rosmaster --core -p 11311' || true
   pkill -f 'roscore' || true
   echo "Android-test roscore/bringup/gmapping/navigation stop requested"
+
+  # Wait for roscore port to close before returning so that a subsequent
+  # 'start' does not race against lingering processes.
+  local i=0
+  while [ "$i" -lt 15 ]; do
+    if ! (ss -lnt 2>/dev/null || netstat -lnt 2>/dev/null) | grep -q ':11311'; then
+      echo "roscore port 11311 closed (${i}s)"
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  echo "[WARN] roscore port 11311 still open after 15s; continuing anyway"
 }
 
 cmd="${1:-help}"

@@ -126,6 +126,7 @@
     <string name="slam_map_debug_export_done">Diagnostic copied and saved to %1$s</string>
     <string name="slam_nav_set_a">Set A</string>
     <string name="slam_nav_set_b">Set B</string>
+    <string name="slam_nav_section_mode">Navigation mode</string>
     <string name="slam_nav_section_pick">1. Pick points on map</string>
     <string name="slam_nav_section_go">2. Navigate</string>
     <string name="slam_nav_section_view">3. Map view</string>
@@ -173,6 +174,9 @@
     <string name="slam_multi_state_failed">failed at %1$d</string>
     <string name="slam_multi_state_canceled">canceled</string>
     <string name="slam_multi_manual_locked">Navigation active — manual drive disabled</string>
+    <string name="slam_multi_started">Mission started — manual drive disabled</string>
+    <string name="slam_nav_cancel_first">Cancel current navigation first</string>
+    <string name="slam_multi_stop_first">Stop multi-waypoint navigation first</string>
     <string name="laser_scan_detail_pref_summary">Sets the detail level of the laser scan visualization.
         A higher number will draw more laser points\nValue: %s
     </string>

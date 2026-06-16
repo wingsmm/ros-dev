@@ -5,6 +5,12 @@
         <item name="android:windowBackground">@drawable/background_splash</item>
     </style>
 
+    <!-- Control screens use Toolbar + DrawerToggle (same as robot chooser). -->
+    <style name="ControlAppTheme" parent="@style/Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">#CCCCCC</item>
+        <item name="colorPrimaryDark">#999999</item>
+    </style>
+
     <style name="CustomShowcaseTheme" parent="ShowcaseView.Light">
         <item name="sv_backgroundColor">#3300A621</item>
         <item name="sv_showcaseColor">#00801A</item>

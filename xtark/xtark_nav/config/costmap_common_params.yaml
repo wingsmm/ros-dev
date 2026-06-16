@@ -1,5 +1,7 @@
-obstacle_range: 2.5
-raytrace_range: 3.0
+# obstacle_range must not exceed SLAM_MAX_URANGE (2.0) in android_stack.sh;
+# raytrace_range can be slightly larger to clear previously-marked free space.
+obstacle_range: 2.0
+raytrace_range: 2.5
 
 footprint: [[0.16, 0.13], [0.16, -0.13], [-0.16, -0.13], [-0.16, 0.13]]
 inflation_radius: 0.20

@@ -104,6 +104,7 @@
     <string name="slam_map_debug_export_done">诊断信息已复制并保存到 %1$s</string>
     <string name="slam_nav_set_a">设 A</string>
     <string name="slam_nav_set_b">设 B</string>
+    <string name="slam_nav_section_mode">导航模式</string>
     <string name="slam_nav_section_pick">1. 在地图上选点</string>
     <string name="slam_nav_section_go">2. 发送导航</string>
     <string name="slam_nav_section_view">3. 地图视图</string>
@@ -151,6 +152,9 @@
     <string name="slam_multi_state_failed">第 %1$d 点失败</string>
     <string name="slam_multi_state_canceled">已取消</string>
     <string name="slam_multi_manual_locked">导航中，手动控制已禁用</string>
+    <string name="slam_multi_started">任务已启动，手动控制已禁用</string>
+    <string name="slam_nav_cancel_first">请先取消当前导航</string>
+    <string name="slam_multi_stop_first">请先停止多点导航</string>
     <string name="laser_scan_detail_pref_summary">设置激光扫描可视化的细节级别。
         数值越大绘制的激光点越多\n当前值：%s
     </string>

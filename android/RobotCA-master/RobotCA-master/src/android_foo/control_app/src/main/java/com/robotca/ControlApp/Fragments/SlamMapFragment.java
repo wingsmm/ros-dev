@@ -16,6 +16,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.robotca.ControlApp.ControlApp;
+import com.robotca.ControlApp.Core.AppTrace;
 import com.robotca.ControlApp.Core.Navigation.MoveBaseMissionRunner;
 import com.robotca.ControlApp.Core.Navigation.Waypoint;
 import com.robotca.ControlApp.Core.Navigation.WaypointMission;
@@ -88,6 +89,8 @@ public class SlamMapFragment extends SimpleFragment {
     private Button multiStopButton;
     private CheckBox multiLoopCheckbox;
     private SlamFloatingNavMenu floatingNavMenu;
+    private View abControlsPanel;
+    private View multiControlsPanel;
 
     private final WaypointMission multiWaypointMission = new WaypointMission();
     private final ArrayList<SlamMapView.MissionWaypointState> multiWaypointStates = new ArrayList<>();
@@ -110,6 +113,7 @@ public class SlamMapFragment extends SimpleFragment {
     private SlamMapView.MapPoint pointA;
     private SlamMapView.MapPoint pointB;
     private byte lastMoveBaseStatus = GoalStatus.PENDING;
+    private byte lastLoggedMoveBaseStatus = -1;
     private boolean waitingForCurrentGoalActive;
     private boolean currentGoalSawActive;
     private boolean boundsFromRos;
@@ -191,6 +195,7 @@ public class SlamMapFragment extends SimpleFragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_slam_map, container, false);
+        AppTrace.i("slam", "open SLAM map");
 
         slamMapView = (SlamMapView) view.findViewById(R.id.slam_map_view);
         statusText = (TextView) view.findViewById(R.id.slam_map_status_text);
@@ -215,6 +220,8 @@ public class SlamMapFragment extends SimpleFragment {
         multiStartButton = (Button) floatingNavMenu.findViewById(R.id.slam_multi_start_button);
         multiStopButton = (Button) floatingNavMenu.findViewById(R.id.slam_multi_stop_button);
         multiLoopCheckbox = (CheckBox) floatingNavMenu.findViewById(R.id.slam_multi_loop_checkbox);
+        abControlsPanel = floatingNavMenu.findViewById(R.id.slam_ab_controls);
+        multiControlsPanel = floatingNavMenu.findViewById(R.id.slam_multi_controls);
 
         ControlApp activityForRunner = getControlApp();
         if (activityForRunner != null && activityForRunner.getRobotController() != null) {
@@ -228,6 +235,10 @@ public class SlamMapFragment extends SimpleFragment {
                                 if (state == MoveBaseMissionRunner.State.WAITING_ACTIVE
                                         || state == MoveBaseMissionRunner.State.NAVIGATING
                                         || state == MoveBaseMissionRunner.State.SENDING_GOAL) {
+                                    if (waypointIndex == 0 && hasAnyCompletedWaypoint()) {
+                                        resetMultiWaypointStates(
+                                                SlamMapView.MissionWaypointState.PENDING);
+                                    }
                                     setMultiWaypointState(waypointIndex,
                                             SlamMapView.MissionWaypointState.CURRENT);
                                 }
@@ -274,22 +285,12 @@ public class SlamMapFragment extends SimpleFragment {
                             updateNavigationStatusText();
                         }
                     });
-            missionRunner.setYawProvider(new MoveBaseMissionRunner.YawProvider() {
-                @Override
-                public double getCurrentYaw() {
-                    return slamMapView != null ? slamMapView.getRobotYaw() : 0.0;
-                }
-
-                @Override
-                public boolean hasCurrentYaw() {
-                    return slamMapView != null && slamMapView.hasRobotYaw();
-                }
-            });
         }
 
         modeAbButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                AppTrace.i("ui", "mode AB");
                 setMapNavMode(MapNavMode.AB);
             }
         });
@@ -297,6 +298,7 @@ public class SlamMapFragment extends SimpleFragment {
         modeMultiButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                AppTrace.i("ui", "mode multi");
                 setMapNavMode(MapNavMode.MULTI_WAYPOINT);
             }
         });
@@ -304,6 +306,7 @@ public class SlamMapFragment extends SimpleFragment {
         multiClearButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                AppTrace.i("ui", "multi clear clicked");
                 clearMultiWaypoints();
             }
         });
@@ -311,6 +314,7 @@ public class SlamMapFragment extends SimpleFragment {
         multiStartButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                AppTrace.i("ui", "multi start clicked");
                 startMultiWaypointMission();
             }
         });
@@ -318,6 +322,7 @@ public class SlamMapFragment extends SimpleFragment {
         multiStopButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                AppTrace.i("ui", "multi stop clicked");
                 stopMultiWaypointMission();
             }
         });
@@ -325,6 +330,10 @@ public class SlamMapFragment extends SimpleFragment {
         setAButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (!ensureAbMode("set_A") || !ensureNoAbNavigationActive("set_A")) {
+                    return;
+                }
+                AppTrace.i("ui", "set A mode");
                 enterPickMode(PickMode.SET_A);
             }
         });
@@ -332,6 +341,10 @@ public class SlamMapFragment extends SimpleFragment {
         setBButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (!ensureAbMode("set_B") || !ensureNoAbNavigationActive("set_B")) {
+                    return;
+                }
+                AppTrace.i("ui", "set B mode");
                 enterPickMode(PickMode.SET_B);
             }
         });
@@ -339,6 +352,7 @@ public class SlamMapFragment extends SimpleFragment {
         cancelPickButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                AppTrace.i("ui", "cancel pick");
                 cancelPickMode();
             }
         });
@@ -346,6 +360,10 @@ public class SlamMapFragment extends SimpleFragment {
         goBButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (!ensureAbMode("go_B") || !ensureNoAbNavigationActive("go_B")) {
+                    return;
+                }
+                AppTrace.i("ui", "go B clicked");
                 sendGoalTo(pointB, RoundTripState.GOING_TO_B, false);
             }
         });
@@ -353,6 +371,10 @@ public class SlamMapFragment extends SimpleFragment {
         returnAButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (!ensureAbMode("return_A") || !ensureNoAbNavigationActive("return_A")) {
+                    return;
+                }
+                AppTrace.i("ui", "return A clicked");
                 sendGoalTo(pointA, RoundTripState.RETURNING_TO_A, false);
             }
         });
@@ -360,10 +382,14 @@ public class SlamMapFragment extends SimpleFragment {
         roundTripButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (!ensureAbMode("A_B_A") || !ensureNoAbNavigationActive("A_B_A")) {
+                    return;
+                }
                 if (pointA == null || pointB == null) {
                     showToast(R.string.slam_nav_missing_a_b);
                     return;
                 }
+                AppTrace.i("ui", "A-B-A clicked");
                 sendGoalTo(pointB, RoundTripState.GOING_TO_B, true);
             }
         });
@@ -371,22 +397,17 @@ public class SlamMapFragment extends SimpleFragment {
         cancelNavButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                ControlApp activity = getControlApp();
-                if (activity != null && activity.getRobotController() != null) {
-                    activity.getRobotController().cancelMoveBaseGoal();
-                }
-                roundTripState = RoundTripState.CANCELED;
-                autoReturnEnabled = false;
-                resetGoalTracking();
-                clearMoveBasePlanOverlay();
-                showToast(R.string.slam_nav_cancel_sent);
-                updateNavigationStatusText();
+                AppTrace.i("ui", "cancel nav clicked");
+                cancelCurrentNavigation("cancel_nav", true);
             }
         });
 
         slamMapView.setMapTapListener(new SlamMapView.MapTapListener() {
             @Override
             public void onMapTapped(SlamMapView.MapPoint point) {
+                String route = mapTapRoute();
+                AppTrace.i("ui", "map tap " + AppTrace.point(point.x, point.y)
+                        + " mode=" + mapNavMode + " pick=" + pickMode + " route=" + route);
                 if (mapNavMode == MapNavMode.MULTI_WAYPOINT) {
                     appendMultiWaypoint(point);
                     return;
@@ -397,14 +418,17 @@ public class SlamMapFragment extends SimpleFragment {
                 }
 
                 if (!slamMapView.isFreeForGoal(point)) {
+                    AppTrace.w("ui", "map tap rejected: not free " + AppTrace.point(point.x, point.y));
                     showToast(R.string.slam_nav_goal_rejected);
                     return;
                 }
 
                 if (pickMode == PickMode.SET_A) {
+                    AppTrace.i("ui", "A set " + AppTrace.point(point.x, point.y));
                     pointA = point;
                     slamMapView.setPointA(point);
                 } else if (pickMode == PickMode.SET_B) {
+                    AppTrace.i("ui", "B set " + AppTrace.point(point.x, point.y));
                     pointB = point;
                     slamMapView.setPointB(point);
                 }
@@ -450,6 +474,8 @@ public class SlamMapFragment extends SimpleFragment {
             @Override
             public void onNewMessage(OccupancyGrid grid) {
                 pendingMapGrid = grid;
+                AppTrace.dThrottle("map_rx", 5000L, "topic", "map "
+                        + grid.getInfo().getWidth() + "x" + grid.getInfo().getHeight());
                 scheduleMapUiUpdate();
             }
         };
@@ -488,6 +514,8 @@ public class SlamMapFragment extends SimpleFragment {
             @Override
             public void onNewMessage(Path path) {
                 pendingMoveBasePlan = path;
+                AppTrace.dThrottle("plan_rx", 2000L, "topic", "plan poses="
+                        + path.getPoses().size());
                 scheduleMoveBasePlanUiUpdate();
             }
         };
@@ -496,6 +524,9 @@ public class SlamMapFragment extends SimpleFragment {
             @Override
             public void onNewMessage(PoseStamped pose) {
                 pendingRobotPose = pose;
+                AppTrace.dThrottle("pose_rx", 2000L, "topic", "pose "
+                        + AppTrace.point(pose.getPose().getPosition().getX(),
+                        pose.getPose().getPosition().getY()));
                 scheduleRobotPoseUiUpdate();
             }
         };
@@ -535,6 +566,7 @@ public class SlamMapFragment extends SimpleFragment {
     @Override
     public void onResume() {
         super.onResume();
+        AppTrace.i("slam", "resume listeners");
         ControlApp activity = getControlApp();
         if (activity != null) {
             RobotController controller = activity.getRobotController();
@@ -569,11 +601,17 @@ public class SlamMapFragment extends SimpleFragment {
                 }
             }
         }
+        AppTrace.i("slam", "pause listeners");
         super.onPause();
     }
 
     @Override
     public void onDestroyView() {
+        AppTrace.i("slam", "destroy view");
+        if (isAnyNavigationActive()) {
+            cancelCurrentNavigation("destroy", false);
+        }
+
         uiHandler.removeCallbacks(refreshUiRunnable);
         uiHandler.removeCallbacks(mapUiUpdateRunnable);
         uiHandler.removeCallbacks(robotPoseUiUpdateRunnable);
@@ -625,6 +663,8 @@ public class SlamMapFragment extends SimpleFragment {
         multiStopButton = null;
         multiLoopCheckbox = null;
         floatingNavMenu = null;
+        abControlsPanel = null;
+        multiControlsPanel = null;
         missionRunner = null;
         scanTimestamps.clear();
         super.onDestroyView();
@@ -690,6 +730,9 @@ public class SlamMapFragment extends SimpleFragment {
     }
 
     private void enterPickMode(PickMode mode) {
+        if (!ensureAbMode("pick")) {
+            return;
+        }
         pickMode = mode;
         updatePickModeUi();
         if (mode == PickMode.SET_A) {
@@ -714,7 +757,8 @@ public class SlamMapFragment extends SimpleFragment {
 
     private void updatePickModeUi() {
         if (cancelPickButton != null) {
-            cancelPickButton.setVisibility(pickMode != PickMode.NONE ? View.VISIBLE : View.GONE);
+            boolean showPickCancel = mapNavMode == MapNavMode.AB && pickMode != PickMode.NONE;
+            cancelPickButton.setVisibility(showPickCancel ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -755,31 +799,57 @@ public class SlamMapFragment extends SimpleFragment {
     }
 
     private void sendGoalTo(SlamMapView.MapPoint point, RoundTripState state, boolean autoReturn) {
+        sendGoalTo(point, state, autoReturn, true);
+    }
+
+    private void sendGoalTo(SlamMapView.MapPoint point, RoundTripState state,
+            boolean autoReturn, boolean userInitiated) {
+        if (mapNavMode != MapNavMode.AB) {
+            AppTrace.w("nav", "goal rejected: not in AB mode");
+            return;
+        }
+        if (isMultiMissionRunning()) {
+            AppTrace.w("nav", "goal rejected: multi navigation active");
+            showToast(R.string.slam_multi_stop_first);
+            return;
+        }
+        if (userInitiated && isAbNavigationActive()) {
+            AppTrace.w("nav", "goal rejected: AB navigation active state=" + roundTripState);
+            showToast(R.string.slam_nav_cancel_first);
+            return;
+        }
         if (point == null) {
+            AppTrace.w("nav", "goal rejected: missing point state=" + state);
             showToast(R.string.slam_nav_missing_a_b);
             return;
         }
 
         if (slamMapView == null || !slamMapView.isFreeForGoal(point)) {
+            AppTrace.w("nav", "goal rejected: not free " + AppTrace.point(point.x, point.y));
             showToast(R.string.slam_nav_goal_rejected);
             return;
         }
 
         ControlApp activity = getControlApp();
         if (activity == null || activity.getRobotController() == null) {
+            AppTrace.w("nav", "goal rejected: controller missing");
             return;
         }
 
+        AppTrace.i("nav", "request " + state + " " + AppTrace.point(point.x, point.y)
+                + " autoReturn=" + autoReturn);
         boolean sent = activity.getRobotController().publishMoveBaseGoal(point.x, point.y, 0.0);
         if (sent) {
             roundTripState = state;
             autoReturnEnabled = autoReturn;
             beginGoalTracking();
             showToast(R.string.slam_nav_goal_sent);
+            updateMultiMissionUi();
             updateNavigationStatusText();
+        } else {
+            AppTrace.w("nav", "goal publish failed " + state);
         }
     }
-
     private void handleMoveBaseStatus(GoalStatusArray array) {
         if (array == null) {
             return;
@@ -790,11 +860,35 @@ public class SlamMapFragment extends SimpleFragment {
             return;
         }
 
-        byte status = statusList.get(statusList.size() - 1).getStatus();
+        GoalStatus latest = null;
+        for (GoalStatus gs : statusList) {
+            if (latest == null
+                    || gs.getGoalId().getStamp().compareTo(
+                            latest.getGoalId().getStamp()) > 0) {
+                latest = gs;
+            }
+        }
+        if (latest == null) {
+            return;
+        }
+        byte status = latest.getStatus();
         lastMoveBaseStatus = status;
+
+        if (status != lastLoggedMoveBaseStatus) {
+            AppTrace.i("status", "move_base " + statusName(status)
+                    + " roundTrip=" + roundTripState
+                    + " multi=" + (missionRunner != null && missionRunner.isRunning()));
+            lastLoggedMoveBaseStatus = status;
+        }
 
         if (missionRunner != null && missionRunner.isRunning()) {
             missionRunner.onMoveBaseStatus(status);
+            return;
+        }
+
+        boolean trackingAbGoal = isAbNavigationActive() || waitingForCurrentGoalActive;
+        if (!trackingAbGoal) {
+            updateNavigationStatusText();
             return;
         }
 
@@ -812,7 +906,8 @@ public class SlamMapFragment extends SimpleFragment {
             resetGoalTracking();
             if (roundTripState == RoundTripState.GOING_TO_B && autoReturnEnabled) {
                 autoReturnEnabled = false;
-                sendGoalTo(pointA, RoundTripState.RETURNING_TO_A, false);
+                AppTrace.i("nav", "auto return A");
+                sendGoalTo(pointA, RoundTripState.RETURNING_TO_A, false, false);
                 return;
             } else if (roundTripState == RoundTripState.GOING_TO_B) {
                 roundTripState = RoundTripState.FINISHED;
@@ -831,7 +926,35 @@ public class SlamMapFragment extends SimpleFragment {
             clearMoveBasePlanOverlay();
         }
 
+        updateMultiMissionUi();
         updateNavigationStatusText();
+    }
+
+    private String statusName(byte status) {
+        switch (status) {
+            case GoalStatus.PENDING:
+                return "PENDING";
+            case GoalStatus.ACTIVE:
+                return "ACTIVE";
+            case GoalStatus.SUCCEEDED:
+                return "SUCCEEDED";
+            case GoalStatus.PREEMPTED:
+                return "PREEMPTED";
+            case GoalStatus.ABORTED:
+                return "ABORTED";
+            case GoalStatus.REJECTED:
+                return "REJECTED";
+            case 6:
+                return "PREEMPTING";
+            case 7:
+                return "RECALLING";
+            case 8:
+                return "RECALLED";
+            case 9:
+                return "LOST";
+            default:
+                return "status=" + status;
+        }
     }
 
     private void updateNavigationStatusText() {
@@ -1121,26 +1244,111 @@ public class SlamMapFragment extends SimpleFragment {
     }
 
     private void setMapNavMode(MapNavMode mode) {
-        if (missionRunner != null && missionRunner.isRunning()) {
-            showToast(R.string.slam_multi_manual_locked);
+        if (mode == mapNavMode) {
+            return;
+        }
+        if (isAnyNavigationActive()) {
+            AppTrace.w("ui", "mode switch rejected: navigation active");
+            showToast(R.string.slam_nav_cancel_first);
             return;
         }
         mapNavMode = mode;
-        if (mode == MapNavMode.AB) {
-            cancelPickMode();
+        cancelPickMode();
+        if (mode == MapNavMode.MULTI_WAYPOINT
+                && !isMultiMissionRunning()
+                && multiWaypointMission.isEmpty()) {
+            multiMissionState = MoveBaseMissionRunner.State.IDLE;
         }
         updateMapNavModeUi();
         if (mode == MapNavMode.MULTI_WAYPOINT) {
             showToast(R.string.slam_multi_pick_hint);
         }
+        updateNavigationStatusText();
     }
 
     private void updateMapNavModeUi() {
         if (modeAbButton == null || modeMultiButton == null) {
             return;
         }
-        modeAbButton.setAlpha(mapNavMode == MapNavMode.AB ? 1.0f : 0.5f);
-        modeMultiButton.setAlpha(mapNavMode == MapNavMode.MULTI_WAYPOINT ? 1.0f : 0.5f);
+        boolean abMode = mapNavMode == MapNavMode.AB;
+        modeAbButton.setAlpha(abMode ? 1.0f : 0.5f);
+        modeMultiButton.setAlpha(abMode ? 0.5f : 1.0f);
+        if (abControlsPanel != null) {
+            abControlsPanel.setVisibility(abMode ? View.VISIBLE : View.GONE);
+        }
+        if (multiControlsPanel != null) {
+            multiControlsPanel.setVisibility(abMode ? View.GONE : View.VISIBLE);
+        }
+        updatePickModeUi();
+    }
+
+    private boolean isAbNavigationActive() {
+        return roundTripState == RoundTripState.GOING_TO_B
+                || roundTripState == RoundTripState.RETURNING_TO_A;
+    }
+
+    private boolean isAnyNavigationActive() {
+        return isMultiMissionRunning() || isAbNavigationActive();
+    }
+
+    private boolean ensureAbMode(String action) {
+        if (mapNavMode == MapNavMode.AB) {
+            return true;
+        }
+        AppTrace.i("ui", "ignored: AB disabled in multi mode action=" + action);
+        return false;
+    }
+
+    private boolean ensureNoAbNavigationActive(String action) {
+        if (!isAbNavigationActive()) {
+            return true;
+        }
+        AppTrace.w("nav", "AB action rejected: navigation active action=" + action);
+        showToast(R.string.slam_nav_cancel_first);
+        return false;
+    }
+
+    private String mapTapRoute() {
+        if (mapNavMode == MapNavMode.MULTI_WAYPOINT) {
+            return "multi_add";
+        }
+        if (pickMode == PickMode.SET_A) {
+            return "set_A";
+        }
+        if (pickMode == PickMode.SET_B) {
+            return "set_B";
+        }
+        return "none";
+    }
+
+    private void cancelCurrentNavigation(String reason, boolean notify) {
+        boolean hadAb = isAbNavigationActive();
+        boolean hadMulti = isMultiMissionRunning();
+        if (!hadAb && !hadMulti) {
+            AppTrace.i("nav", "cancel ignored: no active navigation reason=" + reason);
+            if (notify) {
+                showToast(R.string.slam_nav_state_idle);
+            }
+            return;
+        }
+        AppTrace.i("nav", "cancel current reason=" + reason + " mode=" + mapNavMode);
+        if (missionRunner != null && hadMulti) {
+            missionRunner.cancel();
+        }
+        ControlApp activity = getControlApp();
+        if (!hadMulti && activity != null && activity.getRobotController() != null) {
+            activity.getRobotController().cancelMoveBaseGoal();
+        }
+        roundTripState = RoundTripState.CANCELED;
+        multiMissionState = MoveBaseMissionRunner.State.CANCELED;
+        autoReturnEnabled = false;
+        resetGoalTracking();
+        clearMoveBasePlanOverlay();
+        updateMultiMissionUi();
+        updateNavigationStatusText();
+        if (notify && !hadMulti) {
+            showToast(R.string.slam_nav_cancel_sent);
+        }
     }
 
     private boolean isMultiMissionRunning() {
@@ -1149,20 +1357,21 @@ public class SlamMapFragment extends SimpleFragment {
 
     private void updateMultiMissionUi() {
         boolean running = isMultiMissionRunning();
+        boolean navActive = isAnyNavigationActive();
         if (multiClearButton != null) {
             multiClearButton.setEnabled(!running);
         }
         if (multiStartButton != null) {
-            multiStartButton.setEnabled(!running);
+            multiStartButton.setEnabled(!navActive);
         }
         if (multiStopButton != null) {
             multiStopButton.setEnabled(running);
         }
         if (modeAbButton != null) {
-            modeAbButton.setEnabled(!running);
+            modeAbButton.setEnabled(!navActive);
         }
         if (modeMultiButton != null) {
-            modeMultiButton.setEnabled(!running);
+            modeMultiButton.setEnabled(!navActive);
         }
         if (multiLoopCheckbox != null) {
             multiLoopCheckbox.setEnabled(!running);
@@ -1177,15 +1386,17 @@ public class SlamMapFragment extends SimpleFragment {
             return;
         }
         if (!slamMapView.isFreeForGoal(point)) {
+            AppTrace.w("ui", "map tap rejected: not free " + AppTrace.point(point.x, point.y));
             showToast(R.string.slam_nav_goal_rejected);
             return;
         }
 
         int number = multiWaypointMission.size() + 1;
-        double yaw = slamMapView.hasRobotYaw() ? slamMapView.getRobotYaw() : 0.0;
         multiWaypointMission.add(new Waypoint(
-                "wp-" + number, point.x, point.y, yaw, String.valueOf(number)));
+                "wp-" + number, point.x, point.y, 0.0, String.valueOf(number)));
         multiWaypointStates.add(SlamMapView.MissionWaypointState.PENDING);
+        AppTrace.i("mission", "add waypoint #" + number + " "
+                + AppTrace.point(point.x, point.y));
         refreshMissionWaypointMarkers();
         showToast(R.string.slam_multi_added, number);
         updateNavigationStatusText();
@@ -1195,6 +1406,7 @@ public class SlamMapFragment extends SimpleFragment {
         if (isMultiMissionRunning()) {
             return;
         }
+        AppTrace.i("mission", "clear waypoints count=" + multiWaypointMission.size());
         multiWaypointMission.clear();
         multiWaypointStates.clear();
         multiMissionState = MoveBaseMissionRunner.State.IDLE;
@@ -1206,6 +1418,10 @@ public class SlamMapFragment extends SimpleFragment {
     }
 
     private void startMultiWaypointMission() {
+        if (mapNavMode != MapNavMode.MULTI_WAYPOINT) {
+            AppTrace.w("mission", "start rejected: not in multi mode");
+            return;
+        }
         if (missionRunner == null || multiWaypointMission.isEmpty()) {
             showToast(R.string.slam_multi_need_points);
             return;
@@ -1213,12 +1429,21 @@ public class SlamMapFragment extends SimpleFragment {
         if (isMultiMissionRunning()) {
             return;
         }
+        if (isAbNavigationActive()) {
+            AppTrace.w("mission", "start rejected: AB navigation active");
+            showToast(R.string.slam_nav_cancel_first);
+            return;
+        }
 
+        roundTripState = RoundTripState.IDLE;
+        autoReturnEnabled = false;
+        resetGoalTracking();
+        AppTrace.i("mission", "start clicked count=" + multiWaypointMission.size());
         multiWaypointMission.setLoop(multiLoopCheckbox != null && multiLoopCheckbox.isChecked());
         resetMultiWaypointStates(SlamMapView.MissionWaypointState.PENDING);
         multiMissionState = MoveBaseMissionRunner.State.READY;
         clearMoveBasePlanOverlay();
-        showToast(R.string.slam_multi_manual_locked);
+        showToast(R.string.slam_multi_started);
 
         WaypointMission missionCopy = new WaypointMission();
         missionCopy.setLoop(multiWaypointMission.isLoop());
@@ -1227,6 +1452,7 @@ public class SlamMapFragment extends SimpleFragment {
         }
 
         if (!missionRunner.start(missionCopy)) {
+            AppTrace.w("mission", "start rejected: goal publish failed");
             showToast(R.string.slam_nav_goal_rejected);
             multiMissionState = MoveBaseMissionRunner.State.FAILED;
             updateMultiMissionUi();
@@ -1237,14 +1463,8 @@ public class SlamMapFragment extends SimpleFragment {
     }
 
     private void stopMultiWaypointMission() {
-        if (missionRunner == null) {
-            return;
-        }
-        missionRunner.cancel();
-        multiMissionState = MoveBaseMissionRunner.State.CANCELED;
-        clearMoveBasePlanOverlay();
-        updateMultiMissionUi();
-        updateNavigationStatusText();
+        AppTrace.i("ui", "multi stop clicked");
+        cancelCurrentNavigation("multi_stop", true);
     }
 
     private void resetMultiWaypointStates(SlamMapView.MissionWaypointState state) {
@@ -1253,6 +1473,15 @@ public class SlamMapFragment extends SimpleFragment {
             multiWaypointStates.add(state);
         }
         refreshMissionWaypointMarkers();
+    }
+
+    private boolean hasAnyCompletedWaypoint() {
+        for (SlamMapView.MissionWaypointState s : multiWaypointStates) {
+            if (s == SlamMapView.MissionWaypointState.COMPLETED) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void setMultiWaypointState(int index, SlamMapView.MissionWaypointState state) {

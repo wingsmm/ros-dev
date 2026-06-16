@@ -1,7 +1,6 @@
 package com.robotca.ControlApp;
 
 import android.annotation.SuppressLint;
-import android.app.ActionBar;
 import android.app.AlertDialog;
 import android.app.Fragment;
 import android.app.FragmentManager;
@@ -22,6 +21,7 @@ import android.provider.Settings;
 import android.support.v4.view.GravityCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
+import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Display;
 import android.view.LayoutInflater;
@@ -88,6 +88,7 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
     private String[] mFeatureTitles;
     private DrawerLayout mDrawerLayout;
     private ListView mDrawerList;
+    private Toolbar mToolbar;
     private ActionBarDrawerToggle mDrawerToggle;
 
     // NodeMainExecutor encapsulating the Robot's connection
@@ -221,43 +222,34 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
         mFeatureTitles = getResources().getStringArray(R.array.feature_titles); // Where you set drawer item titles
         mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
         mDrawerList = (ListView) findViewById(R.id.left_drawer);
+        mToolbar = (Toolbar) findViewById(R.id.control_app_toolbar);
 
-        if (getActionBar() != null) {
-            ActionBar actionBar = getActionBar();
+        if (mToolbar != null) {
+            mToolbar.setTitle(getTitle());
+            LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            View spinnerHost = inflater.inflate(R.layout.actionbar_dropdown_menu, mToolbar, false);
+            Toolbar.LayoutParams spinnerLp = new Toolbar.LayoutParams(
+                    Toolbar.LayoutParams.WRAP_CONTENT,
+                    Toolbar.LayoutParams.WRAP_CONTENT,
+                    GravityCompat.END);
+            mToolbar.addView(spinnerHost, spinnerLp);
 
-            actionBar.setDisplayHomeAsUpEnabled(true);
-            actionBar.setHomeButtonEnabled(true);
-
-            // Set custom Action Bar view
-            LayoutInflater inflater = (LayoutInflater) this .getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-            @SuppressLint("InflateParams") View v = inflater.inflate(R.layout.actionbar_dropdown_menu, null);
-
-            actionMenuSpinner = (Spinner) v.findViewById(R.id.spinner_control_mode);
-
+            actionMenuSpinner = (Spinner) spinnerHost.findViewById(R.id.spinner_control_mode);
             ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this,
                     R.array.motion_plans, android.R.layout.simple_spinner_item);
-
             adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             actionMenuSpinner.setAdapter(adapter);
             actionMenuSpinner.setOnItemSelectedListener(this);
-
-            actionBar.setCustomView(v);
-            actionBar.setDisplayShowCustomEnabled(true);
         }
 
-        mDrawerToggle = new ActionBarDrawerToggle(this, mDrawerLayout,
-               /* R.drawable.ic_drawer,*/ R.string.drawer_open,
-                R.string.drawer_close) {
+        mDrawerToggle = new ActionBarDrawerToggle(this, mDrawerLayout, mToolbar,
+                R.string.drawer_open, R.string.drawer_close) {
             public void onDrawerClosed(View view) {
-                //getActionBar().setTitle(mTitle);
-                invalidateOptionsMenu(); // creates call to
-                // onPrepareOptionsMenu()
+                invalidateOptionsMenu();
             }
 
             public void onDrawerOpened(View drawerView) {
-                //getActionBar().setTitle(mDrawerTitle);
-                invalidateOptionsMenu(); // creates call to
-                // onPrepareOptionsMenu()
+                invalidateOptionsMenu();
             }
         };
 
@@ -811,8 +803,9 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
     @Override
     public void setTitle(CharSequence title) {
         try {
-            //noinspection ConstantConditions
-            getActionBar().setTitle(title);
+            if (mToolbar != null) {
+                mToolbar.setTitle(title);
+            }
         } catch (NullPointerException e) {
             // Ignore
         }
@@ -821,7 +814,6 @@ public class ControlApp extends RosActivity implements ListView.OnItemClickListe
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
         super.onPostCreate(savedInstanceState);
-        // Sync the toggle state after onRestoreInstanceState has occurred.
         mDrawerToggle.syncState();
     }
 
