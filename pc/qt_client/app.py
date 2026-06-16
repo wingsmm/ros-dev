@@ -25,7 +25,7 @@ from PyQt5.QtWidgets import (
 from gateway.json_client import JsonClientBridge, JsonTcpClient, SEND_RATE_HZ
 from mapping.ros_stack import RosStackManager
 from ui.fonts import setup_app_font
-from ui.widgets import ControlPanel, LogPanel, NavPanel, StackPanel, StatusPanel
+from ui.widgets import CameraPanel, ControlPanel, LogPanel, NavPanel, StackPanel, StatusPanel
 
 APP_TITLE = "xtark Console"
 
@@ -157,6 +157,10 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout(right)
         self.status_panel = StatusPanel()
         right_layout.addWidget(self.status_panel)
+        self.camera_panel = CameraPanel()
+        self.camera_panel.log.connect(self._on_log)
+        right_layout.addWidget(self.camera_panel)
+        right_layout.addStretch(1)
         splitter.addWidget(right)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
@@ -199,6 +203,7 @@ class MainWindow(QMainWindow):
         self.port_spin.setValue(port)
         self.control_panel.linear_spin.setValue(linear)
         self.control_panel.angular_spin.setValue(angular)
+        self.camera_panel.load_settings(self.settings)
         map_yaml = str(self.settings.value("map_yaml", ""))
         if map_yaml:
             self.nav_panel.set_map_yaml(map_yaml)
@@ -209,6 +214,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("linear_speed", self.control_panel.linear_speed())
         self.settings.setValue("angular_speed", self.control_panel.angular_speed())
         self.settings.setValue("map_yaml", self.nav_panel.map_yaml())
+        self.camera_panel.save_settings(self.settings)
 
     def _connect(self) -> None:
         host = self.host_edit.text().strip()
@@ -522,6 +528,7 @@ class MainWindow(QMainWindow):
         self._send_timer.stop()
         self._ui_timer.stop()
         self._save_settings()
+        self.camera_panel.shutdown()
         self._stop_motion()
         self.client.disconnect(send_stop=False)
         if self._stack is not None:

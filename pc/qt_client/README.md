@@ -103,6 +103,7 @@ qt_client/
 │   ├── fonts.py
 │   └── widgets/
 │       ├── control_panel.py
+│       ├── camera_panel.py
 │       ├── stack_panel.py
 │       ├── nav_panel.py
 │       ├── status_panel.py

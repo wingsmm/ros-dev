@@ -139,6 +139,8 @@
     <string name="slam_nav_pick_b">Tap a free cell to set B</string>
     <string name="slam_nav_cancel_pick">Cancel pick</string>
     <string name="slam_nav_pick_canceled">Point picking canceled</string>
+    <string name="slam_nav_clear_ab">Clear A/B</string>
+    <string name="slam_nav_ab_cleared">A/B points cleared</string>
     <string name="slam_nav_goal_rejected">Goal rejected: choose a white free area</string>
     <string name="slam_nav_missing_a_b">Set both A and B first</string>
     <string name="slam_nav_goal_sent">Goal sent</string>

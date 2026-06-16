@@ -212,6 +212,7 @@ public class SlamMapFragment extends SimpleFragment {
         Button returnAButton = (Button) floatingNavMenu.findViewById(R.id.slam_return_a_button);
         Button roundTripButton = (Button) floatingNavMenu.findViewById(R.id.slam_round_trip_button);
         Button cancelNavButton = (Button) floatingNavMenu.findViewById(R.id.slam_cancel_nav_button);
+        Button clearAbButton = (Button) floatingNavMenu.findViewById(R.id.slam_clear_ab_button);
         Button recenterButton = (Button) floatingNavMenu.findViewById(R.id.slam_map_recenter_button);
         cancelPickButton = (Button) floatingNavMenu.findViewById(R.id.slam_cancel_pick_button);
         modeAbButton = (Button) floatingNavMenu.findViewById(R.id.slam_mode_ab_button);
@@ -354,6 +355,17 @@ public class SlamMapFragment extends SimpleFragment {
             public void onClick(View v) {
                 AppTrace.i("ui", "cancel pick");
                 cancelPickMode();
+            }
+        });
+
+        clearAbButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!ensureAbMode("clear_AB") || !ensureNoAbNavigationActive("clear_AB")) {
+                    return;
+                }
+                AppTrace.i("ui", "clear AB clicked");
+                clearAbPoints();
             }
         });
 
@@ -749,6 +761,23 @@ public class SlamMapFragment extends SimpleFragment {
         pickMode = PickMode.NONE;
         updatePickModeUi();
         showToast(R.string.slam_nav_pick_canceled);
+    }
+
+    private void clearAbPoints() {
+        pickMode = PickMode.NONE;
+        pointA = null;
+        pointB = null;
+        roundTripState = RoundTripState.IDLE;
+        autoReturnEnabled = false;
+        resetGoalTracking();
+        clearMoveBasePlanOverlay();
+        if (slamMapView != null) {
+            slamMapView.setPointA(null);
+            slamMapView.setPointB(null);
+        }
+        updatePickModeUi();
+        updateNavigationStatusText();
+        showToast(R.string.slam_nav_ab_cleared);
     }
 
     private static double quaternionToYaw(double x, double y, double z, double w) {

@@ -117,6 +117,8 @@
     <string name="slam_nav_pick_b">点击白色可通行区域设置 B</string>
     <string name="slam_nav_cancel_pick">取消选点</string>
     <string name="slam_nav_pick_canceled">已取消选点</string>
+    <string name="slam_nav_clear_ab">清 A/B</string>
+    <string name="slam_nav_ab_cleared">已清除 A/B 点</string>
     <string name="slam_nav_goal_rejected">目标不可用：请选择白色可通行区域</string>
     <string name="slam_nav_missing_a_b">请先设置 A 和 B</string>
     <string name="slam_nav_goal_sent">目标已发送</string>
