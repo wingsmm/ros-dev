@@ -19,6 +19,13 @@ if [ -f /opt/ros/humble/setup.bash ]; then
 fi
 
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
+
+# Qt on WSLg expects XDG_RUNTIME_DIR mode 0700; /mnt/* cannot chmod (drvfs).
+RUNTIME_DIR="/tmp/xtark-qt-runtime-$(id -u)"
+mkdir -p "$RUNTIME_DIR"
+chmod 700 "$RUNTIME_DIR"
+export XDG_RUNTIME_DIR="$RUNTIME_DIR"
+
 export LANG=C.UTF-8
 export LC_ALL=C.UTF-8
 export PYTHONUTF8=1

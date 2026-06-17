@@ -10,12 +10,14 @@ from typing import Any, Dict, Set, Tuple
 from PyQt5.QtCore import QDir, QLockFile, QSettings, QTimer, Qt
 from PyQt5.QtWidgets import (
     QApplication,
+    QDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QProgressDialog,
     QSpinBox,
     QSplitter,
     QVBoxLayout,
@@ -25,6 +27,14 @@ from PyQt5.QtWidgets import (
 from gateway.json_client import JsonClientBridge, JsonTcpClient, SEND_RATE_HZ
 from mapping.ros_stack import RosStackManager
 from ui.fonts import setup_app_font
+from ui.models import RobotStore
+from ui.shell import AppShell
+from ui.pages import (
+    PlaceholderPage,
+    RobotDeletePage,
+    RobotFormPage,
+    RobotListPage,
+)
 from ui.widgets import CameraPanel, ControlPanel, LogPanel, NavPanel, StackPanel, StatusPanel
 
 APP_TITLE = "xtark Console"
@@ -37,14 +47,20 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="JSON/GUI only; disable ROS2 publishing and mapping controls",
     )
+    parser.add_argument(
+        "--legacy",
+        action="store_true",
+        help="Use legacy debug dashboard layout (old MainWindow UI)",
+    )
     return parser.parse_args()
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, enable_ros2: bool = True):
+    def __init__(self, enable_ros2: bool = True, legacy_ui: bool = True):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
         self.resize(980, 820)
+        self._legacy_ui = legacy_ui
 
         self._ros2 = None
         if enable_ros2:
@@ -62,13 +78,18 @@ class MainWindow(QMainWindow):
             self._ros2_fail_reason = "已禁用 (--no-ros)"
 
         self.settings = QSettings("xtark", "json_debug_client")
-        self.bridge = JsonClientBridge(self)
-        self.client = JsonTcpClient(self.bridge)
-        self.bridge.log_line.connect(self._on_log)
-        self.bridge.message.connect(self._on_message)
-        self.bridge.connection_changed.connect(self._on_connection)
-
-        self._stack = RosStackManager(log=self._on_log) if enable_ros2 else None
+        # Phase 0 shell mode: do not touch JSON/ROS stack logic.
+        if self._legacy_ui:
+            self.bridge = JsonClientBridge(self)
+            self.client = JsonTcpClient(self.bridge)
+            self.bridge.log_line.connect(self._on_log)
+            self.bridge.message.connect(self._on_message)
+            self.bridge.connection_changed.connect(self._on_connection)
+            self._stack = RosStackManager(log=self._on_log) if enable_ros2 else None
+        else:
+            self.bridge = None
+            self.client = None
+            self._stack = None
 
         self._pressed_keys: Set[int] = set()
         self._active_velocity: Tuple[float, float, float] = (0.0, 0.0, 0.0)
@@ -76,14 +97,15 @@ class MainWindow(QMainWindow):
         self._nav_cmd_paused = False
         self._cleanup_done = False
 
-        self._send_timer = QTimer(self)
-        self._send_timer.setInterval(int(1000 / SEND_RATE_HZ))
-        self._send_timer.timeout.connect(self._tick_send)
+        if self._legacy_ui:
+            self._send_timer = QTimer(self)
+            self._send_timer.setInterval(int(1000 / SEND_RATE_HZ))
+            self._send_timer.timeout.connect(self._tick_send)
 
-        self._ui_timer = QTimer(self)
-        self._ui_timer.setInterval(200)
-        self._ui_timer.timeout.connect(self._refresh_status_labels)
-        self._ui_timer.start()
+            self._ui_timer = QTimer(self)
+            self._ui_timer.setInterval(200)
+            self._ui_timer.timeout.connect(self._refresh_status_labels)
+            self._ui_timer.start()
 
         if self._ros2 is not None:
             self._ros_timer = QTimer(self)
@@ -98,7 +120,9 @@ class MainWindow(QMainWindow):
             self._stack_timer.start()
 
         self._build_ui()
-        self._load_settings()
+        # Shell UI does not own legacy controls yet; do not touch legacy settings.
+        if self._legacy_ui:
+            self._load_settings()
 
     def _ros2_spin(self) -> None:
         if self._ros2 is None:
@@ -111,7 +135,156 @@ class MainWindow(QMainWindow):
             if hasattr(self, "_ros_timer"):
                 self._ros_timer.stop()
 
+    def _refresh_robot_list(self) -> None:
+        if not hasattr(self, "_robot_list_page"):
+            return
+        self._robot_list_page.set_robots(self._robot_store.robots())
+
+    def _open_add_robot_dialog(self) -> None:
+        form = RobotFormPage()
+        form.prepare_add()
+        self._show_robot_form_dialog(form, "添加/编辑机器人")
+
+    def _open_edit_robot_dialog(self, robot_id: str) -> None:
+        robot = self._robot_store.get(robot_id)
+        if robot is None:
+            return
+        form = RobotFormPage()
+        form.prepare_edit(robot)
+        self._show_robot_form_dialog(form, "添加/编辑机器人")
+
+    def _open_delete_robot_dialog(self, robot_id: str) -> None:
+        robot = self._robot_store.get(robot_id)
+        if robot is None:
+            return
+        page = RobotDeletePage()
+        page.prepare(robot)
+
+        dialog = self._make_modal_dialog("删除", width=520)
+        dialog.layout().addWidget(page)
+        page.cancel_requested.connect(dialog.reject)
+        page.delete_confirmed.connect(
+            lambda rid: self._delete_robot_from_dialog(rid, dialog)
+        )
+        self._exec_modal_dialog(dialog)
+
+    def _make_modal_dialog(self, title: str, width: int = 720) -> QDialog:
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setWindowModality(Qt.WindowModal)
+        dialog.setModal(True)
+        if width > 0:
+            dialog.setMinimumWidth(width)
+        dialog.setStyleSheet("QDialog { background: #ffffff; }")
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        return dialog
+
+    def _exec_modal_dialog(self, dialog: QDialog) -> int:
+        scrim = None
+        if hasattr(self, "shell"):
+            scrim = QWidget(self.shell)
+            scrim.setGeometry(self.shell.rect())
+            scrim.setStyleSheet("background: rgba(0, 0, 0, 0.55);")
+            scrim.show()
+            scrim.raise_()
+        self._resize_and_center_dialog(dialog)
+        try:
+            return dialog.exec_()
+        finally:
+            if scrim is not None:
+                scrim.hide()
+                scrim.deleteLater()
+
+    def _resize_and_center_dialog(self, dialog: QDialog) -> None:
+        dialog.adjustSize()
+        parent_geo = self.frameGeometry()
+        dialog_geo = dialog.frameGeometry()
+        dialog.move(parent_geo.center() - dialog_geo.center())
+
+    def _show_robot_form_dialog(self, form: RobotFormPage, title: str) -> None:
+        dialog = self._make_modal_dialog(title, width=0)
+        dialog.layout().addWidget(form)
+        form.cancel_requested.connect(dialog.reject)
+        form.save_requested.connect(
+            lambda robot: self._save_robot_from_dialog(robot, dialog)
+        )
+        self._exec_modal_dialog(dialog)
+
+    def _save_robot_from_dialog(self, robot, dialog: QDialog) -> None:
+        self._on_robot_form_saved(robot)
+        dialog.accept()
+
+    def _delete_robot_from_dialog(self, robot_id: str, dialog: QDialog) -> None:
+        self._on_robot_delete_confirmed(robot_id)
+        dialog.accept()
+
+    def _on_robot_selected(self, robot_id: str) -> None:
+        robot = self._robot_store.get(robot_id)
+        if robot is None:
+            return
+        progress = QProgressDialog(
+            f"正在连接 {robot.name}（{robot.master_uri}）",
+            "",
+            0,
+            0,
+            self,
+        )
+        progress.setWindowTitle("正在连接")
+        progress.setCancelButton(None)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(True)
+        progress.show()
+        QTimer.singleShot(900, progress.close)
+        QTimer.singleShot(
+            920,
+            lambda: self._on_log(
+                f"Robot connect placeholder: {robot.name} ({robot.master_uri})"
+            ),
+        )
+
+    def _on_robot_form_saved(self, robot) -> None:
+        if self._robot_store.get(robot.id):
+            self._robot_store.update(robot)
+            self._on_log(f"Robot updated: {robot.name}")
+        else:
+            self._robot_store.add(robot)
+            self._on_log(f"Robot added: {robot.name}")
+        self._refresh_robot_list()
+
+    def _on_robot_delete_confirmed(self, robot_id: str) -> None:
+        robot = self._robot_store.get(robot_id)
+        if robot is None:
+            return
+        self._robot_store.remove(robot_id)
+        self._on_log(f"Robot deleted: {robot.name}")
+        self._refresh_robot_list()
+
     def _build_ui(self) -> None:
+        if not self._legacy_ui:
+            self._robot_store = RobotStore()
+            robot_list = RobotListPage()
+            pages = {
+                "robot_list": robot_list,
+                "help": PlaceholderPage("帮助"),
+                "about": PlaceholderPage("关于"),
+            }
+            shell = AppShell(pages=pages)
+            shell.log.connect(self._on_log)
+            self.shell = shell
+            self._robot_list_page = robot_list
+            self._refresh_robot_list()
+
+            shell.topbar.add_clicked.connect(self._open_add_robot_dialog)
+            robot_list.robot_selected.connect(self._on_robot_selected)
+            robot_list.robot_edit_requested.connect(self._open_edit_robot_dialog)
+            robot_list.robot_delete_requested.connect(self._open_delete_robot_dialog)
+
+            self.setCentralWidget(shell)
+            return
+
+        # Legacy debug dashboard layout (original UI).
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
@@ -209,6 +382,8 @@ class MainWindow(QMainWindow):
             self.nav_panel.set_map_yaml(map_yaml)
 
     def _save_settings(self) -> None:
+        if not self._legacy_ui:
+            return
         self.settings.setValue("host", self.host_edit.text().strip())
         self.settings.setValue("port", self.port_spin.value())
         self.settings.setValue("linear_speed", self.control_panel.linear_speed())
@@ -256,7 +431,11 @@ class MainWindow(QMainWindow):
 
     def _on_log(self, text: str) -> None:
         stamp = datetime.now().strftime("%H:%M:%S")
-        self.log_panel.append("[{stamp}] {text}".format(stamp=stamp, text=text))
+        line = "[{stamp}] {text}".format(stamp=stamp, text=text)
+        if hasattr(self, "log_panel"):
+            self.log_panel.append(line)
+        else:
+            print(line)
 
     def _on_message(self, msg: Dict[str, Any]) -> None:
         msg_type = msg.get("type")
@@ -376,7 +555,7 @@ class MainWindow(QMainWindow):
         self._nav_cmd_paused = True
         if self._ros2 is not None:
             self._ros2.set_nav_cmd_enabled(False)
-        if self.client.connected:
+        if self.client is not None and self.client.connected:
             self.client.send_cmd_vel(0.0, 0.0, 0.0)
         if self._stack is not None:
             self._stack.cancel_navigation()
@@ -405,13 +584,18 @@ class MainWindow(QMainWindow):
     def _stop_motion(self) -> None:
         self._hold_from_button = False
         self._active_velocity = (0.0, 0.0, 0.0)
-        if self.client.connected:
+        if self.client is not None and self.client.connected:
             self.client.send_cmd_vel(0.0, 0.0, 0.0)
-        if not self._pressed_keys:
+        if not self._pressed_keys and hasattr(self, "_send_timer"):
             self._send_timer.stop()
 
     def _ensure_send_timer(self) -> None:
-        if self.client.connected and not self._send_timer.isActive():
+        if (
+            self.client is not None
+            and self.client.connected
+            and hasattr(self, "_send_timer")
+            and not self._send_timer.isActive()
+        ):
             self._send_timer.start()
 
     def _tick_send(self) -> None:
@@ -452,6 +636,8 @@ class MainWindow(QMainWindow):
         return lx, ly, az
 
     def _refresh_status_labels(self) -> None:
+        if not self._legacy_ui:
+            return
         last_send = "-"
         if self.client.last_send_time > 0:
             last_send = datetime.fromtimestamp(self.client.last_send_time).strftime(
@@ -469,6 +655,9 @@ class MainWindow(QMainWindow):
         )
 
     def keyPressEvent(self, event):
+        if not self._legacy_ui:
+            super().keyPressEvent(event)
+            return
         if event.isAutoRepeat():
             event.accept()
             return
@@ -503,6 +692,9 @@ class MainWindow(QMainWindow):
         super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event):
+        if not self._legacy_ui:
+            super().keyReleaseEvent(event)
+            return
         if event.isAutoRepeat():
             event.accept()
             return
@@ -525,12 +717,15 @@ class MainWindow(QMainWindow):
             self._ros_timer.stop()
         if hasattr(self, "_stack_timer"):
             self._stack_timer.stop()
-        self._send_timer.stop()
-        self._ui_timer.stop()
+        if self._legacy_ui:
+            self._send_timer.stop()
+            self._ui_timer.stop()
         self._save_settings()
-        self.camera_panel.shutdown()
-        self._stop_motion()
-        self.client.disconnect(send_stop=False)
+        if self._legacy_ui:
+            self.camera_panel.shutdown()
+            self._stop_motion()
+        if self.client is not None:
+            self.client.disconnect(send_stop=False)
         if self._stack is not None:
             self._stack.cancel_navigation()
             self._stack.stop_all()
@@ -555,7 +750,11 @@ def main() -> int:
     if not lock.tryLock(100):
         QMessageBox.warning(None, APP_TITLE, "xtark Console is already running.")
         return 1
-    window = MainWindow(enable_ros2=not args.no_ros)
+    if args.legacy:
+        window = MainWindow(enable_ros2=not args.no_ros, legacy_ui=True)
+    else:
+        # Shell phase 0: do not touch ROS2/JSON controls yet.
+        window = MainWindow(enable_ros2=False, legacy_ui=False)
     app.aboutToQuit.connect(window.cleanup)
     signal.signal(signal.SIGINT, lambda *_args: window.close())
     signal.signal(signal.SIGTERM, lambda *_args: window.close())
