@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from PyQt5.QtWidgets import QVBoxLayout, QWidget
 
 from core import RobotSession
+from core.robot_state import RobotConnectionState
 from ui.models.robot_info import RobotInfo
 from ui.widgets.camera_toolbar import CameraToolbar
 from ui.widgets.camera_viewport import CameraViewport
@@ -13,17 +14,17 @@ from ui.widgets.manual_control_strip import ManualControlStrip
 from ui.widgets.mjpeg_stream import MjpegStreamController
 from ui.widgets.robot_hud_bar import RobotHudBar
 
+# Android/ROS contract vs Qt/Browser HTTP preview (see xtark/scripts/camera_stack.sh).
+ANDROID_CAMERA_TOPIC = "/image_raw/compressed"
+QT_MJPEG_TOPIC = "/camera/image_raw"
+
 
 def default_mjpeg_url(robot: RobotInfo) -> str:
     if robot.camera_url.strip():
         return robot.camera_url.strip()
     parsed = urlparse(robot.master_uri)
     host = parsed.hostname or "192.168.1.169"
-    # The Android/ROS contract topic is /image_raw/compressed, but the
-    # temporary HTTP/MJPEG path is served by web_video_server from the
-    # republished raw image topic, matching the legacy CameraPanel default.
-    topic = "/camera/image_raw"
-    return f"http://{host}:8080/stream?topic={topic}"
+    return f"http://{host}:8080/stream?topic={QT_MJPEG_TOPIC}"
 
 
 class CameraPage(QWidget):
@@ -35,7 +36,7 @@ class CameraPage(QWidget):
     ):
         super().__init__(parent)
         self._robot = robot
-        self._session = session  # reserved for ros1_gateway / ros2_native camera backend
+        self._session = session
         self._stream = MjpegStreamController(self)
         self._hud = RobotHudBar()
         self._toolbar = CameraToolbar()
@@ -65,27 +66,44 @@ class CameraPage(QWidget):
         self._stream.connected_changed.connect(self._on_connected)
         self._stream.fps_changed.connect(self._toolbar.set_fps)
 
-        self._hud.emergency_stop_requested.connect(self._manual.stop)
-        self._manual.stop_requested.connect(
-            lambda: self._hud.set_motion("0.00", "0.00")
-        )
-        self._manual.velocity_requested.connect(self._on_velocity_placeholder)
+        self._manual.velocity_requested.connect(self._on_velocity_requested)
+        self._manual.stop_requested.connect(self._on_stop_requested)
+        self._hud.emergency_stop_requested.connect(self._on_emergency_stop)
 
     def _apply_robot_defaults(self) -> None:
         url = default_mjpeg_url(self._robot)
         self._toolbar.set_url(url)
-        self._toolbar.set_topic_hint(self._robot.camera_topic)
-        self._hud.set_connection(True, self._robot.name)
-        self._hud.set_motion("0.00", "0.00")
-        self._hud.set_pose("(x, y, yaw) 占位")
+        self._toolbar.set_topic_hint(
+            f"Android {ANDROID_CAMERA_TOPIC} | 预览 {QT_MJPEG_TOPIC}"
+        )
+        linear = (
+            self._robot.manual_linear_speed
+            if self._robot.manual_linear_speed is not None
+            else 0.10
+        )
+        angular = (
+            self._robot.manual_angular_speed
+            if self._robot.manual_angular_speed is not None
+            else 0.20
+        )
+        self._manual.set_speeds(linear=linear, angular=angular)
+        self._refresh_hud_connection()
+
+    def _refresh_hud_connection(self) -> None:
+        if self._session is not None and self._session.is_connected():
+            self._hud.set_connection(True, self._robot.name)
+        elif self._session is not None and self._session.state == RobotConnectionState.FAILED:
+            self._hud.set_connection(False, self._session.last_error or "连接失败")
+        else:
+            self._hud.set_connection(False, self._robot.name)
 
     def on_page_activated(self) -> None:
-        """Called by RobotWorkspacePage when this tab becomes visible."""
+        """Auto-connect MJPEG preview when entering camera tab (MVP)."""
+        self._refresh_hud_connection()
         if not self._stream.is_streaming():
             self._on_connect()
 
     def on_page_deactivated(self) -> None:
-        """Called by RobotWorkspacePage when leaving this tab; stops MJPEG only."""
         self._stream.disconnect()
 
     def _on_connect(self) -> None:
@@ -116,8 +134,30 @@ class CameraPage(QWidget):
             if self._stream.stats.status == "No Camera":
                 self._viewport.set_empty()
 
-    def _on_velocity_placeholder(self, lx: float, ly: float, az: float) -> None:
-        self._hud.set_motion(f"{lx:.2f}", f"{az:.2f}")
+    def _on_velocity_requested(self, lx: float, ly: float, az: float) -> None:
+        if self._session is None:
+            self._hud.set_motion(f"{lx:.2f}", f"{az:.2f}")
+            return
+        if self._session.send_velocity(lx, ly, az):
+            self._hud.set_motion(f"{lx:.2f}", f"{az:.2f}")
+        elif self._session.last_error:
+            self._hud.set_connection(self._session.is_connected(), self._session.last_error)
+
+    def _on_stop_requested(self) -> None:
+        if self._session is not None:
+            self._session.stop_motion()
+        self._hud.set_motion("0.00", "0.00")
+
+    def _on_emergency_stop(self) -> None:
+        if self._session is not None:
+            self._session.emergency_stop()
+        self._manual.stop()
+        self._hud.set_motion("0.00", "0.00")
+        if self._session is not None:
+            self._hud.set_connection(
+                self._session.is_connected(),
+                "急停" if not self._session.manual_control_enabled else self._robot.name,
+            )
 
     def shutdown(self) -> None:
         self._stream.shutdown()

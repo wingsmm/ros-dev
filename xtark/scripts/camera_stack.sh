@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# camera_stack.sh: minimal camera-only entrypoint for xtark robot
+# camera_stack.sh: shared robot camera entrypoint (Android ROS + Qt/Browser HTTP)
 #
-# Responsibilities:
-# - start: roscore (if needed) + xtark_camera.launch
-# - stop: stop camera roslaunch + camera nodes
-# - status: show process + topic diagnostics
+# Android observation:
+#   /image_raw/compressed  (sensor_msgs/CompressedImage)
+# Qt / Browser preview:
+#   web_video_server http://<HOST>:8080/stream?topic=/camera/image_raw
 #
-# Copied to robot:
-#   /home/xtark/ros_ws/scripts/camera_stack.sh
+# Copied to robot: /home/xtark/ros_ws/scripts/camera_stack.sh
 
 HOST_IP="${HOST_IP:-192.168.1.169}"
 export ROS_MASTER_URI="${ROS_MASTER_URI:-http://${HOST_IP}:11311}"
@@ -32,7 +31,8 @@ Usage: camera_stack.sh <command>
 Commands:
   start   Start roscore (if needed) + xtark camera only
   stop    Stop camera roslaunch + nodes
-  status  Show camera topic/process diagnostics
+  status  Show Android/Qt camera topic and HTTP diagnostics
+  urls    Print Android ROS topic and Qt/Browser camera URLs
   logs    Tail recent camera log
 
 Env:
@@ -86,7 +86,7 @@ start_roscore_if_needed() {
     return 0
   fi
 
-mkdir -p "$LOG_DIR"
+  mkdir -p "$LOG_DIR"
   echo "[INFO] Starting roscore (ROS_IP=$ROS_IP)"
   nohup roscore >"$LOG_DIR/roscore.log" 2>&1 &
   echo "[OK] roscore started pid=$!"
@@ -121,14 +121,48 @@ status() {
   source_ros
   echo "ROS_MASTER_URI=$ROS_MASTER_URI"
   echo "ROS_IP=$ROS_IP"
+  echo "ANDROID_ROS_TOPIC=/image_raw/compressed"
+  echo "QT_MJPEG_URL=http://$HOST_IP:8080/stream?topic=/camera/image_raw"
+  echo "BROWSER_SNAPSHOT_URL=http://$HOST_IP:8080/snapshot?topic=/camera/image_raw"
   echo "---11311---"
   if is_listening_11311; then echo "listening"; else echo "closed"; fi
+  echo "---8080(web_video_server)---"
+  if (ss -lnt 2>/dev/null || netstat -lnt 2>/dev/null) | grep -q ':8080'; then
+    echo "listening"
+  else
+    echo "closed"
+  fi
   echo "---processes---"
   pgrep -af "roslaunch $CAMERA_PKG $CAMERA_LAUNCH|uvc_camera_node|image_transport/republish|web_video_server" || true
   echo "---topics(image)---"
   rostopic list 2>/dev/null | grep -i image || echo "(no image topics)"
   echo "---/image_raw/compressed---"
   rostopic info /image_raw/compressed 2>/dev/null || true
+  echo "---/camera/image_raw---"
+  rostopic info /camera/image_raw 2>/dev/null || true
+  if command -v curl >/dev/null 2>&1; then
+    echo "---HTTP snapshot probe---"
+    curl -fsS --max-time 2 -o /dev/null \
+      -w 'http_code=%{http_code} content_type=%{content_type}\n' \
+      "http://$HOST_IP:8080/snapshot?topic=/camera/image_raw" || true
+  fi
+}
+
+urls() {
+  cat <<EOF
+Android / ROS camera topic:
+  /image_raw/compressed
+
+Qt / Browser MJPEG preview:
+  http://$HOST_IP:8080/stream?topic=/camera/image_raw
+
+Browser snapshot probe:
+  http://$HOST_IP:8080/snapshot?topic=/camera/image_raw
+
+Note:
+  Keep this script neutral. It starts the robot camera stack for both
+  Android observation and Qt preview; do not make it Qt-only.
+EOF
 }
 
 logs() {
@@ -141,8 +175,8 @@ case "$cmd" in
   start) start ;;
   stop) stop ;;
   status) status ;;
+  urls) urls ;;
   logs) logs ;;
   -h|--help|help|"") usage ;;
   *) echo "Unknown command: $cmd"; usage; exit 1 ;;
 esac
-

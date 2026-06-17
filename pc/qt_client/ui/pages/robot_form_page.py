@@ -201,6 +201,7 @@ class RobotFormPage(QWidget):
             robot_id = self._robot_id
         else:
             robot_id = RobotInfo.new_id()
+        original = self._original_robot
         robot = RobotInfo(
             id=robot_id,
             name=name,
@@ -215,5 +216,10 @@ class RobotFormPage(QWidget):
             invert_x=self.invert_x_checkbox.isChecked(),
             invert_y=self.invert_y_checkbox.isChecked(),
             invert_angular_velocity=self.invert_angular_checkbox.isChecked(),
+            backend_type=original.backend_type if original else "mock",
+            gateway_uri=original.gateway_uri if original else "",
+            camera_mode=original.camera_mode if original else "mjpeg",
+            camera_url=original.camera_url if original else "",
+            ros_domain_id=original.ros_domain_id if original else 0,
         )
         self.save_requested.emit(robot)

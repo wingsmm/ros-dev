@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from .robot_info import RobotInfo, default_robot
+from .env_config import apply_env_overrides
 
 
 def default_store_path() -> Path:
@@ -60,17 +61,17 @@ class RobotStore:
             self._robots = [default_robot()]
             return
         if not self._path.is_file():
-            self._robots = [default_robot()]
+            self._robots = [apply_env_overrides(default_robot())]
             self.save()
             return
         try:
             raw = json.loads(self._path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            self._robots = [default_robot()]
+            self._robots = [apply_env_overrides(default_robot())]
             self.save()
             return
         if not isinstance(raw, list):
-            self._robots = [default_robot()]
+            self._robots = [apply_env_overrides(default_robot())]
             self.save()
             return
         robots: List[RobotInfo] = []
@@ -82,10 +83,17 @@ class RobotStore:
             except (TypeError, ValueError):
                 continue
         if not robots:
-            self._robots = [default_robot()]
+            self._robots = [apply_env_overrides(default_robot())]
             self.save()
             return
-        self._robots = robots
+        # Apply .env overrides only to the default robot entry (local runtime preference).
+        patched: List[RobotInfo] = []
+        for robot in robots:
+            if robot.id == "xtark-default":
+                patched.append(apply_env_overrides(robot))
+            else:
+                patched.append(robot)
+        self._robots = patched
 
     def save(self) -> None:
         try:

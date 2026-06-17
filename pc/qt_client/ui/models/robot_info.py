@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import asdict, dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 @dataclass
@@ -21,10 +21,12 @@ class RobotInfo:
     invert_y: bool = False
     invert_angular_velocity: bool = False
     backend_type: str = "mock"
-    gateway_uri: str = ""
+    gateway_uri: str = ""  # json_gateway: host:port; ros1_gateway: HTTP gateway URL
     camera_mode: str = "mjpeg"
     camera_url: str = ""
     ros_domain_id: int = 0
+    manual_linear_speed: Optional[float] = None
+    manual_angular_speed: Optional[float] = None
 
     @staticmethod
     def new_id() -> str:

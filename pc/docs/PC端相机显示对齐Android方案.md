@@ -1,10 +1,188 @@
 # PC 端相机显示对齐 Android 方案
 
-最后更新：2026-06-16
+最后更新：2026-06-17
 
 目标：在 `pc/qt_client` 上实现与 Android（RobotCA）相机页**同等语义**的“看相机”能力：订阅同一类话题（`/image_raw/compressed`，`sensor_msgs/CompressedImage`），JPEG 解码显示，支持无图提示与话题配置。
 
-本文只做方案设计与落地步骤说明，不在此文档中直接修改代码。
+本文同时记录方案设计、阶段落地状态和后续演进边界。
+
+## 0. 当前落地状态（2026-06-17）
+
+Phase 0 **HTTP/MJPEG 看图方案已落地并实机出图**。当前 PC Qt 新版 Shell 在进入机器人工作区后，可切换到“摄像头”页并自动连接机器人端 `web_video_server`。
+
+当前已实现代码结构：
+
+```text
+CameraPage
+  ├─ RobotHudBar        连接/速度/位姿/急停占位
+  ├─ CameraToolbar      URL、连接/断开/重连、FPS、状态
+  ├─ CameraViewport     图像显示、加载、无图、中断状态
+  └─ ManualControlStrip PC 化按钮遥控占位
+
+MjpegStreamController
+  ├─ CameraPage         新版机器人工作区摄像头页
+  └─ CameraPanel        --legacy 旧调试台相机面板
+```
+
+当前默认 HTTP/MJPEG URL：
+
+```text
+http://192.168.1.169:8080/stream?topic=/camera/image_raw
+```
+
+注意边界：
+
+- Android / ROS 语义契约仍是 `/image_raw/compressed`。
+- 当前 PC Phase 0 走 `web_video_server`，默认拉 `/camera/image_raw`，用于“先能稳定看图”。
+- 长期方案仍回到 `ros1_bridge` 或后续 backend，让 Qt 按 ROS 话题模型订阅 `/image_raw/compressed`。
+
+## 0.1 下一步：观察优先的摄像头页远程控制桥接方案
+
+目标：先用同一套机器人端相机脚本同时支撑 Android 观察和 Qt 预览，再决定 Qt 如何抄 Android 的总览/摄像头/控制体验。现阶段不要把摄像头页做得过于“产品定稿”，远程控制只接统一桥接骨架，不在页面里写死 ROS / JSON / socket。
+
+统一路径：
+
+```text
+CameraPage / OverviewPage / RobotControlPage
+  -> ManualControlStrip
+  -> RobotSession
+  -> RobotBackend
+  -> 具体桥接实现
+```
+
+短期桥接选择：
+
+```text
+相机画面：HTTP/MJPEG -> MjpegStreamController
+远程控制：RobotSession -> JsonGatewayBackend -> xtark JSON TCP
+状态/HUD：先 mock/占位，后续接 JSON telemetry 或 ROS backend
+```
+
+机器人端日常脚本：
+
+```bash
+~/ros_ws/scripts/robot_stack.sh start
+~/ros_ws/scripts/robot_stack.sh status
+~/ros_ws/scripts/robot_stack.sh stop
+```
+
+`robot_stack.sh start` 一次拉起：
+
+- roscore
+- 底盘 bringup
+- 相机
+- JSON adapter（Qt 控车用 8765）
+
+如果只观察相机、不希望底盘启动，再单独用：
+
+```bash
+~/ros_ws/scripts/camera_stack.sh start
+~/ros_ws/scripts/camera_stack.sh status
+~/ros_ws/scripts/camera_stack.sh urls
+```
+
+脚本分工：
+
+- `robot_stack.sh`：Android + Qt 控车/看图最小全栈，一把 start/stop/status。
+- `camera_stack.sh`：只启动相机链路，服务 Android 观察和 Qt/浏览器预览。
+
+原则：**日常使用不搅复杂子命令；控车用 robot_stack，相机观察用 camera_stack。**
+
+长期桥接选择：
+
+```text
+RobotBackend
+  ├─ MockRobotBackend       本地 UI 验证，不动真车
+  ├─ JsonGatewayBackend     复用 legacy JSON 控制链路，短期真车控制
+  ├─ Ros1GatewayBackend     机器人端应用层 gateway，不把 11311 当应用网关
+  └─ Ros2NativeBackend      WSL2/ROS2 成熟后原生发布/订阅
+```
+
+### 给实施 agent 的任务书：CameraPage 远程控制
+
+背景：
+
+- `CameraPage` 已能通过 HTTP/MJPEG 显示画面。
+- `ManualControlStrip` 已有前进、后退、左移、右移、左转、右转、停止按钮，但当前只更新 HUD 占位，不发真控制。
+- 既有 legacy 调试台有 JSON 控制链路；新版页面不能直接复制 legacy 大窗口逻辑，也不能让页面直接发 ROS。
+
+目标：
+
+- 让 `CameraPage` 的手动遥控按钮通过统一 `RobotSession / RobotBackend` 发控制。
+- 先实现 mock 行为和接口，再接 `JsonGatewayBackend`。
+- 保证急停、停止、断连保护集中在 session/backend 层。
+- UI 不要做成最终形态，先保留足够空间观察 Android 后再调整布局。
+
+建议新增/修改文件：
+
+```text
+pc/qt_client/backends/base.py
+pc/qt_client/backends/mock_backend.py
+pc/qt_client/backends/json_gateway_backend.py
+pc/qt_client/backends/__init__.py
+pc/qt_client/core/robot_session.py
+pc/qt_client/ui/pages/camera_page.py
+pc/qt_client/ui/widgets/manual_control_strip.py
+```
+
+接口建议：
+
+```python
+class RobotBackend:
+    def send_velocity(self, linear_x: float, linear_y: float, angular_z: float) -> None:
+        ...
+
+    def stop_motion(self) -> None:
+        ...
+
+    def emergency_stop(self) -> None:
+        ...
+```
+
+`RobotSession` 负责安全入口：
+
+```text
+send_velocity()
+  - 未连接则拒绝
+  - 手动控制禁用则拒绝
+  - 参数做限幅
+  - 转发 backend.send_velocity()
+
+stop_motion()
+  - 总是尽量发 0 速度
+
+emergency_stop()
+  - 发 0 速度
+  - 后续可扩展取消导航/禁用手动
+```
+
+`CameraPage` 只做信号连接：
+
+```text
+ManualControlStrip.velocity_requested -> RobotSession.send_velocity
+ManualControlStrip.stop_requested     -> RobotSession.stop_motion
+RobotHudBar.emergency_stop_requested  -> RobotSession.emergency_stop
+```
+
+不要做：
+
+- 不要在 `CameraPage` 里 import ROS。
+- 不要在 `CameraPage` 里直接打开 TCP socket。
+- 不要把 legacy `LegacyWindow` 整块逻辑搬进新版页面。
+- 不要绕过 `RobotSession` 发速度。
+- 不要默认启用真实控制；先 mock 验证 UI，再显式切到 `json_gateway`。
+- 不要把机器人端 `camera_stack.sh` 改成全栈控车脚本；控车统一用 `robot_stack.sh`。
+- 不要急着复刻 Android 摇杆/总览最终布局；先观察 Android 行为，再按组件边界抄。
+
+验收标准：
+
+- `./run.sh --no-ros` 下 mock backend 可打印/记录速度请求，不崩溃。
+- 进入摄像头页后画面仍自动显示。
+- 按住前进/后退/左移/右移/左转/右转，Qt 以约 10Hz 持续通过 session/backend 发送速度请求。
+- 松开运动按钮或点击停止，速度归零，并走 `stop_motion()`。
+- 点击急停，速度归零，并走 `emergency_stop()`。
+- 断连或未连接时，控制请求被拒绝并有可见状态/日志。
+- legacy `--legacy` 行为不被破坏。
 
 ---
 
@@ -19,8 +197,9 @@
 
 ### 1.2 PC 端现状（`pc/qt_client`）
 
-- 当前 `qt_client` 主要职责：GUI + TCP JSON（8765）控制底盘；同时在 WSL2 发布 ROS2（`/odom_base`、TF、`/cmd_vel` → JSON）。
-- 当前未实现相机显示链路（未订阅 ROS1 `/image_raw/compressed`）。
+- 当前 `qt_client` 默认进入新版机器人 Shell：机器人选择、添加/编辑/删除、机器人工作区、侧栏导航。
+- `--legacy` 保留旧调试台：GUI + TCP JSON（8765）控制底盘，同时在 WSL2 发布 ROS2（`/odom_base`、TF、`/cmd_vel` → JSON）。
+- 当前已实现 Phase 0 HTTP/MJPEG 摄像头页；尚未实现 ROS2 侧 `/image_raw/compressed` 订阅显示。
 
 ### 1.3 核心矛盾
 
@@ -49,7 +228,7 @@ flowchart LR
   end
 
   subgraph PCAPP["pc/qt_client (Qt + rclpy)"]
-    Panel["CameraPanel\nQLabel/QImage"]
+    Panel["CameraPage / CameraPanel\nQLabel/QImage"]
     PanelSub["CameraSubscriber\n订阅 /image_raw/compressed"]
     PanelSub --> Panel
   end
@@ -104,7 +283,7 @@ xtark /dev/video0
   -> /camera/image_raw
   -> web_video_server
   -> HTTP MJPEG
-  -> qt_client CameraPanel
+  -> qt_client CameraPage / CameraPanel
 ```
 
 最小可用 URL：
@@ -221,8 +400,11 @@ curl -I "http://192.168.1.169:8080/snapshot?topic=/camera/image_raw"
 http://192.168.1.169:8080/stream?topic=/camera/image_raw
 ```
 
-3. **qt_client 新增 HTTP CameraPanel**
+3. **qt_client 新增 HTTP/MJPEG 相机 UI**
 
+- 新版工作区：`CameraPage`
+- legacy 调试台：`CameraPanel`
+- 共享拉流组件：`MjpegStreamController`
 - 默认 URL：`http://192.168.1.169:8080/stream?topic=/camera/image_raw`
 - 后台线程拉 MJPEG，不阻塞 Qt 主线程
 - 解码 JPEG 帧为 `QImage` / `QPixmap`
@@ -298,11 +480,13 @@ ros2 run ros1_bridge dynamic_bridge
 
 ---
 
-## 8. 给实施 agent 的任务书（Phase 0）
+## 8. 给实施 agent 的任务书（Phase 0，历史记录）
+
+> 状态：已完成。当前段落保留为实现来源和验收依据，后续不要再按“未实现”理解。
 
 ### 背景
 
-当前 WSL2 环境暂不优先处理 `ros1_bridge` 安装问题。机器人端 `xtark_camera.launch` 已启动 `uvc_camera_node`、`image_transport republish` 和 `web_video_server`；Android 侧已能通过 ROS `/image_raw/compressed` 看图。PC 端 `pc/qt_client` 当前还没有相机显示。
+当前 WSL2 环境暂不优先处理 `ros1_bridge` 安装问题。机器人端 `xtark_camera.launch` 已启动 `uvc_camera_node`、`image_transport republish` 和 `web_video_server`；Android 侧已能通过 ROS `/image_raw/compressed` 看图。PC 端 `pc/qt_client` 已完成 HTTP/MJPEG 相机显示 MVP。
 
 ### 目标
 
@@ -455,4 +639,3 @@ Xtark 的 Android 约定是：
 ---
 
 如果你告诉我：**目标设备是什么（Linux 还是 Android/盒子）、相机型号（UVC 还是 Orbbec 深度）、你最终要 ROS1 还是 ROS2**，我可以把上面步骤缩成一条具体的“按命令走”的路径（每一步用哪个包、跑哪些命令、预期看到什么 topic）。
-

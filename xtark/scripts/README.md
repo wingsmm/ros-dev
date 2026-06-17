@@ -14,8 +14,20 @@ These scripts are copied to the robot under:
 
 | Script | Responsibility |
 |--------|----------------|
+| `robot_stack.sh` | Simple one-command stack for Android observation + Qt preview/control: roscore, bringup, camera, and JSON adapter. |
 | `android_stack.sh` | Starts the Android validation ROS stack: roscore, bringup, camera, gmapping, move_base, `/robot_pose_in_map`, and speed sync. |
+| `camera_stack.sh` | Starts only the shared camera path for Android ROS topic and Qt/browser MJPEG preview. |
 | `json_stack.sh` | Starts the PC/Qt JSON bridge validation stack: bringup plus `xtark_json_bridge`. |
+
+Recommended daily command:
+
+```bash
+~/ros_ws/scripts/robot_stack.sh start
+~/ros_ws/scripts/robot_stack.sh status
+~/ros_ws/scripts/robot_stack.sh stop
+```
+
+Use `camera_stack.sh` only when you want to observe camera without starting the base.
 
 ## Windows-Side Remote Helpers
 

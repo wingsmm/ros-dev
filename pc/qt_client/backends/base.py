@@ -20,8 +20,21 @@ class RobotBackend(ABC):
     def is_connected(self) -> bool:
         pass
 
-    def send_cmd_vel(self, linear_x: float, linear_y: float, angular_z: float) -> None:
+    def send_velocity(
+        self, linear_x: float, linear_y: float, angular_z: float
+    ) -> None:
+        self.send_cmd_vel(linear_x, linear_y, angular_z)
+
+    def send_cmd_vel(
+        self, linear_x: float, linear_y: float, angular_z: float
+    ) -> None:
         raise NotImplementedError
+
+    def stop_motion(self) -> None:
+        self.send_velocity(0.0, 0.0, 0.0)
+
+    def emergency_stop(self) -> None:
+        self.stop_motion()
 
     def cleanup(self) -> None:
         self.disconnect()

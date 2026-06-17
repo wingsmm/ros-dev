@@ -4,6 +4,94 @@
 
 ---
 
+## 0. 2026-06-17 当前实现快照
+
+`pc/qt_client` 已从单文件主窗口演进为“新版 Shell + legacy 调试台”双入口结构。
+
+默认启动：
+
+```bash
+./run.sh
+./run.sh --no-ros
+```
+
+进入新版 Shell：
+
+```text
+机器人选择页
+  ├─ 添加/编辑/删除机器人
+  ├─ 连接机器人（当前默认 mock backend）
+  └─ 进入机器人工作区
+
+机器人工作区
+  ├─ 左侧飞入式导航
+  ├─ 总览（占位）
+  ├─ 摄像头（已实现 HTTP/MJPEG MVP）
+  ├─ 机器人（占位）
+  ├─ SLAM 地图（占位）
+  ├─ GPS 地图（占位）
+  ├─ 设置（占位）
+  └─ 关于（占位）
+```
+
+旧调试台仍保留：
+
+```bash
+./run.sh --legacy
+```
+
+当前架构：
+
+```text
+app.py
+  └─ main_window.create_main_window()
+       ├─ ShellMainWindow（默认）
+       │    └─ RobotShellController
+       │         └─ RobotSession -> RobotBackend
+       └─ LegacyWindow（--legacy）
+```
+
+相机当前状态：
+
+- 新版 `CameraPage` 已接入机器人工作区。
+- `CameraPage` 与 legacy `CameraPanel` 复用 `MjpegStreamController`。
+- 当前 HTTP/MJPEG 默认 URL：`http://192.168.1.169:8080/stream?topic=/camera/image_raw`。
+- 已实测 `./run.sh --no-ros` 下进入摄像头页自动出图，FPS 约 25。
+- 长期仍应通过 `ros1_bridge` / backend 对齐 Android 的 `/image_raw/compressed` ROS 话题模型。
+
+控制桥接原则：
+
+- 页面层统一只调用 `RobotSession`，不要直接发 ROS、JSON 或 socket。
+- 短期真车控制优先接 `JsonGatewayBackend`，复用 legacy JSON 控制链路。
+- 手动遥控采用 dead-man 模式：按住立即发速度，并以约 10Hz 通过 `RobotSession` 连续发送；松开按钮或点击停止调用 `stop_motion()`。
+- 调试日志需能看到 `RobotSession velocity`、`JSON velocity sent=True`、底层 `TX ...`，用于定位 Qt / TCP / 机器人端链路断点。
+- 中期补机器人端 `Ros1GatewayBackend`，让 ROS1 复杂性留在机器人端。
+- 长期再接 `Ros2NativeBackend` / `ros1_bridge`，对齐 Android ROS 话题语义。
+
+推荐数据流：
+
+```text
+CameraPage / OverviewPage / RobotControlPage
+  -> ManualControlStrip
+  -> RobotSession
+  -> RobotBackend
+  -> Mock / JSON / ROS1 Gateway / ROS2 Native
+```
+
+机器人端日常入口推荐：
+
+```bash
+~/ros_ws/scripts/robot_stack.sh start
+~/ros_ws/scripts/robot_stack.sh status
+~/ros_ws/scripts/robot_stack.sh stop
+```
+
+该脚本一把拉起底盘、相机和 JSON 网关；只观察相机时才单独用 `camera_stack.sh`。
+
+后文部分路线和模块名保留历史设计语境；若与本节冲突，以本节和当前代码为准。
+
+---
+
 ## 1. 我们在做什么
 
 `qt_client` 不是手机 App 的移植版，而是 **WSL2 统一栈的日常入口**，同时承担两个角色：
@@ -105,7 +193,7 @@
 | 设导航目标 | ✅ 地图长按拖拽 | ⚠️ 仅 RViz | **核心差距** |
 | 设初始位姿 | ✅ 地图长按拖拽 | ⚠️ 仅 RViz | **核心差距** |
 | 内嵌地图/激光/路径 | ✅ | ❌ | **核心差距** |
-| 摄像头 | ✅ | ❌ | 看硬件是否提供 |
+| 摄像头 | ✅ | ✅ Phase 0 | PC 当前通过 HTTP/MJPEG 看图；长期仍需 ROS 话题对齐 |
 | 启停 SLAM/Nav2 | ❌ | ✅ | 咱们优势 |
 | Nav2 全栈 | ❌ | ✅ | 咱们优势 |
 
@@ -116,7 +204,7 @@
 | 摇杆遥控 | ✅ | ❌ | Phase 4 |
 | 倾斜传感器 | ✅ | ❌ | 暂不做 |
 | 激光显示 | ✅ | ❌ | Phase 2 |
-| 摄像头 | ✅ | ❌ | Phase 5 |
+| 摄像头 | ✅ | ✅ Phase 0 | 新版 CameraPage 已实现 HTTP/MJPEG MVP |
 | HUD 仪表盘 | ✅ | 部分 | 有连接/状态，无速度表 |
 | 多机器人管理 | ✅ | ❌ | 暂不做 |
 | 自主路点/随机走 | ✅ | ❌ | 用 Nav2 替代 |
@@ -381,7 +469,11 @@ pc/qt_client/
 
 ```text
 pc/qt_client/
-├── app.py                      # 主窗口编排（逐步瘦身）
+├── app.py                      # 轻量入口：参数、QApplication、单实例锁
+├── main_window.py              # 默认 Shell / --legacy 路由
+├── legacy/                     # 旧调试台 LegacyWindow
+├── core/                       # RobotSession / RobotConnectionState
+├── backends/                   # RobotBackend 抽象与 mock/ros1/ros2 骨架
 ├── gateway/
 │   ├── json_client.py          # 保持
 │   └── ros2_pub.py             # 扩展：scan/map 订阅或拆 ros2_node.py
