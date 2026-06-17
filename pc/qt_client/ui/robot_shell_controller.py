@@ -28,6 +28,7 @@ class RobotShellController:
         self._robot_list_page = robot_list_page
         self._log = log_fn
         self._session: Optional[RobotSession] = None
+        self._workspace: Optional[RobotWorkspacePage] = None
 
         shell.topbar.add_clicked.connect(self._open_add_robot_dialog)
         shell.page_popped.connect(self._on_page_popped)
@@ -39,6 +40,9 @@ class RobotShellController:
         self._robot_list_page.set_robots(self._robot_store.robots())
 
     def cleanup(self) -> None:
+        if self._workspace is not None:
+            self._workspace.shutdown()
+            self._workspace = None
         if self._session is not None:
             self._session.cleanup()
             self._session = None
@@ -134,6 +138,7 @@ class RobotShellController:
 
     def _open_robot_workspace(self, robot, session: RobotSession) -> None:
         workspace = RobotWorkspacePage(robot, session=session)
+        self._workspace = workspace
         workspace.back_requested.connect(self._shell.pop_page)
         self._shell.push_page(
             page_id=f"robot_workspace:{robot.id}",
@@ -144,6 +149,9 @@ class RobotShellController:
     def _on_page_popped(self, page_id: str) -> None:
         if not page_id.startswith("robot_workspace:"):
             return
+        if self._workspace is not None:
+            self._workspace.shutdown()
+            self._workspace = None
         if self._session is not None:
             self._session.cleanup()
             self._session = None

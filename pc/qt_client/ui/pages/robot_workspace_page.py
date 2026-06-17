@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QHBoxLayout, QStackedWidget, QWidget
 
 from core import RobotSession
 from ui.models.robot_info import RobotInfo
+from ui.pages.camera_page import CameraPage
 from ui.pages.placeholder_page import PlaceholderPage
 from ui.widgets.robot_side_nav import CONTENT_PAGE_IDS, RobotSideNav
 
@@ -50,6 +51,7 @@ class RobotWorkspacePage(QWidget):
         self._scrim = QWidget(self)
         self._stack = QStackedWidget()
         self._page_index: Dict[str, int] = {}
+        self._active_page_id = ""
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -58,9 +60,12 @@ class RobotWorkspacePage(QWidget):
         root.setSpacing(0)
 
         for page_id in CONTENT_PAGE_IDS:
-            title = _NAV_TITLES.get(page_id, page_id)
-            hint = _WORKSPACE_PLACEHOLDERS.get(page_id, "功能待接入")
-            page = PlaceholderPage(title, hint)
+            if page_id == "camera":
+                page = CameraPage(self.robot, session=self.session)
+            else:
+                title = _NAV_TITLES.get(page_id, page_id)
+                hint = _WORKSPACE_PLACEHOLDERS.get(page_id, "功能待接入")
+                page = PlaceholderPage(title, hint)
             self._page_index[page_id] = self._stack.addWidget(page)
         root.addWidget(self._stack, 1)
 
@@ -146,9 +151,39 @@ class RobotWorkspacePage(QWidget):
         self._show_content_page(page_id)
         self.close_navigation()
 
+    def _page_widget(self, page_id: str) -> Optional[QWidget]:
+        index = self._page_index.get(page_id)
+        if index is None:
+            return None
+        return self._stack.widget(index)
+
+    def _notify_page_lifecycle(self, page_id: str, *, entering: bool) -> None:
+        widget = self._page_widget(page_id)
+        if widget is None:
+            return
+        method = "on_page_activated" if entering else "on_page_deactivated"
+        handler = getattr(widget, method, None)
+        if callable(handler):
+            handler()
+
+    def shutdown(self) -> None:
+        if self._active_page_id:
+            self._notify_page_lifecycle(self._active_page_id, entering=False)
+            self._active_page_id = ""
+        for i in range(self._stack.count()):
+            widget = self._stack.widget(i)
+            if hasattr(widget, "shutdown"):
+                widget.shutdown()
+
     def _show_content_page(self, page_id: str) -> None:
+        if page_id == self._active_page_id:
+            return
+        if self._active_page_id:
+            self._notify_page_lifecycle(self._active_page_id, entering=False)
         index = self._page_index.get(page_id)
         if index is None:
             return
         self._stack.setCurrentIndex(index)
         self._side_nav.set_active(page_id)
+        self._active_page_id = page_id
+        self._notify_page_lifecycle(page_id, entering=True)
