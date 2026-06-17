@@ -9,7 +9,7 @@ from backends import create_backend
 from core import RobotSession
 from ui.dialogs import exec_modal_dialog, make_modal_dialog
 from ui.models import RobotStore
-from ui.pages import RobotDeletePage, RobotFormPage, RobotListPage
+from ui.pages import RobotDeletePage, RobotFormPage, RobotListPage, RobotWorkspacePage
 from ui.shell import AppShell
 
 
@@ -30,6 +30,7 @@ class RobotShellController:
         self._session: Optional[RobotSession] = None
 
         shell.topbar.add_clicked.connect(self._open_add_robot_dialog)
+        shell.page_popped.connect(self._on_page_popped)
         robot_list_page.robot_selected.connect(self._on_robot_selected)
         robot_list_page.robot_edit_requested.connect(self._open_edit_robot_dialog)
         robot_list_page.robot_delete_requested.connect(self._open_delete_robot_dialog)
@@ -121,12 +122,31 @@ class RobotShellController:
                     f"Robot connected ({robot.backend_type}): "
                     f"{robot.name} ({robot.master_uri})"
                 )
+                self._open_robot_workspace(robot, session)
             else:
+                self._session = None
+                session.cleanup()
                 self._log(
                     f"Robot connect failed: {robot.name} - {session.last_error}"
                 )
 
         QTimer.singleShot(900, finish_connect)
+
+    def _open_robot_workspace(self, robot, session: RobotSession) -> None:
+        workspace = RobotWorkspacePage(robot, session=session)
+        workspace.back_requested.connect(self._shell.pop_page)
+        self._shell.push_page(
+            page_id=f"robot_workspace:{robot.id}",
+            title=robot.name,
+            widget=workspace,
+        )
+
+    def _on_page_popped(self, page_id: str) -> None:
+        if not page_id.startswith("robot_workspace:"):
+            return
+        if self._session is not None:
+            self._session.cleanup()
+            self._session = None
 
     def _on_robot_form_saved(self, robot) -> None:
         if self._robot_store.get(robot.id):

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -9,11 +8,7 @@ from .robot_info import RobotInfo, default_robot
 
 
 def default_store_path() -> Path:
-    if os.name == "nt":
-        root = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
-    else:
-        root = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-    return root / "xtark" / "qt_client" / "robots.json"
+    return Path(__file__).resolve().parents[2] / "data" / "robots.json"
 
 
 class RobotStore:
@@ -58,7 +53,12 @@ class RobotStore:
         return False
 
     def load(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            print(f"WARN: robot config directory unavailable: {exc}")
+            self._robots = [default_robot()]
+            return
         if not self._path.is_file():
             self._robots = [default_robot()]
             self.save()
@@ -88,9 +88,16 @@ class RobotStore:
         self._robots = robots
 
     def save(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            print(f"WARN: robot config directory unavailable: {exc}")
+            return
         payload = [robot.to_dict() for robot in self._robots]
-        self._path.write_text(
-            json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-        )
+        try:
+            self._path.write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(f"WARN: robot config save failed: {exc}")

@@ -161,6 +161,7 @@ class AppShell(QWidget):
     """
 
     log = pyqtSignal(str)
+    page_popped = pyqtSignal(str)
 
     def __init__(self, pages: Dict[str, QWidget], parent=None):
         super().__init__(parent)
@@ -174,6 +175,11 @@ class AppShell(QWidget):
         self._push_stack: List[Tuple[str, str, QWidget]] = []
         self._build_ui()
         self.set_page("robot_list")
+
+    def _current_push_widget(self) -> QWidget | None:
+        if not self._push_stack:
+            return None
+        return self._push_stack[-1][2]
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -247,6 +253,10 @@ class AppShell(QWidget):
         self.overlay.hide()
 
     def toggle_drawer(self) -> None:
+        pushed_widget = self._current_push_widget()
+        if pushed_widget is not None and hasattr(pushed_widget, "toggle_navigation"):
+            pushed_widget.toggle_navigation()
+            return
         if self._drawer_open:
             self.close_drawer()
         else:
@@ -296,7 +306,7 @@ class AppShell(QWidget):
             self._stack.addWidget(widget)
         self._push_stack.append((page_id, title, widget))
         self._stack.setCurrentWidget(widget)
-        self.topbar.set_nav_mode("back")
+        self.topbar.set_nav_mode("menu")
         self.topbar.set_add_visible(False)
         self.topbar.set_title(title)
         self.log.emit(f"Shell push -> {page_id}: {title}")
@@ -305,18 +315,21 @@ class AppShell(QWidget):
         if not self._push_stack:
             return
         popped = self._push_stack.pop()
-        self.log.emit(f"Shell pop <- {popped[0]}")
+        page_id = popped[0]
+        self.log.emit(f"Shell pop <- {page_id}")
         if self._push_stack:
             _, title, widget = self._push_stack[-1]
             self._stack.setCurrentWidget(widget)
-            self.topbar.set_nav_mode("back")
+            self.topbar.set_nav_mode("menu")
             self.topbar.set_add_visible(False)
             self.topbar.set_title(title)
+            self.page_popped.emit(page_id)
             return
         widget = self._page_widgets.get(self._current_base_id)
         if widget is not None:
             self._stack.setCurrentWidget(widget)
         self._update_topbar_for_base(self._current_base_id)
+        self.page_popped.emit(page_id)
 
     def is_on_base_page(self) -> bool:
         return not self._push_stack

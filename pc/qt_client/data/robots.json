@@ -1,0 +1,22 @@
+[
+  {
+    "id": "xtark-default",
+    "name": "xtark",
+    "master_uri": "http://192.168.1.169:11311",
+    "joystick_topic": "/joy_teleop/cmd_vel",
+    "camera_topic": "/image_raw/compressed",
+    "laser_topic": "/scan",
+    "navsat_topic": "/navsat/fix",
+    "odometry_topic": "/odometry/filtered",
+    "pose_topic": "/pose",
+    "reverse_laser_scan": false,
+    "invert_x": false,
+    "invert_y": false,
+    "invert_angular_velocity": false,
+    "backend_type": "mock",
+    "gateway_uri": "",
+    "camera_mode": "mjpeg",
+    "camera_url": "",
+    "ros_domain_id": 0
+  }
+]

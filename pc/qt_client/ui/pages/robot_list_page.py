@@ -49,10 +49,12 @@ class _RobotCard(QFrame):
         body_layout.addWidget(name)
         body_layout.addWidget(uri)
         body_layout.addStretch(1)
-        body.mousePressEvent = lambda event: (  # type: ignore[method-assign, assignment]
-            self.selected.emit(self._robot_id),
-            event.accept(),
-        )
+
+        def select_robot(event) -> None:
+            self.selected.emit(self._robot_id)
+            event.accept()
+
+        body.mousePressEvent = select_robot  # type: ignore[method-assign]
         row.addWidget(body, 1)
 
         btn_wifi = self._icon_button("wifi_0.png", "连接状态（占位）")
