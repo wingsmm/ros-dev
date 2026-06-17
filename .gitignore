@@ -6,6 +6,7 @@ Desktop.ini
 .idea/
 .vscode/
 .history/
+.claude/
 
 # ===== Repo-local folders =====
 other/

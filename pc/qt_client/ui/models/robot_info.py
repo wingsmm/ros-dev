@@ -20,6 +20,11 @@ class RobotInfo:
     invert_x: bool = False
     invert_y: bool = False
     invert_angular_velocity: bool = False
+    backend_type: str = "mock"
+    gateway_uri: str = ""
+    camera_mode: str = "mjpeg"
+    camera_url: str = ""
+    ros_domain_id: int = 0
 
     @staticmethod
     def new_id() -> str:
