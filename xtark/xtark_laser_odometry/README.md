@@ -72,6 +72,18 @@ roslaunch xtark_laser_odometry rf2o_odom_laser.launch
 ~/ros_ws/scripts/laser_odom_experiment.sh start
 ```
 
+**Qt 遥控 + 三路对照 + rosbag**：
+
+```bash
+robot_stack.sh stop                    # 手动停其它栈
+laser_odom_compare_stack.sh start
+laser_odom_compare_stack.sh record
+laser_odom_compare_stack.sh stop
+robot_stack.sh start
+```
+
+`compare_stack` 的 `record` 含 `/cmd_vel` `/odom` `/odom_laser` `/scan`。各脚本互不调用。
+
 ## 验证
 
 ```bash
@@ -84,7 +96,7 @@ rostopic echo /odom_laser -n 1
 记录对比 bag：
 
 ```bash
-rosbag record /scan /odom /odom_laser /tf
+rosbag record /scan /odom /odom_laser
 ```
 
 手动低速控车时同时观察 `/odom` 与 `/odom_laser`：

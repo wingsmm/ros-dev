@@ -19,6 +19,7 @@ These scripts are copied to the robot under:
 | `camera_stack.sh` | Starts only the shared camera path for Android ROS topic and Qt/browser MJPEG preview. |
 | `json_stack.sh` | Starts the PC/Qt JSON bridge validation stack: bringup plus `xtark_json_bridge`. |
 | `laser_odom_experiment.sh` | Sidecar only: starts `xtark_laser_odometry` -> `/odom_laser` for phase-1 experiments. Does not modify bringup, gmapping, or move_base. |
+| `laser_odom_compare_stack.sh` | **Qt 对照实验栈**：启动本栈 bringup + JSON + rf2o；`record` 录 `/cmd_vel` + `/odom` + `/odom_laser` + `/scan`。脚本只停自己记录的 PID。 |
 
 Recommended daily command:
 
@@ -34,11 +35,25 @@ Laser odometry experiment (phase 1, sidecar only):
 
 ```bash
 ~/ros_ws/scripts/laser_odom_experiment.sh start
-~/ros_ws/scripts/laser_odom_experiment.sh status
+~/ros_ws/scripts/laser_odom_experiment.sh record
 ~/ros_ws/scripts/laser_odom_experiment.sh stop
 ```
 
-Requires main bringup already running (`/scan`, `/odom`). See `../xtark_laser_odometry/README.md`.
+Qt manual drive + odom compare + rosbag:
+
+```bash
+# 先手动停其它栈，避免端口/话题冲突
+~/ros_ws/scripts/robot_stack.sh stop
+
+~/ros_ws/scripts/laser_odom_compare_stack.sh start
+~/ros_ws/scripts/laser_odom_compare_stack.sh record
+# Qt connect 192.168.1.169:8765, drive slowly
+~/ros_ws/scripts/laser_odom_compare_stack.sh stop
+
+~/ros_ws/scripts/robot_stack.sh start   # 测完自行恢复
+```
+
+各脚本只控制自己的 `start | stop | record | logs`，互不调用。
 
 ## Windows-Side Remote Helpers
 

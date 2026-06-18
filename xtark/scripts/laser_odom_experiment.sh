@@ -1,47 +1,40 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Sidecar only: start/stop rf2o -> /odom_laser. Does NOT touch robot_stack / android_stack bringup.
+# laser_odom_experiment.sh
+# Owns only rf2o -> /odom_laser and optional rosbag.
+# It does not start bringup, JSON, or roscore.
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+STACK_TAG="laser_odom_experiment"
 
 ROS_SETUP="${ROS_SETUP:-/opt/ros/melodic/setup.bash}"
 WS_SETUP="${WS_SETUP:-$HOME/ros_ws/devel/setup.bash}"
-LOG_DIR="${XTARK_LOG_DIR:-$HOME/xtark_logs}/laser_odom_experiment"
+LOG_DIR="${LOG_DIR:-$HOME/xtark_logs/laser_odom_experiment}"
+BAG_DIR="${BAG_DIR:-$LOG_DIR/bags}"
+PID_DIR="$LOG_DIR/pids"
 LAUNCH_PKG="${LAUNCH_PKG:-xtark_laser_odometry}"
 LAUNCH_FILE="${LAUNCH_FILE:-rf2o_odom_laser.launch}"
-ODOM_LASER_TOPIC="${ODOM_LASER_TOPIC:-/odom_laser}"
-SCAN_TOPIC="${SCAN_TOPIC:-/scan}"
-MAIN_ODOM_TOPIC="${MAIN_ODOM_TOPIC:-/odom}"
+RECORD_TOPICS="${RECORD_TOPICS:-/odom /odom_laser /scan}"
 
 usage() {
   cat <<EOF
-Usage: laser_odom_experiment.sh <command>
+Usage: ${STACK_TAG}.sh <command>
 
 Commands:
-  start   Start rf2o_laser_odometry -> ${ODOM_LASER_TOPIC} (background)
-  stop    Stop experiment node only
-  status  Show process and topic probes
-  logs    Tail experiment log
+  start   Start rf2o -> /odom_laser (requires /scan from another stack)
+  stop    Stop rf2o + this stack's rosbag only
+  record  Start rosbag (${RECORD_TOPICS})
+  logs    Tail rf2o log
 
-Does NOT start xtark_driver, gmapping, or move_base.
-Requires main stack already publishing ${SCAN_TOPIC} and ${MAIN_ODOM_TOPIC}.
-
-Environment:
-  ROS_SETUP=${ROS_SETUP}
-  WS_SETUP=${WS_SETUP}
-  LOG_DIR=${LOG_DIR}
+LOG_DIR=${LOG_DIR}
+BAG_DIR=${BAG_DIR}
 EOF
 }
 
 source_ros() {
-  if [ ! -f "$ROS_SETUP" ]; then
-    echo "[ERR] ROS setup not found: $ROS_SETUP"
-    exit 1
-  fi
-  if [ ! -f "$WS_SETUP" ]; then
-    echo "[ERR] workspace setup not found: $WS_SETUP"
-    echo "      run: cd ~/ros_ws && catkin_make && source devel/setup.bash"
+  if [ ! -f "$ROS_SETUP" ] || [ ! -f "$WS_SETUP" ]; then
+    echo "[ERR] ROS or workspace setup missing"
     exit 1
   fi
   set +u
@@ -52,119 +45,121 @@ source_ros() {
   set -u
 }
 
-is_running() {
+pid_alive() {
+  local f="$1"
+  [ -f "$f" ] || return 1
+  local pid
+  pid="$(cat "$f")"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+write_pid() {
+  mkdir -p "$PID_DIR"
+  echo "$2" >"$PID_DIR/$1.pid"
+}
+
+stop_pid() {
+  local name="$1"
+  local f="$PID_DIR/$name.pid"
+  if pid_alive "$f"; then
+    kill "$(cat "$f")" 2>/dev/null || true
+    sleep 1
+  fi
+  rm -f "$f"
+}
+
+is_rf2o_running() {
   pgrep -f "roslaunch ${LAUNCH_PKG} ${LAUNCH_FILE}" >/dev/null 2>&1
 }
 
 wait_for_master() {
-  local max="${1:-20}"
   local i=0
   while ! rostopic list &>/dev/null; do
     i=$((i + 1))
-    if [ "$i" -ge "$max" ]; then
-      echo "[ERR] rosmaster not ready after ${max}s"
-      return 1
+    if [ "$i" -ge 20 ]; then
+      echo "[ERR] rosmaster not ready"
+      exit 1
     fi
     sleep 1
   done
-}
-
-wait_for_topic() {
-  local topic="$1"
-  local max="${2:-25}"
-  local i=0
-  while ! rostopic list 2>/dev/null | grep -qx "$topic"; do
-    i=$((i + 1))
-    if [ "$i" -ge "$max" ]; then
-      echo "[WARN] topic ${topic} not seen after ${max}s"
-      return 1
-    fi
-    sleep 1
-  done
-  echo "[OK] ${topic} available"
 }
 
 cmd_start() {
-  mkdir -p "$LOG_DIR"
+  mkdir -p "$LOG_DIR" "$PID_DIR"
   source_ros
-  wait_for_master 20
+  wait_for_master
 
   if ! rospack find rf2o_laser_odometry >/dev/null 2>&1; then
     echo "[ERR] rf2o_laser_odometry not found"
-    echo "      try: sudo apt install ros-melodic-rf2o-laser-odometry"
     exit 1
   fi
-
   if ! rospack find "$LAUNCH_PKG" >/dev/null 2>&1; then
-    echo "[ERR] package ${LAUNCH_PKG} not in workspace"
-    echo "      copy xtark/${LAUNCH_PKG} to ~/ros_ws/src/ and catkin_make"
+    echo "[ERR] package ${LAUNCH_PKG} not found"
     exit 1
   fi
 
-  wait_for_topic "$SCAN_TOPIC" 25 || true
-  wait_for_topic "$MAIN_ODOM_TOPIC" 25 || true
-
-  if is_running; then
-    echo "[OK] experiment already running"
+  if pid_alive "$PID_DIR/rf2o.pid" || is_rf2o_running; then
+    echo "[OK] rf2o already running"
     return 0
   fi
 
-  echo "[INFO] Starting roslaunch ${LAUNCH_PKG} ${LAUNCH_FILE}"
+  echo "[INFO] roslaunch ${LAUNCH_PKG} ${LAUNCH_FILE}"
   nohup roslaunch "$LAUNCH_PKG" "$LAUNCH_FILE" >"$LOG_DIR/rf2o.log" 2>&1 &
-  echo "[OK] started pid=$! log=$LOG_DIR/rf2o.log"
-
+  write_pid rf2o "$!"
   sleep 2
-  wait_for_topic "$ODOM_LASER_TOPIC" 30 || true
+  if rostopic list 2>/dev/null | grep -qx /odom_laser; then
+    echo "[OK] /odom_laser up"
+  else
+    echo "[WARN] /odom_laser not seen yet"
+  fi
 }
 
 cmd_stop() {
-  pkill -f "roslaunch ${LAUNCH_PKG} ${LAUNCH_FILE}" || true
-  pkill -f 'rf2o_laser_odometry_node' || true
-  sleep 1
-  if is_running; then
-    echo "[WARN] experiment may still be running"
-    exit 1
-  fi
-  echo "[OK] stopped"
+  stop_pid rosbag
+  pkill -f "rosbag record -O ${BAG_DIR}/laser_odom_experiment_" 2>/dev/null || true
+  rm -f "$PID_DIR/rosbag.path"
+
+  stop_pid rf2o
+  echo "[OK] ${STACK_TAG} stop done"
 }
 
-cmd_status() {
-  source_ros 2>/dev/null || true
-  echo "---process---"
-  pgrep -af "roslaunch ${LAUNCH_PKG} ${LAUNCH_FILE}|rf2o_laser_odometry" || echo "not running"
-  echo "---topics---"
-  if rostopic list &>/dev/null; then
-    for t in "$SCAN_TOPIC" "$MAIN_ODOM_TOPIC" "$ODOM_LASER_TOPIC"; do
-      if rostopic list 2>/dev/null | grep -qx "$t"; then
-        echo "[OK] $t"
-        timeout 3 rostopic hz "$t" 2>&1 | head -3 || true
-      else
-        echo "[--] $t missing"
-      fi
-    done
-  else
-    echo "rosmaster not reachable"
+cmd_record() {
+  source_ros
+  wait_for_master
+  for t in /odom /odom_laser /scan; do
+    if ! rostopic list 2>/dev/null | grep -qx "$t"; then
+      echo "[ERR] missing $t"
+      exit 1
+    fi
+  done
+  if pid_alive "$PID_DIR/rosbag.pid"; then
+    echo "[OK] already recording"
+    cat "$PID_DIR/rosbag.path" 2>/dev/null || true
+    return 0
   fi
+  mkdir -p "$BAG_DIR" "$PID_DIR"
+  local bag="${BAG_DIR}/laser_odom_experiment_$(date +%Y%m%d_%H%M%S).bag"
+  # shellcheck disable=SC2086
+  nohup rosbag record -O "$bag" $RECORD_TOPICS >"$LOG_DIR/rosbag.log" 2>&1 &
+  write_pid rosbag "$!"
+  echo "$bag" >"$PID_DIR/rosbag.path"
+  echo "[OK] recording -> $bag"
 }
 
 cmd_logs() {
   mkdir -p "$LOG_DIR"
-  touch "$LOG_DIR/rf2o.log"
-  tail -n 80 -f "$LOG_DIR/rf2o.log"
+  touch "$LOG_DIR/rf2o.log" "$LOG_DIR/rosbag.log"
+  tail -n 80 -f "$LOG_DIR/rf2o.log" "$LOG_DIR/rosbag.log"
 }
 
 main() {
   case "${1:-}" in
     start) cmd_start ;;
     stop) cmd_stop ;;
-    status) cmd_status ;;
+    record) cmd_record ;;
     logs) cmd_logs ;;
     -h|--help|help|"") usage ;;
-    *)
-      echo "Unknown command: $1"
-      usage
-      exit 1
-      ;;
+    *) echo "Unknown: $1"; usage; exit 1 ;;
   esac
 }
 
