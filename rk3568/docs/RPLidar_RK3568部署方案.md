@@ -1,6 +1,6 @@
 # RPLidar RK3568 部署方案
 
-在 **RK3568（aarch64）** 上部署从 xtark 拆下的 **思岚 RPLidar XAS**（USB 转串口 **CH341 `1a86:7523`**），输出 ROS2 **`/scan`**，与已验收的深度相机 **并行采集**（相机见 `Astra_RK3568部署方案.md`）。
+在 **RK3568（aarch64）** 上部署从 xtark 拆下的 **思岚 RPLidar XAS**（USB 转串口 **CH341 `1a86:7523`**），输出 ROS2 **`/scan`**，并与已验收的 Astra 深度相机并行采集。
 
 | 板子路径 | 内容 |
 |----------|------|
@@ -285,7 +285,7 @@ docker exec astra-camera bash -lc '
 |------|------|
 | `/scan` | **优先转发**，带宽小 |
 | `/tf`、`/tf_static` | 需与远端统一 `frame_id` |
-| `/camera/depth/image_raw` | 全帧 30Hz 不适合长期 WiFi；见深度相机文档 |
+| `/camera/depth/image_raw` | 全帧 30Hz 不适合长期 WiFi；按需开启 |
 
 同一 `ROS_DOMAIN_ID`、NTP 同步；跨网用 VPN 或 `dds-router` / `zenoh`。
 
@@ -308,7 +308,6 @@ docker exec astra-camera bash -lc '
 ## 10. 参考
 
 - Slamtec ROS2：<https://github.com/Slamtec/sllidar_ros2>
-- 板端深度相机验收：`rk3568/docs/Astra_RK3568部署方案.md`
 - xtark 雷达硬件说明：`xtark/docs/README.md`（ROS1 仅供参考）
 
 ---

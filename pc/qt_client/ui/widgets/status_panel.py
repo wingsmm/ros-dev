@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from PyQt5.QtWidgets import QFormLayout, QGroupBox, QLabel, QVBoxLayout, QWidget
 
+from ui.widgets.robot_telemetry_panel import RobotTelemetryPanel
+
 
 class StatusPanel(QWidget):
+    """Legacy debug console: connection stats + JSON telemetry."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._build_ui()
@@ -25,35 +29,8 @@ class StatusPanel(QWidget):
         conn_form.addRow("最近反馈", self.last_feedback_label)
         root.addWidget(conn_group)
 
-        status_group = QGroupBox("base_status")
-        status_form = QFormLayout(status_group)
-        self.online_label = QLabel("-")
-        self.estop_label = QLabel("-")
-        self.battery_label = QLabel("-")
-        self.mode_label = QLabel("-")
-        self.error_label = QLabel("-")
-        status_form.addRow("online", self.online_label)
-        status_form.addRow("estop", self.estop_label)
-        status_form.addRow("battery_v", self.battery_label)
-        status_form.addRow("mode", self.mode_label)
-        status_form.addRow("error_code", self.error_label)
-        root.addWidget(status_group)
-
-        odom_group = QGroupBox("odom_base")
-        odom_form = QFormLayout(odom_group)
-        self.x_label = QLabel("-")
-        self.y_label = QLabel("-")
-        self.yaw_label = QLabel("-")
-        self.vx_label = QLabel("-")
-        self.vy_label = QLabel("-")
-        self.wz_label = QLabel("-")
-        odom_form.addRow("x", self.x_label)
-        odom_form.addRow("y", self.y_label)
-        odom_form.addRow("yaw", self.yaw_label)
-        odom_form.addRow("vx", self.vx_label)
-        odom_form.addRow("vy", self.vy_label)
-        odom_form.addRow("wz", self.wz_label)
-        root.addWidget(odom_group)
+        self._telemetry = RobotTelemetryPanel()
+        root.addWidget(self._telemetry)
         root.addStretch(1)
 
     def set_connection(self, connected: bool, detail: str) -> None:
@@ -65,27 +42,7 @@ class StatusPanel(QWidget):
         self.last_feedback_label.setText(last_feedback)
 
     def update_base_status(self, msg: Dict[str, Any]) -> None:
-        self.online_label.setText(self._fmt(msg.get("online")))
-        self.estop_label.setText(self._fmt(msg.get("estop")))
-        battery = msg.get("battery_v")
-        self.battery_label.setText("-" if battery is None else "{:.2f} V".format(battery))
-        self.mode_label.setText(self._fmt(msg.get("mode")))
-        self.error_label.setText(self._fmt(msg.get("error_code")))
+        self._telemetry.update_base_status(msg)
 
     def update_odom(self, msg: Dict[str, Any]) -> None:
-        self.x_label.setText(self._fmt_num(msg.get("x")))
-        self.y_label.setText(self._fmt_num(msg.get("y")))
-        self.yaw_label.setText(self._fmt_num(msg.get("yaw")))
-        self.vx_label.setText(self._fmt_num(msg.get("linear_x")))
-        self.vy_label.setText(self._fmt_num(msg.get("linear_y")))
-        self.wz_label.setText(self._fmt_num(msg.get("angular_z")))
-
-    @staticmethod
-    def _fmt(value: Any) -> str:
-        return "-" if value is None else str(value)
-
-    @staticmethod
-    def _fmt_num(value: Optional[float]) -> str:
-        if value is None:
-            return "-"
-        return "{:.3f}".format(float(value))
+        self._telemetry.update_odom(msg)

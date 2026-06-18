@@ -24,9 +24,9 @@ class RobotHudBar(QWidget):
         layout.setSpacing(16)
 
         self.conn_label = QLabel("未连接")
-        self.speed_label = QLabel("线速度: -- m/s")
-        self.turn_label = QLabel("角速度: -- °/s")
-        self.pose_label = QLabel("位姿: --")
+        self.speed_label = QLabel("线速度 (vx): -- m/s")
+        self.turn_label = QLabel("角速度 (wz): -- °/s")
+        self.pose_label = QLabel("位姿 (x,y,yaw): --")
 
         for label in (self.conn_label, self.speed_label, self.turn_label, self.pose_label):
             label.setStyleSheet("font-size: 13px; color: #333;")
@@ -60,8 +60,8 @@ class RobotHudBar(QWidget):
         self.conn_label.setStyleSheet(f"font-size: 13px; color: {color};")
 
     def set_motion(self, linear: str, angular: str) -> None:
-        self.speed_label.setText(f"线速度: {linear} m/s")
-        self.turn_label.setText(f"角速度: {angular} °/s")
+        self.speed_label.setText(f"线速度 (vx): {linear} m/s")
+        self.turn_label.setText(f"角速度 (wz): {angular} °/s")
 
     def set_pose(self, pose_text: str) -> None:
-        self.pose_label.setText(f"位姿: {pose_text}")
+        self.pose_label.setText(f"位姿 (x,y,yaw): {pose_text}")

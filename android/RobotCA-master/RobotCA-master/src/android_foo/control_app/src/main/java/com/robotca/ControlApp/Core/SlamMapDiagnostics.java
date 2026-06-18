@@ -40,7 +40,9 @@ public final class SlamMapDiagnostics {
                                        long mapAgeMs, double scanHz,
                                        boolean odomOk, Double entropy) {
         if (stats == null || !stats.hasMap()) {
-            return context.getString(R.string.slam_map_debug_waiting);
+            return context.getString(R.string.slam_map_debug_waiting)
+                    + " | scan " + formatScanHz(scanHz)
+                    + (odomOk ? " | odom OK" : " | odom --");
         }
 
         String mapStatus = context.getString(R.string.slam_map_debug_map_ok,

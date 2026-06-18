@@ -5,14 +5,13 @@ from urllib.parse import urlparse
 
 from PyQt5.QtWidgets import QVBoxLayout, QWidget
 
-from core import RobotSession
-from core.robot_state import RobotConnectionState
+from core.robot_telemetry_binder import RobotTelemetryBinder
 from ui.models.robot_info import RobotInfo
 from ui.widgets.camera_toolbar import CameraToolbar
 from ui.widgets.camera_viewport import CameraViewport
 from ui.widgets.manual_control_strip import ManualControlStrip
 from ui.widgets.mjpeg_stream import MjpegStreamController
-from ui.widgets.robot_hud_bar import RobotHudBar
+from ui.widgets.telemetry_details_strip import TelemetryDetailsStrip
 
 # Android/ROS contract vs Qt/Browser HTTP preview (see xtark/scripts/camera_stack.sh).
 ANDROID_CAMERA_TOPIC = "/image_raw/compressed"
@@ -31,29 +30,31 @@ class CameraPage(QWidget):
     def __init__(
         self,
         robot: RobotInfo,
-        session: Optional[RobotSession] = None,
+        telemetry_binder: Optional[RobotTelemetryBinder] = None,
         parent=None,
     ):
         super().__init__(parent)
         self._robot = robot
-        self._session = session
+        self._binder = telemetry_binder
         self._stream = MjpegStreamController(self)
-        self._hud = RobotHudBar()
         self._toolbar = CameraToolbar()
         self._viewport = CameraViewport()
+        self._telemetry = TelemetryDetailsStrip()
         self._manual = ManualControlStrip()
         self._build_ui()
         self._wire_signals()
         self._apply_robot_defaults()
+        if self._binder is not None:
+            self._binder.register_panel(self._telemetry.telemetry_panel)
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 12, 16, 12)
         root.setSpacing(8)
 
-        root.addWidget(self._hud)
         root.addWidget(self._toolbar)
         root.addWidget(self._viewport, 1)
+        root.addWidget(self._telemetry)
         root.addWidget(self._manual)
 
     def _wire_signals(self) -> None:
@@ -68,7 +69,6 @@ class CameraPage(QWidget):
 
         self._manual.velocity_requested.connect(self._on_velocity_requested)
         self._manual.stop_requested.connect(self._on_stop_requested)
-        self._hud.emergency_stop_requested.connect(self._on_emergency_stop)
 
     def _apply_robot_defaults(self) -> None:
         url = default_mjpeg_url(self._robot)
@@ -87,24 +87,21 @@ class CameraPage(QWidget):
             else 0.20
         )
         self._manual.set_speeds(linear=linear, angular=angular)
-        self._refresh_hud_connection()
-
-    def _refresh_hud_connection(self) -> None:
-        if self._session is not None and self._session.is_connected():
-            self._hud.set_connection(True, self._robot.name)
-        elif self._session is not None and self._session.state == RobotConnectionState.FAILED:
-            self._hud.set_connection(False, self._session.last_error or "连接失败")
-        else:
-            self._hud.set_connection(False, self._robot.name)
 
     def on_page_activated(self) -> None:
         """Auto-connect MJPEG preview when entering camera tab (MVP)."""
-        self._refresh_hud_connection()
+        if self._binder is not None:
+            self._binder.replay()
         if not self._stream.is_streaming():
             self._on_connect()
 
     def on_page_deactivated(self) -> None:
         self._stream.disconnect()
+
+    def shutdown(self) -> None:
+        if self._binder is not None:
+            self._binder.unregister_panel(self._telemetry.telemetry_panel)
+        self._stream.shutdown()
 
     def _on_connect(self) -> None:
         url = self._toolbar.url() or default_mjpeg_url(self._robot)
@@ -135,29 +132,10 @@ class CameraPage(QWidget):
                 self._viewport.set_empty()
 
     def _on_velocity_requested(self, lx: float, ly: float, az: float) -> None:
-        if self._session is None:
-            self._hud.set_motion(f"{lx:.2f}", f"{az:.2f}")
+        if self._binder is None:
             return
-        if self._session.send_velocity(lx, ly, az):
-            self._hud.set_motion(f"{lx:.2f}", f"{az:.2f}")
-        elif self._session.last_error:
-            self._hud.set_connection(self._session.is_connected(), self._session.last_error)
+        self._binder.session.send_velocity(lx, ly, az)
 
     def _on_stop_requested(self) -> None:
-        if self._session is not None:
-            self._session.stop_motion()
-        self._hud.set_motion("0.00", "0.00")
-
-    def _on_emergency_stop(self) -> None:
-        if self._session is not None:
-            self._session.emergency_stop()
-        self._manual.stop()
-        self._hud.set_motion("0.00", "0.00")
-        if self._session is not None:
-            self._hud.set_connection(
-                self._session.is_connected(),
-                "急停" if not self._session.manual_control_enabled else self._robot.name,
-            )
-
-    def shutdown(self) -> None:
-        self._stream.shutdown()
+        if self._binder is not None:
+            self._binder.session.stop_motion()

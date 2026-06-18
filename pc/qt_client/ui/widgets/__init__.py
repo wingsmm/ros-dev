@@ -8,8 +8,10 @@ from .mjpeg_stream import CameraStats, MjpegStreamController
 from .nav_panel import NavPanel
 from .robot_hud_bar import RobotHudBar
 from .robot_side_nav import RobotSideNav
+from .robot_telemetry_panel import RobotTelemetryPanel
 from .stack_panel import StackPanel
 from .status_panel import StatusPanel
+from .telemetry_details_strip import TelemetryDetailsStrip
 
 __all__ = [
     "CameraPanel",
@@ -23,6 +25,8 @@ __all__ = [
     "NavPanel",
     "RobotHudBar",
     "RobotSideNav",
+    "RobotTelemetryPanel",
     "StackPanel",
     "StatusPanel",
+    "TelemetryDetailsStrip",
 ]

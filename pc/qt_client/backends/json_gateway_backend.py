@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Tuple, TYPE_CHECKING
+from typing import Callable, Optional, Tuple, TYPE_CHECKING
 from urllib.parse import urlparse
 
 from backends.base import RobotBackend
@@ -8,6 +8,9 @@ from gateway.json_client import JsonClientBridge, JsonTcpClient
 
 if TYPE_CHECKING:
     from ui.models.robot_info import RobotInfo
+
+MessageHandler = Callable[[object], None]
+ConnectionHandler = Callable[[bool, str], None]
 
 
 def _parse_json_gateway(profile: RobotInfo) -> Tuple[str, int]:
@@ -30,17 +33,48 @@ def _parse_json_gateway(profile: RobotInfo) -> Tuple[str, int]:
 
 
 class JsonGatewayBackend(RobotBackend):
-    """Reuse legacy xtark JSON TCP bridge for velocity commands."""
+    """xtark JSON TCP bridge: cmd_vel out, odom_base / base_status in."""
 
     def __init__(self) -> None:
         self._bridge = JsonClientBridge()
         self._client = JsonTcpClient(self._bridge)
         self._host = ""
         self._port = 8765
+        self._message_handlers: list[MessageHandler] = []
+        self._connection_handlers: list[ConnectionHandler] = []
         self._bridge.log_line.connect(lambda text: print(f"JSON gateway: {text}"))
-        self._bridge.connection_changed.connect(
-            lambda ok, detail: print(f"JSON gateway connection: ok={ok} {detail}")
-        )
+        self._bridge.message.connect(self._dispatch_message)
+        self._bridge.connection_changed.connect(self._dispatch_connection)
+
+    def bind_feedback(
+        self,
+        *,
+        on_message: MessageHandler,
+        on_connection: ConnectionHandler,
+    ) -> None:
+        if on_message not in self._message_handlers:
+            self._message_handlers.append(on_message)
+        if on_connection not in self._connection_handlers:
+            self._connection_handlers.append(on_connection)
+
+    def unbind_feedback(
+        self,
+        *,
+        on_message: MessageHandler,
+        on_connection: ConnectionHandler,
+    ) -> None:
+        if on_message in self._message_handlers:
+            self._message_handlers.remove(on_message)
+        if on_connection in self._connection_handlers:
+            self._connection_handlers.remove(on_connection)
+
+    def _dispatch_message(self, msg: object) -> None:
+        for handler in list(self._message_handlers):
+            handler(msg)
+
+    def _dispatch_connection(self, ok: bool, detail: str) -> None:
+        for handler in list(self._connection_handlers):
+            handler(ok, detail)
 
     def connect(self, profile: RobotInfo) -> None:
         host, port = _parse_json_gateway(profile)

@@ -1,18 +1,54 @@
 from __future__ import annotations
 
+from typing import Any, Dict, Optional
+
+from PyQt5.QtCore import QObject, pyqtSignal
+
 from core.robot_state import RobotConnectionState
 
 _MAX_LINEAR = 0.50
 _MAX_ANGULAR = 1.00
 
 
-class RobotSession:
-    def __init__(self, profile, backend):
+class RobotSession(QObject):
+    """Robot control session; emits JSON gateway telemetry for UI layers."""
+
+    odom_updated = pyqtSignal(object)
+    base_status_updated = pyqtSignal(object)
+    gateway_connection_changed = pyqtSignal(bool, str)
+
+    def __init__(self, profile, backend, parent=None):
+        super().__init__(parent)
         self.profile = profile
         self.backend = backend
         self.state = RobotConnectionState.DISCONNECTED
         self.last_error = ""
         self.manual_control_enabled = True
+        self.last_odom: Optional[Dict[str, Any]] = None
+        self.last_base_status: Optional[Dict[str, Any]] = None
+        self._bind_backend_feedback()
+
+    def _bind_backend_feedback(self) -> None:
+        bind = getattr(self.backend, "bind_feedback", None)
+        if callable(bind):
+            bind(
+                on_message=self._handle_json_message,
+                on_connection=self._handle_gateway_connection,
+            )
+
+    def _handle_json_message(self, msg: Dict[str, Any]) -> None:
+        msg_type = msg.get("type")
+        if msg_type == "odom_base":
+            self.last_odom = msg
+            self.odom_updated.emit(msg)
+        elif msg_type == "base_status":
+            self.last_base_status = msg
+            self.base_status_updated.emit(msg)
+
+    def _handle_gateway_connection(self, ok: bool, detail: str) -> None:
+        self.gateway_connection_changed.emit(ok, detail)
+        if not ok:
+            self.last_error = detail or "JSON 网关连接中断"
 
     def connect(self) -> bool:
         self.state = RobotConnectionState.CONNECTING
@@ -33,7 +69,14 @@ class RobotSession:
         self.state = RobotConnectionState.DISCONNECTED
 
     def cleanup(self) -> None:
+        unbind = getattr(self.backend, "unbind_feedback", None)
+        if callable(unbind):
+            unbind(
+                on_message=self._handle_json_message,
+                on_connection=self._handle_gateway_connection,
+            )
         self.backend.cleanup()
+        self.state = RobotConnectionState.DISCONNECTED
 
     def is_connected(self) -> bool:
         return self.state == RobotConnectionState.CONNECTED and self.backend.is_connected()

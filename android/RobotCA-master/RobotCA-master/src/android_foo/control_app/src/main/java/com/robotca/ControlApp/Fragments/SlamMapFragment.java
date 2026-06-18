@@ -1252,11 +1252,6 @@ public class SlamMapFragment extends SimpleFragment {
 
         updateWaitingState();
 
-        if (!slamMapView.hasMap()) {
-            debugPanel.setVisibility(View.GONE);
-            return;
-        }
-
         debugPanel.setVisibility(View.VISIBLE);
         debugSummaryText.setText(buildSummaryText());
         updateNavigationStatusText();

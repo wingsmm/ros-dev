@@ -27,7 +27,7 @@
         android:focusable="true"
         android:orientation="vertical"
         android:padding="8dp"
-        android:visibility="gone">
+        android:visibility="visible">
 
         <TextView
             android:id="@+id/slam_map_debug_summary"
