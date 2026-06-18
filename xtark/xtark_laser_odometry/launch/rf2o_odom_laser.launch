@@ -1,0 +1,26 @@
+<launch>
+  <!-- Experimental sidecar: publishes /odom_laser only. Does not replace /odom or main TF. -->
+
+  <arg name="scan_topic" default="/scan" />
+  <arg name="odom_topic" default="/odom_laser" />
+  <arg name="base_frame_id" default="base_footprint" />
+  <arg name="odom_frame_id" default="odom_laser" />
+  <arg name="publish_tf" default="false" />
+  <arg name="freq" default="10.0" />
+  <arg name="verbose" default="false" />
+
+  <node pkg="rf2o_laser_odometry"
+        type="rf2o_laser_odometry_node"
+        name="rf2o_laser_odometry"
+        output="screen">
+    <rosparam file="$(find xtark_laser_odometry)/config/rf2o_laser_odometry.yaml" command="load" />
+    <param name="laser_scan_topic" value="$(arg scan_topic)" />
+    <param name="odom_topic" value="$(arg odom_topic)" />
+    <param name="base_frame_id" value="$(arg base_frame_id)" />
+    <param name="odom_frame_id" value="$(arg odom_frame_id)" />
+    <param name="publish_tf" value="$(arg publish_tf)" />
+    <param name="init_pose_from_topic" value="" />
+    <param name="freq" value="$(arg freq)" />
+    <param name="verbose" value="$(arg verbose)" />
+  </node>
+</launch>

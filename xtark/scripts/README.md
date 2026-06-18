@@ -18,6 +18,7 @@ These scripts are copied to the robot under:
 | `android_stack.sh` | Starts the Android validation ROS stack: roscore, bringup, camera, gmapping, move_base, `/robot_pose_in_map`, and speed sync. |
 | `camera_stack.sh` | Starts only the shared camera path for Android ROS topic and Qt/browser MJPEG preview. |
 | `json_stack.sh` | Starts the PC/Qt JSON bridge validation stack: bringup plus `xtark_json_bridge`. |
+| `laser_odom_experiment.sh` | Sidecar only: starts `xtark_laser_odometry` -> `/odom_laser` for phase-1 experiments. Does not modify bringup, gmapping, or move_base. |
 
 Recommended daily command:
 
@@ -28,6 +29,16 @@ Recommended daily command:
 ```
 
 Use `camera_stack.sh` only when you want to observe camera without starting the base.
+
+Laser odometry experiment (phase 1, sidecar only):
+
+```bash
+~/ros_ws/scripts/laser_odom_experiment.sh start
+~/ros_ws/scripts/laser_odom_experiment.sh status
+~/ros_ws/scripts/laser_odom_experiment.sh stop
+```
+
+Requires main bringup already running (`/scan`, `/odom`). See `../xtark_laser_odometry/README.md`.
 
 ## Windows-Side Remote Helpers
 
@@ -41,7 +52,7 @@ These scripts are run from the repository root on Windows:
 ## Placement Rule
 
 - Add remote startup/status/log collection here.
-- Add robot runtime ROS code to a ROS package under `../`.
+- Add robot runtime ROS code to a ROS package under `../` (e.g. `../xtark_laser_odometry/` for laser odom experiments).
 - Add Android APK build/install scripts under `../../android/scripts/`.
 - Add PC/Qt client scripts under `../../pc/`.
 

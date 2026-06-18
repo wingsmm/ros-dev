@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>xtark_laser_odometry</name>
+  <version>0.1.0</version>
+  <description>Experimental laser odometry sidecar for xtark (/odom_laser). Does not replace wheel /odom.</description>
+
+  <maintainer email="dev@example.com">xtark</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>rf2o_laser_odometry</exec_depend>
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>tf</exec_depend>
+
+  <export/>
+</package>

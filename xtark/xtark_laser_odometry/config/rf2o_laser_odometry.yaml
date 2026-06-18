@@ -1,0 +1,11 @@
+# rf2o_laser_odometry private params (see MAPIRlab/rf2o_laser_odometry launch examples).
+# Loaded by rf2o_odom_laser.launch; launch args override these values.
+
+laser_scan_topic: /scan
+odom_topic: /odom_laser
+base_frame_id: base_footprint
+odom_frame_id: odom_laser
+publish_tf: false
+init_pose_from_topic: ""
+freq: 10.0
+verbose: false
