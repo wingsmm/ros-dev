@@ -10,8 +10,11 @@ import time
 import rospy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Float32
 from tf.transformations import euler_from_quaternion
+
+from warning_scan_math import compute_front_min_range
 
 
 def clamp(value, limit):
@@ -38,10 +41,15 @@ class JsonBaseAdapter(object):
         self.max_angular_z = float(rospy.get_param("~max_angular_z", 0.8))
         self.odom_send_rate_hz = float(rospy.get_param("~odom_send_rate_hz", 20.0))
         self.status_send_rate_hz = float(rospy.get_param("~status_send_rate_hz", 2.0))
+        self.scan_warning_send_rate_hz = float(
+            rospy.get_param("~scan_warning_send_rate_hz", 10.0)
+        )
+        self.scan_stale_sec = float(rospy.get_param("~scan_stale_sec", 1.0))
 
         cmd_topic = rospy.get_param("~cmd_vel_topic", "/cmd_vel")
         odom_topic = rospy.get_param("~odom_topic", "/odom")
         voltage_topic = rospy.get_param("~voltage_topic", "/voltage")
+        scan_topic = rospy.get_param("~scan_topic", "/scan")
 
         self.cmd_pub = rospy.Publisher(cmd_topic, Twist, queue_size=1)
         self.clients = set()
@@ -50,12 +58,19 @@ class JsonBaseAdapter(object):
         self.stop_sent = True
         self.latest_voltage = None
         self.last_pose_sample = None
+        self.latest_front_min = float("inf")
+        self.last_scan_time = 0.0
 
         rospy.Subscriber(odom_topic, Odometry, self.on_odom, queue_size=10)
         rospy.Subscriber(voltage_topic, Float32, self.on_voltage, queue_size=2)
+        rospy.Subscriber(scan_topic, LaserScan, self.on_scan, queue_size=5)
 
         rospy.Timer(rospy.Duration(0.05), self.watchdog)
         rospy.Timer(rospy.Duration(1.0 / max(self.status_send_rate_hz, 0.1)), self.send_status)
+        rospy.Timer(
+            rospy.Duration(1.0 / max(self.scan_warning_send_rate_hz, 0.1)),
+            self.send_scan_warning,
+        )
 
         self.server_thread = threading.Thread(target=self.run_server)
         self.server_thread.daemon = True
@@ -203,6 +218,27 @@ class JsonBaseAdapter(object):
 
     def on_voltage(self, msg):
         self.latest_voltage = float(msg.data)
+
+    def on_scan(self, msg):
+        ranges = list(msg.ranges)
+        self.latest_front_min = compute_front_min_range(
+            ranges, msg.angle_min, msg.angle_increment
+        )
+        self.last_scan_time = time.time()
+
+    def send_scan_warning(self, _event):
+        now = time.time()
+        stale = (
+            self.last_scan_time <= 0.0
+            or (now - self.last_scan_time) > self.scan_stale_sec
+        )
+        payload = {
+            "type": "scan_warning",
+            "stamp_ms": int(now * 1000),
+            "front_min_m": None if stale else self.latest_front_min,
+            "stale": stale,
+        }
+        self.broadcast(payload)
 
     def send_status(self, _event):
         payload = {

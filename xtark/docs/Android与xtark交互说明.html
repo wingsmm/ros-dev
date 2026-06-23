@@ -219,7 +219,7 @@
       <tr><td>App Master URI</td><td><code>http://192.168.1.169:11311</code></td></tr>
       <tr><td>网络</td><td>手机/模拟器与小车在同一局域网</td></tr>
       <tr><td>小车启动脚本</td><td><code>xtark/scripts/android_stack.sh start</code></td></tr>
-      <tr><td>Windows 同步启动</td><td><code>xtark/scripts/start_android.bat</code></td></tr>
+      <tr><td>Windows 同步启动</td><td><code>xtark/scripts/android_remote.bat</code></td></tr>
     </table>
 
     <div class="warn">
@@ -561,9 +561,9 @@ move_base → /move_base/status → App</pre>
       <tr><th>步骤</th><th>命令</th><th>说明</th></tr>
       <tr><td>1. 编译 APK</td><td><code>android\scripts\build_app.bat</code></td><td>生成 <code>android\apks\xtark-control-alt-debug.apk</code></td></tr>
       <tr><td>2. 安装 APK</td><td><code>android\scripts\install_mumu.bat</code></td><td>安装到 MuMu；真机可按需手动安装 APK</td></tr>
-      <tr><td>3. 清理远端</td><td><code>xtark\scripts\start_android.bat stop</code></td><td>停掉远端旧 ROS 进程；会中断当前运行，执行前需确认</td></tr>
-      <tr><td>4. 同步并启动</td><td><code>xtark\scripts\start_android.bat</code></td><td>scp <code>android_stack.sh</code> + <code>xtark_nav</code> 到 169，并启动 Android 验证栈</td></tr>
-      <tr><td>5. 状态</td><td><code>xtark\scripts\status_android.bat</code></td><td>检查 <code>/map</code>、<code>/robot_pose_in_map</code>、move_base</td></tr>
+      <tr><td>3. 清理远端</td><td><code>xtark\scripts\android_remote.bat stop</code></td><td>停掉远端旧 ROS 进程；会中断当前运行，执行前需确认</td></tr>
+      <tr><td>4. 同步并启动</td><td><code>xtark\scripts\android_remote.bat all</code></td><td>scp <code>android_stack.sh</code> + <code>xtark_nav</code> 到 169，并启动 Android 验证栈</td></tr>
+      <tr><td>5. 状态</td><td><code>xtark\scripts\android_remote.bat status</code></td><td>检查 <code>/map</code>、<code>/robot_pose_in_map</code>、move_base</td></tr>
       <tr><td>6. App</td><td>MuMu / 手机</td><td>Master URI 填 <code>http://192.168.1.169:11311</code>，在已走过白色区域设置 A/B 点</td></tr>
     </table>
 

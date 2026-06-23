@@ -4,6 +4,7 @@ port: 8765
 cmd_vel_topic: "/cmd_vel"
 odom_topic: "/odom"
 voltage_topic: "/voltage"
+scan_topic: "/scan"
 
 cmd_timeout_sec: 0.5
 max_linear_x: 0.30
@@ -12,3 +13,5 @@ max_angular_z: 0.80
 
 odom_send_rate_hz: 20.0
 status_send_rate_hz: 2.0
+scan_warning_send_rate_hz: 10.0
+scan_stale_sec: 1.0

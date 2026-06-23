@@ -33,24 +33,31 @@ class RobotStore:
                 return robot
         return None
 
-    def add(self, robot: RobotInfo) -> None:
+    def add(self, robot: RobotInfo) -> bool:
         self._robots.append(robot)
-        self.save()
+        if self.save():
+            return True
+        self._robots.pop()
+        return False
 
     def update(self, robot: RobotInfo) -> bool:
         for index, existing in enumerate(self._robots):
             if existing.id == robot.id:
                 self._robots[index] = robot
-                self.save()
-                return True
+                if self.save():
+                    return True
+                self._robots[index] = existing
+                return False
         return False
 
     def remove(self, robot_id: str) -> bool:
         for index, robot in enumerate(self._robots):
             if robot.id == robot_id:
                 self._robots.pop(index)
-                self.save()
-                return True
+                if self.save():
+                    return True
+                self._robots.insert(index, robot)
+                return False
         return False
 
     def load(self) -> None:
@@ -95,12 +102,12 @@ class RobotStore:
                 patched.append(robot)
         self._robots = patched
 
-    def save(self) -> None:
+    def save(self) -> bool:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
             print(f"WARN: robot config directory unavailable: {exc}")
-            return
+            return False
         payload = [robot.to_dict() for robot in self._robots]
         try:
             self._path.write_text(
@@ -109,3 +116,5 @@ class RobotStore:
             )
         except OSError as exc:
             print(f"WARN: robot config save failed: {exc}")
+            return False
+        return True

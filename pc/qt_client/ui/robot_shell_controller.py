@@ -85,12 +85,12 @@ class RobotShellController:
         exec_modal_dialog(self._window, dialog, shell=self._shell)
 
     def _save_robot_from_dialog(self, robot, dialog) -> None:
-        self._on_robot_form_saved(robot)
-        dialog.accept()
+        if self._on_robot_form_saved(robot):
+            dialog.accept()
 
     def _delete_robot_from_dialog(self, robot_id: str, dialog) -> None:
-        self._on_robot_delete_confirmed(robot_id)
-        dialog.accept()
+        if self._on_robot_delete_confirmed(robot_id):
+            dialog.accept()
 
     def _on_robot_selected(self, robot_id: str) -> None:
         robot = self._robot_store.get(robot_id)
@@ -137,7 +137,9 @@ class RobotShellController:
         QTimer.singleShot(900, finish_connect)
 
     def _open_robot_workspace(self, robot, session: RobotSession) -> None:
-        workspace = RobotWorkspacePage(robot, session=session)
+        workspace = RobotWorkspacePage(
+            robot, session=session, robot_store=self._robot_store
+        )
         self._workspace = workspace
         workspace.back_requested.connect(self._shell.pop_page)
         self._shell.push_page(
@@ -156,19 +158,27 @@ class RobotShellController:
             self._session.cleanup()
             self._session = None
 
-    def _on_robot_form_saved(self, robot) -> None:
+    def _on_robot_form_saved(self, robot) -> bool:
         if self._robot_store.get(robot.id):
-            self._robot_store.update(robot)
-            self._log(f"Robot updated: {robot.name}")
+            saved = self._robot_store.update(robot)
+            action = "updated"
         else:
-            self._robot_store.add(robot)
-            self._log(f"Robot added: {robot.name}")
+            saved = self._robot_store.add(robot)
+            action = "added"
+        if not saved:
+            self._log(f"Robot save failed: {robot.name}")
+            return False
+        self._log(f"Robot {action}: {robot.name}")
         self.refresh_robot_list()
+        return True
 
-    def _on_robot_delete_confirmed(self, robot_id: str) -> None:
+    def _on_robot_delete_confirmed(self, robot_id: str) -> bool:
         robot = self._robot_store.get(robot_id)
         if robot is None:
-            return
-        self._robot_store.remove(robot_id)
+            return False
+        if not self._robot_store.remove(robot_id):
+            self._log(f"Robot delete failed: {robot.name}")
+            return False
         self._log(f"Robot deleted: {robot.name}")
         self.refresh_robot_list()
+        return True

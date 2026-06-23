@@ -45,9 +45,9 @@ Android A/B 点
 ## 当前怎么跑
 
 ```bat
-xtark\scripts\start_android.bat
-xtark\scripts\status_android.bat
-xtark\scripts\start_android.bat stop
+xtark\scripts\android_remote.bat all
+xtark\scripts\android_remote.bat status
+xtark\scripts\android_remote.bat stop
 ```
 
 Android App 的 ROS Master URI：

@@ -1,0 +1,39 @@
+---
+description: 禁止为临时验证新建 scripts/tests 文件；用命令或测完即删
+alwaysApply: true
+---
+
+# 禁止临时验证专用文件
+
+## 原则
+
+一次性联调、真机验证、截图、冒烟检查**不要**落成仓库里的专用脚本或测试文件。
+
+优先：
+
+1. **直接在终端跑命令**（`python -m unittest …`、`plink`/`curl`、现有 `xtark/scripts/*.bat` 等）
+2. **必须写临时代码时**：任务结束前删除，不要提交、不要留在工作区
+
+## 禁止（除非用户明确要求保留）
+
+- 在 `pc/qt_client/scripts/` 下新建「只为这次验证」的 `.py`
+- 在 `pc/qt_client/tests/` 下新建或扩充「只为这次修复」的 `test_*.py`
+- 在 `pc/tools/` 下新建 `verify_*` / `check_*` 一类一次性脚本
+- 在 `xtark/**/scripts/` 下新建与 ROS 节点无关的 `test_*.py`
+
+## 允许
+
+- 用户明确说「加测试」「保留脚本」「做截图工具进文档」
+- 复用仓库已有入口：`xtark/scripts/deploy_*.bat`、`pc/tools/send_cmd_vel_json.py`、`json_stack.sh` 等
+- 在对话里给出可复制命令，而不是新建文件
+
+## 示例
+
+```
+用户：验证 scan_warning 是否通
+→ plink 看进程 + python 一行 socket 读 JSON，或 deploy_json_bridge.bat status
+→ 不要新建 pc/tools/verify_scan_warning_json.py
+
+用户：设置页截图进文档，以后要复用
+→ 可先问是否保留；未确认则跑完删临时脚本
+```

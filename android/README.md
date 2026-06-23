@@ -98,11 +98,11 @@ xtark / xtark
 From the repository root on Windows:
 
 ```bat
-xtark\scripts\start_android.bat
-xtark\scripts\status_android.bat
+xtark\scripts\android_remote.bat all
+xtark\scripts\android_remote.bat status
 ```
 
-`start_android.bat` syncs `xtark/scripts/android_stack.sh` and the `xtark_nav` ROS package to the robot, then starts the Android validation stack.
+`android_remote.bat deploy` syncs `xtark/scripts/android_stack.sh` and the `xtark_nav` ROS package to the robot. `android_remote.bat start` (or `all`) starts the Android validation stack without re-uploading unless you run `deploy` first.
 
 The robot-side script starts roscore, `xtark_bringup.launch`, camera, gmapping, move_base, `/robot_pose_in_map`, and Android navigation speed sync. It deliberately does not start `json_base_adapter`, which is for PC/Qt control and can conflict on `/cmd_vel`.
 
@@ -187,8 +187,7 @@ docs\Android手动控制与SafeMode说明.md
 |--------|----------------|
 | `scripts\build_app.bat` | Build RobotCA, defaulting to the non-conflicting `cn.xtark.robotca` package. |
 | `scripts\install_mumu.bat` | Install the rebuilt APK into MuMu. |
-| `..\xtark\scripts\start_android.bat` | Sync and start the robot-side Android validation ROS stack on 169. |
-| `..\xtark\scripts\status_android.bat` | Show ROS status and logs from 169. |
+| `..\xtark\scripts\android_remote.bat` | Deploy, start, stop, status, logs for the robot-side Android validation stack. |
 | `..\xtark\scripts\android_stack.sh` | Canonical robot-side Android validation startup script. |
 
 ## Upstream References

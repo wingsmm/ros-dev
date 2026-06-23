@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QObject, QTimer, pyqtSignal
+from PyQt5.QtWidgets import QApplication
 
 from core.robot_state import RobotConnectionState
+from core.warning_controller import WarningController, WarningSettings
 
 _MAX_LINEAR = 0.50
 _MAX_ANGULAR = 1.00
@@ -15,6 +17,7 @@ class RobotSession(QObject):
 
     odom_updated = pyqtSignal(object)
     base_status_updated = pyqtSignal(object)
+    warning_updated = pyqtSignal(object)
     gateway_connection_changed = pyqtSignal(bool, str)
 
     def __init__(self, profile, backend, parent=None):
@@ -26,7 +29,26 @@ class RobotSession(QObject):
         self.manual_control_enabled = True
         self.last_odom: Optional[Dict[str, Any]] = None
         self.last_base_status: Optional[Dict[str, Any]] = None
+        self.last_warning: Optional[Dict[str, Any]] = None
+        self._warning = WarningController(self._warning_settings_from_profile())
+        self._warning_timer = QTimer(self)
+        self._warning_timer.setInterval(100)
+        self._warning_timer.timeout.connect(self._on_warning_timer)
+        self._warning_timer.start()
         self._bind_backend_feedback()
+
+    def _warning_settings_from_profile(self) -> WarningSettings:
+        profile = self.profile
+        return WarningSettings(
+            enabled=bool(getattr(profile, "warning_enabled", False)),
+            safemode=bool(getattr(profile, "warning_safemode", True)),
+            beep=bool(getattr(profile, "warning_beep", True)),
+            min_distance_m=float(getattr(profile, "warning_min_distance", 3.0)),
+        )
+
+    def reload_warning_settings(self) -> None:
+        self._warning.apply_settings(self._warning_settings_from_profile())
+        self._emit_warning_state()
 
     def _bind_backend_feedback(self) -> None:
         bind = getattr(self.backend, "bind_feedback", None)
@@ -40,10 +62,46 @@ class RobotSession(QObject):
         msg_type = msg.get("type")
         if msg_type == "odom_base":
             self.last_odom = msg
+            self._warning.on_odom(float(msg.get("linear_x", 0.0)))
             self.odom_updated.emit(msg)
+            self._emit_warning_state()
         elif msg_type == "base_status":
             self.last_base_status = msg
             self.base_status_updated.emit(msg)
+        elif msg_type == "scan_warning":
+            front_min = msg.get("front_min_m")
+            stale = bool(msg.get("stale", False))
+            if front_min is None:
+                stale = True
+                front_value = float("inf")
+            else:
+                front_value = float(front_min)
+            self._warning.on_scan_warning(
+                front_min_m=front_value,
+                stale=stale,
+                stamp_ms=msg.get("stamp_ms"),
+            )
+            if self._warning.should_beep():
+                QApplication.beep()
+            self._emit_warning_state()
+
+    def _on_warning_timer(self) -> None:
+        before = self._warning.warn_amount
+        self._warning.touch_scan_timeout()
+        if self.last_odom is not None:
+            self._warning.on_odom(float(self.last_odom.get("linear_x", 0.0)))
+        if before != self._warning.warn_amount:
+            self._emit_warning_state()
+
+    def _emit_warning_state(self) -> None:
+        payload = {
+            "warn_amount": self._warning.warn_amount,
+            "scan_stale": self._warning.scan_stale,
+            "enabled": self._warning.settings.enabled,
+            "safemode": self._warning.settings.safemode,
+        }
+        self.last_warning = payload
+        self.warning_updated.emit(payload)
 
     def _handle_gateway_connection(self, ok: bool, detail: str) -> None:
         self.gateway_connection_changed.emit(ok, detail)
@@ -57,6 +115,7 @@ class RobotSession(QObject):
             self.state = RobotConnectionState.CONNECTED
             self.last_error = ""
             self.manual_control_enabled = True
+            self.reload_warning_settings()
             return True
         except Exception as exc:
             self.state = RobotConnectionState.FAILED
@@ -69,6 +128,7 @@ class RobotSession(QObject):
         self.state = RobotConnectionState.DISCONNECTED
 
     def cleanup(self) -> None:
+        self._warning_timer.stop()
         unbind = getattr(self.backend, "unbind_feedback", None)
         if callable(unbind):
             unbind(
@@ -97,8 +157,23 @@ class RobotSession(QObject):
         ly = max(-_MAX_LINEAR, min(_MAX_LINEAR, float(linear_y)))
         az = max(-_MAX_ANGULAR, min(_MAX_ANGULAR, float(angular_z)))
 
+        profile = self.profile
+        if getattr(profile, "invert_x", False):
+            lx = -lx
+        if getattr(profile, "invert_y", False):
+            ly = -ly
+        if getattr(profile, "invert_angular_velocity", False):
+            az = -az
+
+        scale = self._warning.forward_scale(lx)
+        lx *= scale
+
         try:
-            print("RobotSession velocity:", f"lx={lx:.3f} ly={ly:.3f} az={az:.3f}")
+            print(
+                "RobotSession velocity:",
+                f"lx={lx:.3f} ly={ly:.3f} az={az:.3f}",
+                f"warn_scale={scale:.3f}",
+            )
             self.backend.send_velocity(lx, ly, az)
             self.last_error = ""
             return True

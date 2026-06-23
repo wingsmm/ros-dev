@@ -8,8 +8,10 @@ from PyQt5.QtWidgets import QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 from core import RobotSession
 from core.robot_telemetry_binder import RobotTelemetryBinder
 from ui.models.robot_info import RobotInfo
+from ui.models.robot_store import RobotStore
 from ui.pages.camera_page import CameraPage
 from ui.pages.placeholder_page import PlaceholderPage
+from ui.pages.settings_page import SettingsPage
 from ui.widgets.robot_hud_bar import RobotHudBar
 from ui.widgets.robot_side_nav import CONTENT_PAGE_IDS, RobotSideNav
 
@@ -19,7 +21,6 @@ _WORKSPACE_PLACEHOLDERS: Dict[str, str] = {
     "robot": "机器人控制功能待接入",
     "slam_map": "SLAM 地图功能待接入",
     "gps_map": "GPS 地图功能待接入",
-    "settings": "设置功能待接入",
     "about": "关于功能待接入",
 }
 
@@ -41,11 +42,13 @@ class RobotWorkspacePage(QWidget):
         self,
         robot: RobotInfo,
         session: Optional[RobotSession] = None,
+        robot_store: Optional[RobotStore] = None,
         parent=None,
     ):
         super().__init__(parent)
         self.robot = robot
         self.session = session
+        self._robot_store = robot_store
         self._nav_open = False
         self._nav_width = 320
         self._nav_anim: Optional[QPropertyAnimation] = None
@@ -79,6 +82,13 @@ class RobotWorkspacePage(QWidget):
         for page_id in CONTENT_PAGE_IDS:
             if page_id == "camera":
                 page = CameraPage(self.robot, telemetry_binder=self._telemetry_binder)
+            elif page_id == "settings" and self._robot_store is not None:
+                page = SettingsPage(
+                    self.robot,
+                    self._robot_store,
+                    session=self.session,
+                )
+                page.settings_saved.connect(self._on_settings_saved)
             else:
                 title = _NAV_TITLES.get(page_id, page_id)
                 hint = _WORKSPACE_PLACEHOLDERS.get(page_id, "功能待接入")
@@ -103,6 +113,13 @@ class RobotWorkspacePage(QWidget):
             self._hud.set_placeholder()
 
         self._show_content_page("overview")
+
+    def _on_settings_saved(self) -> None:
+        if self.session is not None:
+            self.session.reload_warning_settings()
+        camera = self._page_widget("camera")
+        if camera is not None and hasattr(camera, "refresh_robot_settings"):
+            camera.refresh_robot_settings()
 
     def _on_emergency_stop(self) -> None:
         if self.session is None:

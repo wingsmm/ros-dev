@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QVBoxLayout, QWidget
 
 from core.robot_telemetry_binder import RobotTelemetryBinder
 from ui.models.robot_info import RobotInfo
+from ui.models.robot_settings import effective_manual_speeds
 from ui.widgets.camera_toolbar import CameraToolbar
 from ui.widgets.camera_viewport import CameraViewport
 from ui.widgets.manual_control_strip import ManualControlStrip
@@ -76,17 +77,15 @@ class CameraPage(QWidget):
         self._toolbar.set_topic_hint(
             f"Android {ANDROID_CAMERA_TOPIC} | 预览 {QT_MJPEG_TOPIC}"
         )
-        linear = (
-            self._robot.manual_linear_speed
-            if self._robot.manual_linear_speed is not None
-            else 0.10
-        )
-        angular = (
-            self._robot.manual_angular_speed
-            if self._robot.manual_angular_speed is not None
-            else 0.20
-        )
+        self._apply_manual_speed_defaults()
+
+    def _apply_manual_speed_defaults(self) -> None:
+        linear, angular = effective_manual_speeds(self._robot)
         self._manual.set_speeds(linear=linear, angular=angular)
+
+    def refresh_robot_settings(self) -> None:
+        """Re-read per-robot settings after SettingsPage save."""
+        self._apply_manual_speed_defaults()
 
     def on_page_activated(self) -> None:
         """Auto-connect MJPEG preview when entering camera tab (MVP)."""

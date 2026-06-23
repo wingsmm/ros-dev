@@ -16,9 +16,11 @@ Runtime nodes should live inside a ROS package, not in `xtark/scripts/`.
 | Path | Responsibility |
 |------|----------------|
 | `scripts/android_stack.sh` | Starts the Android validation stack on the robot: roscore, bringup, camera, gmapping, move_base, pose relay, and speed sync. |
-| `scripts/start_android.bat` | Syncs the Android validation robot-side stack to 192.168.1.169 and runs `android_stack.sh`. |
-| `scripts/status_android.bat` | Reads Android validation ROS status and logs from 192.168.1.169. |
+| `scripts/android_remote.bat` | Windows helper: deploy / start / stop / status / logs for the Android validation stack. |
+| `scripts/deploy_json_bridge.bat` | Windows helper: sync and restart the JSON bridge package. |
+| `scripts/deploy_laser_odom_compare.bat` | Windows helper: sync and run the laser odometry compare stack. |
 | `scripts/json_stack.sh` | Starts the PC/Qt JSON bridge validation stack on the robot. |
+| `tools/analyze_laser_odom_bag.py` | Offline rosbag analysis for laser odometry experiments. |
 
 `xtark/scripts/` is for orchestration, deployment, and diagnostics only. It should not contain long-running ROS nodes.
 See `scripts/README.md` for the script entrypoint split.

@@ -180,8 +180,8 @@ android/
 cd /d D:\Downloads\work\ros-dev\android
 scripts\build_app.bat
 scripts\install_mumu.bat
-..\xtark\scripts\start_android.bat
-..\xtark\scripts\status_android.bat
+..\xtark\scripts\android_remote.bat all
+..\xtark\scripts\android_remote.bat status
 ```
 
 约定：

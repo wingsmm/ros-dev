@@ -111,7 +111,7 @@ rosbag record /scan /odom /odom_laser
 生成文字报告与自包含 HTML/SVG 图表（无需 Matplotlib/Plotly）：
 
 ```bash
-python2 ~/ros_ws/scripts/analyze_laser_odom_bag.py <bag> \
+python2 ~/ros_ws/tools/analyze_laser_odom_bag.py <bag> \
   --report ~/xtark_logs/laser_odom_compare/analysis.txt \
   --html-report ~/xtark_logs/laser_odom_compare/analysis.html
 ```

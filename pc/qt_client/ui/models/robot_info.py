@@ -4,7 +4,6 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional
 
-
 @dataclass
 class RobotInfo:
     id: str
@@ -16,6 +15,17 @@ class RobotInfo:
     navsat_topic: str = "/navsat/fix"
     odometry_topic: str = "/odometry/filtered"
     pose_topic: str = "/pose"
+    map_topic: str = "/map"
+    slam_xmin: float = -2.0
+    slam_xmax: float = 2.0
+    slam_ymin: float = -2.0
+    slam_ymax: float = 2.0
+    warning_enabled: bool = False
+    warning_safemode: bool = True
+    warning_beep: bool = True
+    warning_min_distance: float = 3.0
+    laser_scan_detail: int = 1
+    random_walk_range_proximity: float = 2.0
     reverse_laser_scan: bool = False
     invert_x: bool = False
     invert_y: bool = False
