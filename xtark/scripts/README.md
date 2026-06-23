@@ -14,12 +14,14 @@ These scripts are copied to the robot under:
 
 | Script | Responsibility |
 |--------|----------------|
-| `robot_stack.sh` | Simple one-command stack for Android observation + Qt preview/control: roscore, bringup, camera, and JSON adapter. |
-| `android_stack.sh` | Starts the Android validation ROS stack: roscore, bringup, camera, gmapping, move_base, `/robot_pose_in_map`, and speed sync. |
+| `robot_stack.sh` | Daily Qt / JSON stack: roscore, bringup, camera, and JSON adapter. |
+| `android_stack.sh` | Android validation stack: roscore, bringup, camera, gmapping, move_base, `/robot_pose_in_map`, and speed sync. |
 | `camera_stack.sh` | Starts only the shared camera path for Android ROS topic and Qt/browser MJPEG preview. |
 | `json_stack.sh` | Starts the PC/Qt JSON bridge validation stack: bringup plus `xtark_json_bridge`. |
-| `laser_odom_experiment.sh` | Sidecar only: starts `xtark_laser_odometry` -> `/odom_laser` for phase-1 experiments. Does not modify bringup, gmapping, or move_base. |
-| `laser_odom_compare_stack.sh` | **Qt 对照实验栈**：启动本栈 bringup + JSON + rf2o；`record` 录 `/cmd_vel` + `/odom` + `/odom_laser` + `/scan`。脚本只停自己记录的 PID。 |
+| `laser_odom_experiment.sh` | Sidecar only: starts `xtark_laser_odometry` -> `/odom_laser` for phase-1 experiments. It assumes another stack already provides roscore, bringup, and `/scan`. |
+| `laser_odom_compare_stack.sh` | Independent laser odometry compare stack: starts its own roscore, bringup, JSON adapter, Qt camera preview, rf2o, and optional rosbag recording. Its `stop` only stops PIDs owned by this compare stack. |
+
+## Daily Stack
 
 Recommended daily command:
 
@@ -31,7 +33,9 @@ Recommended daily command:
 
 Use `camera_stack.sh` only when you want to observe camera without starting the base.
 
-Laser odometry experiment (phase 1, sidecar only):
+## Laser Odometry Sidecar Experiment
+
+Use this when daily bringup / `/scan` is already running and you only want to add `/odom_laser` in parallel:
 
 ```bash
 ~/ros_ws/scripts/laser_odom_experiment.sh start
@@ -39,21 +43,44 @@ Laser odometry experiment (phase 1, sidecar only):
 ~/ros_ws/scripts/laser_odom_experiment.sh stop
 ```
 
-Qt manual drive + odom compare + rosbag:
+`laser_odom_experiment.sh` must not stop or modify `robot_stack.sh`, `android_stack.sh`, gmapping, or move_base.
+
+## Laser Odometry Compare Stack
+
+Use this for an isolated Qt manual-drive odometry comparison with rosbag:
 
 ```bash
-# 先手动停其它栈，避免端口/话题冲突
-~/ros_ws/scripts/robot_stack.sh stop
-
 ~/ros_ws/scripts/laser_odom_compare_stack.sh start
 ~/ros_ws/scripts/laser_odom_compare_stack.sh record
-# Qt connect 192.168.1.169:8765, drive slowly
+# Qt connect 192.168.1.169:8765, drive slowly.
+# Qt camera preview: http://192.168.1.169:8080/stream?topic=/camera/image_raw
 ~/ros_ws/scripts/laser_odom_compare_stack.sh stop
-
-~/ros_ws/scripts/robot_stack.sh start   # 测完自行恢复
 ```
 
-各脚本只控制自己的 `start | stop | record | logs`，互不调用。
+Cold boot rule:
+
+- Booting the Nano does not start `robot_stack`, `android_stack`, or `laser_odom_compare_stack` automatically.
+- If no stack was started manually after boot, do not run extra `robot_stack.sh stop` / `android_stack.sh stop` before the laser compare test.
+- `laser_odom_compare_stack.sh stop` only stops the PID files owned by this compare stack.
+
+Conflict rule:
+
+- If `robot_stack.sh` or `android_stack.sh` was started earlier in the same session, stop it manually before starting the compare stack.
+- The compare stack owns its own `roscore + xtark_bringup + JSON :8765 + rf2o + rosbag`, so it is mutually exclusive with daily / Android stacks.
+- It also starts `xtark_camera.launch` only for Qt / browser preview. Camera topics are not part of the default rosbag recording.
+- Set `CAMERA_ENABLE=0` when the camera preview is not needed.
+- Do not add hidden cross-stack stop calls inside `laser_odom_compare_stack.sh`; keep stack boundaries explicit.
+
+Optional cleanup when you are unsure what is running:
+
+```bash
+~/ros_ws/scripts/robot_stack.sh stop
+~/ros_ws/scripts/android_stack.sh stop
+~/ros_ws/scripts/laser_odom_compare_stack.sh stop
+~/ros_ws/scripts/laser_odom_compare_stack.sh start
+```
+
+All stack scripts control only their own `start | stop | record | logs` lifecycle and do not call each other.
 
 ## Windows-Side Remote Helpers
 
@@ -63,6 +90,22 @@ These scripts are run from the repository root on Windows:
 |--------|----------------|
 | `start_android.bat` | Syncs `android_stack.sh` and `xtark_nav` to `192.168.1.169`, then runs `android_stack.sh`. |
 | `status_android.bat` | Reads Android validation ROS status and logs from `192.168.1.169`. |
+| `deploy_laser_odom_compare.bat` | Syncs `laser_odom_compare_stack.sh`, `analyze_laser_odom_bag.py`, and `xtark_laser_odometry` to `192.168.1.169`, then `catkin_make`. Optional: `deploy` / `start` / `stop` / `record` / `status` / `pull <bag_basename>`. |
+
+## Local Test Recordings
+
+Pull bags and analysis reports from Nano into:
+
+```text
+xtark/record/bags/      # rosbag files
+xtark/record/reports/   # analysis_*.txt / analysis_*.html
+```
+
+This directory is gitignored (only `.gitkeep` files are tracked). Example:
+
+```bat
+xtark\scripts\deploy_laser_odom_compare.bat pull laser_odom_compare_20260623_095953
+```
 
 ## Placement Rule
 

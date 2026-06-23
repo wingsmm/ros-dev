@@ -59,6 +59,11 @@ pnpm-debug.log*
 pc/qt_client/maps/*
 !pc/qt_client/maps/.gitkeep
 
+# xtark 真机测试录制（bag / 分析报告，从 Nano 拉回）
+xtark/record/**
+!xtark/record/**/
+!xtark/record/**/.gitkeep
+
 # ===== Secrets / local config =====
 .env
 .env.*

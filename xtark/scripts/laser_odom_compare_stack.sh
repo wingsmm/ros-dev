@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # laser_odom_compare_stack.sh
-# Owns only this compare stack: roscore + bringup + JSON + rf2o + rosbag.
+# Owns only this compare stack: roscore + bringup + JSON + Qt camera preview + rf2o + rosbag.
 # It does not call or stop robot_stack/android_stack. Stop conflicting stacks manually.
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -20,6 +20,9 @@ BRINGUP_PKG="${BRINGUP_PKG:-xtark_driver}"
 BRINGUP_LAUNCH="${BRINGUP_LAUNCH:-xtark_bringup.launch}"
 JSON_PKG="${JSON_PKG:-xtark_json_bridge}"
 JSON_LAUNCH="${JSON_LAUNCH:-json_base_adapter.launch}"
+CAMERA_ENABLE="${CAMERA_ENABLE:-1}"
+CAMERA_PKG="${CAMERA_PKG:-xtark_driver}"
+CAMERA_LAUNCH="${CAMERA_LAUNCH:-xtark_camera.launch}"
 LASER_ODOM_PKG="${LASER_ODOM_PKG:-xtark_laser_odometry}"
 LASER_ODOM_LAUNCH="${LASER_ODOM_LAUNCH:-rf2o_odom_laser.launch}"
 
@@ -29,16 +32,17 @@ PID_DIR="$LOG_DIR/pids"
 ROSCORE_LOG="$LOG_DIR/roscore.log"
 BRINGUP_LOG="$LOG_DIR/bringup.log"
 JSON_LOG="$LOG_DIR/json_adapter.log"
+CAMERA_LOG="$LOG_DIR/camera.log"
 RF2O_LOG="$LOG_DIR/rf2o.log"
 BAG_LOG="$LOG_DIR/rosbag.log"
-RECORD_TOPICS="${RECORD_TOPICS:-/cmd_vel /odom /odom_laser /scan}"
+RECORD_TOPICS="${RECORD_TOPICS:-/cmd_vel /odom_raw /odom /imu /odom_laser /scan /tf_static /xtark/aset /xtark/bset /xtark/cset /xtark/dset /xtark/avel /xtark/bvel /xtark/cvel /xtark/dvel}"
 
 usage() {
   cat <<EOF
 Usage: ${STACK_TAG}.sh <command>
 
 Commands:
-  start   Start this stack only (roscore + bringup + JSON + rf2o)
+  start   Start this stack only (roscore + bringup + JSON + Qt camera preview + rf2o)
   stop    Stop only processes started by this script + its rosbag
   record  Start rosbag for this stack (${RECORD_TOPICS})
   logs    Tail this stack logs
@@ -47,6 +51,8 @@ Does NOT start/stop robot_stack or android_stack.
 If ports/topics conflict, stop the other stack first yourself.
 
 Qt: JSON ${HOST_IP}:8765 -> /cmd_vel
+Qt camera preview: http://${HOST_IP}:8080/stream?topic=/camera/image_raw
+Camera is preview-only here and is not recorded in rosbag.
 
 LOG_DIR=${LOG_DIR}
 BAG_DIR=${BAG_DIR}
@@ -179,6 +185,22 @@ cmd_start() {
     wait_for_port 8765 25 || true
   fi
 
+  if [ "$CAMERA_ENABLE" = "1" ]; then
+    if pid_alive "$PID_DIR/camera.pid"; then
+      echo "[OK] camera already running (this stack)"
+    elif pgrep -f "roslaunch $CAMERA_PKG $CAMERA_LAUNCH" >/dev/null 2>&1; then
+      echo "[WARN] camera already running (other stack?); skip start"
+    else
+      echo "[INFO] starting camera preview for Qt only"
+      nohup roslaunch "$CAMERA_PKG" "$CAMERA_LAUNCH" >"$CAMERA_LOG" 2>&1 &
+      write_pid camera "$!"
+      wait_for_topic /camera/image_raw 25 || true
+      wait_for_port 8080 25 || true
+    fi
+  else
+    echo "[INFO] CAMERA_ENABLE=0, skip camera preview"
+  fi
+
   if ! rospack find rf2o_laser_odometry >/dev/null 2>&1; then
     echo "[ERR] rf2o_laser_odometry not found"
     exit 1
@@ -210,6 +232,7 @@ cmd_stop() {
   rm -f "$PID_DIR/rosbag.path"
 
   stop_pid rf2o
+  stop_pid camera
   stop_pid json
   stop_pid bringup
   stop_pid roscore
@@ -248,7 +271,8 @@ cmd_record() {
 cmd_logs() {
   mkdir -p "$LOG_DIR"
   touch "$ROSCORE_LOG" "$BRINGUP_LOG" "$JSON_LOG" "$RF2O_LOG" "$BAG_LOG"
-  tail -n 40 -f "$ROSCORE_LOG" "$BRINGUP_LOG" "$JSON_LOG" "$RF2O_LOG" "$BAG_LOG"
+  touch "$CAMERA_LOG"
+  tail -n 40 -f "$ROSCORE_LOG" "$BRINGUP_LOG" "$JSON_LOG" "$CAMERA_LOG" "$RF2O_LOG" "$BAG_LOG"
 }
 
 main() {

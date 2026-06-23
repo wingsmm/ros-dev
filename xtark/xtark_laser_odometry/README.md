@@ -82,7 +82,8 @@ laser_odom_compare_stack.sh stop
 robot_stack.sh start
 ```
 
-`compare_stack` 的 `record` 含 `/cmd_vel` `/odom` `/odom_laser` `/scan`。各脚本互不调用。
+`compare_stack` 的 `record` 含 `/cmd_vel`、`/odom_raw`、`/odom`、`/imu`、
+`/odom_laser`、`/scan`、`/tf_static` 以及四轮 `set/vel` 反馈。各脚本互不调用。
 
 ## 验证
 
@@ -106,6 +107,18 @@ rosbag record /scan /odom /odom_laser
 | 前进 | `/odom_laser` 的 x 有合理变化 |
 | 原地转 | yaw 有合理变化 |
 | 静止 | 不明显持续漂移 |
+
+生成文字报告与自包含 HTML/SVG 图表（无需 Matplotlib/Plotly）：
+
+```bash
+python2 ~/ros_ws/scripts/analyze_laser_odom_bag.py <bag> \
+  --report ~/xtark_logs/laser_odom_compare/analysis.txt \
+  --html-report ~/xtark_logs/laser_odom_compare/analysis.html
+```
+
+HTML 包含 SE(2) 对齐轨迹、前进/横移/旋转速度、yaw、一致性误差和四轮
+目标/反馈曲线。`/cmd_vel` 只表示控制意图；没有外部真值时，图中的误差只能称为
+不同估计器之间的“一致性误差”。
 
 ## 停止
 
