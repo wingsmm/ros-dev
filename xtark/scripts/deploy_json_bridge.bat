@@ -30,7 +30,7 @@ goto :help
 :help
 echo Usage: deploy_json_bridge.bat [deploy^|build^|restart^|status^|all^|help]
 echo.
-echo   deploy   Sync json_stack.sh and xtark_json_bridge, then catkin_make
+echo   deploy   Sync json_stack.sh, robot_control_stack.sh and xtark_json_bridge, then catkin_make
 echo   build    catkin_make only (after files already on robot)
 echo   restart  Restart json_base_adapter (no upload)
 echo   status   Show adapter process, port 8765, recent log (no upload)
@@ -41,18 +41,22 @@ echo Default with no arguments: all
 exit /b 0
 
 :deploy
-echo [1/3] sync json_stack.sh ...
+echo [1/4] sync json_stack.sh ...
 "%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% "%REPO_ROOT%xtark\scripts\json_stack.sh" "%XTARK_REMOTE%:%XTARK_REMOTE_SCRIPTS%/json_stack.sh"
 if errorlevel 1 exit /b 1
 
-echo [2/3] sync xtark_json_bridge ...
+echo [2/4] sync robot_control_stack.sh ...
+"%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% "%REPO_ROOT%xtark\scripts\robot_control_stack.sh" "%XTARK_REMOTE%:%XTARK_REMOTE_SCRIPTS%/robot_control_stack.sh"
+if errorlevel 1 exit /b 1
+
+echo [3/4] sync xtark_json_bridge ...
 "%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% -r "%REPO_ROOT%xtark\xtark_json_bridge" %XTARK_REMOTE%:%XTARK_REMOTE_WS%/src/
 if errorlevel 1 exit /b 1
 goto :build_only
 
 :build_only
-echo [3/3] chmod + catkin_make ...
-"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "chmod +x %XTARK_REMOTE_SCRIPTS%/json_stack.sh && cd %XTARK_REMOTE_WS% && source /opt/ros/melodic/setup.bash && catkin_make && source devel/setup.bash && rospack find xtark_json_bridge"
+echo [4/4] chmod + catkin_make ...
+"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "chmod +x %XTARK_REMOTE_SCRIPTS%/json_stack.sh %XTARK_REMOTE_SCRIPTS%/robot_control_stack.sh && cd %XTARK_REMOTE_WS% && source /opt/ros/melodic/setup.bash && catkin_make && source devel/setup.bash && rospack find xtark_json_bridge"
 exit /b %ERRORLEVEL%
 
 :restart

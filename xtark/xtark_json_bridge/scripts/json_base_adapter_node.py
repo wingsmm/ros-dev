@@ -31,6 +31,14 @@ def normalize_angle(angle):
     return angle
 
 
+def is_finite_number(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+    return not (math.isnan(number) or math.isinf(number))
+
+
 class JsonBaseAdapter(object):
     def __init__(self):
         self.host = rospy.get_param("~host", "0.0.0.0")
@@ -44,6 +52,10 @@ class JsonBaseAdapter(object):
         self.scan_warning_send_rate_hz = float(
             rospy.get_param("~scan_warning_send_rate_hz", 10.0)
         )
+        self.laser_scan_send_rate_hz = float(
+            rospy.get_param("~laser_scan_send_rate_hz", 10.0)
+        )
+        self.laser_scan_stride = max(1, int(rospy.get_param("~laser_scan_stride", 1)))
         self.scan_stale_sec = float(rospy.get_param("~scan_stale_sec", 1.0))
 
         cmd_topic = rospy.get_param("~cmd_vel_topic", "/cmd_vel")
@@ -60,6 +72,8 @@ class JsonBaseAdapter(object):
         self.last_pose_sample = None
         self.latest_front_min = float("inf")
         self.last_scan_time = 0.0
+        self.latest_scan_msg = None
+        self.latest_scan_lock = threading.Lock()
 
         rospy.Subscriber(odom_topic, Odometry, self.on_odom, queue_size=10)
         rospy.Subscriber(voltage_topic, Float32, self.on_voltage, queue_size=2)
@@ -70,6 +84,10 @@ class JsonBaseAdapter(object):
         rospy.Timer(
             rospy.Duration(1.0 / max(self.scan_warning_send_rate_hz, 0.1)),
             self.send_scan_warning,
+        )
+        rospy.Timer(
+            rospy.Duration(1.0 / max(self.laser_scan_send_rate_hz, 0.1)),
+            self.send_laser_scan,
         )
 
         self.server_thread = threading.Thread(target=self.run_server)
@@ -225,13 +243,76 @@ class JsonBaseAdapter(object):
             ranges, msg.angle_min, msg.angle_increment
         )
         self.last_scan_time = time.time()
+        with self.latest_scan_lock:
+            self.latest_scan_msg = msg
 
-    def send_scan_warning(self, _event):
-        now = time.time()
-        stale = (
+    @staticmethod
+    def _clean_range(value, range_min, range_max):
+        if value is None:
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not is_finite_number(number):
+            return None
+        if number < range_min or number > range_max:
+            return None
+        return number
+
+    def _scan_is_stale(self, now=None):
+        now = time.time() if now is None else now
+        return (
             self.last_scan_time <= 0.0
             or (now - self.last_scan_time) > self.scan_stale_sec
         )
+
+    def send_laser_scan(self, _event):
+        now = time.time()
+        if self._scan_is_stale(now):
+            return
+
+        with self.latest_scan_lock:
+            msg = self.latest_scan_msg
+        if msg is None:
+            return
+
+        stride = self.laser_scan_stride
+        ranges = list(msg.ranges)[::stride]
+        if not ranges:
+            return
+
+        angle_min = float(msg.angle_min)
+        angle_increment = float(msg.angle_increment) * stride
+        angle_max = angle_min + angle_increment * (len(ranges) - 1)
+        cleaned = [
+            self._clean_range(r, msg.range_min, msg.range_max) for r in ranges
+        ]
+        stamp = msg.header.stamp
+        stamp_ms = int(stamp.secs * 1000 + stamp.nsecs / 1000000)
+        if stamp_ms <= 0:
+            stamp_ms = int(now * 1000)
+
+        frame_id = msg.header.frame_id
+        if not frame_id:
+            frame_id = "laser"
+
+        payload = {
+            "type": "laser_scan",
+            "stamp_ms": stamp_ms,
+            "frame_id": frame_id,
+            "angle_min": angle_min,
+            "angle_max": angle_max,
+            "angle_increment": angle_increment,
+            "range_min": float(msg.range_min),
+            "range_max": float(msg.range_max),
+            "ranges": cleaned,
+        }
+        self.broadcast(payload)
+
+    def send_scan_warning(self, _event):
+        now = time.time()
+        stale = self._scan_is_stale(now)
         payload = {
             "type": "scan_warning",
             "stamp_ms": int(now * 1000),

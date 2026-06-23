@@ -14,4 +14,6 @@ max_angular_z: 0.80
 odom_send_rate_hz: 20.0
 status_send_rate_hz: 2.0
 scan_warning_send_rate_hz: 10.0
+laser_scan_send_rate_hz: 10.0
+laser_scan_stride: 1
 scan_stale_sec: 1.0

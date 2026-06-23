@@ -25,6 +25,7 @@ class RobotTelemetryBinder(QObject):
 
         session.odom_updated.connect(self._on_odom)
         session.base_status_updated.connect(self._on_base_status)
+        session.warning_updated.connect(self._on_warning)
         session.gateway_connection_changed.connect(self._on_gateway_connection)
 
     def bind_hud(self, hud: "RobotHudBar") -> None:
@@ -48,6 +49,8 @@ class RobotTelemetryBinder(QObject):
             self._on_odom(self._session.last_odom)
         if self._session.last_base_status is not None:
             self._on_base_status(self._session.last_base_status)
+        if self._session.last_warning is not None:
+            self._on_warning(self._session.last_warning)
 
     def refresh_connection(self) -> None:
         if self._hud is None:
@@ -84,6 +87,13 @@ class RobotTelemetryBinder(QObject):
             self._hud.set_connection(
                 True, format_connection_detail(self._robot_name, msg)
             )
+
+    def _on_warning(self, msg: object) -> None:
+        if not isinstance(msg, dict):
+            return
+        amount = float(msg.get("warn_amount", 0.0))
+        if self._hud is not None:
+            self._hud.set_warning_amount(amount)
 
     def _on_gateway_connection(self, ok: bool, detail: str) -> None:
         if ok:

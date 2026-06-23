@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 class RobotHudBar(QWidget):
     """Speed / pose / connection HUD; shared across workspace pages."""
 
-    emergency_stop_requested = pyqtSignal()
+    stop_motion_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -34,15 +34,18 @@ class RobotHudBar(QWidget):
 
         layout.addStretch(1)
 
-        self.stop_btn = QPushButton("急停")
+        self.stop_btn = QPushButton("停止")
         self.stop_btn.setFixedHeight(32)
         self.stop_btn.setStyleSheet(
             "QPushButton { background: #c62828; color: white; border: none;"
             " padding: 0 14px; border-radius: 4px; font-weight: 600; }"
             "QPushButton:hover { background: #b71c1c; }"
         )
-        self.stop_btn.clicked.connect(self.emergency_stop_requested.emit)
+        self.stop_btn.clicked.connect(self.stop_motion_requested.emit)
         layout.addWidget(self.stop_btn)
+        self._base_style = (
+            "background: #f0f0f0; border-bottom: 1px solid #ddd; padding: 4px;"
+        )
 
     def set_placeholder(self) -> None:
         self.set_connection(False, "占位")
@@ -65,3 +68,16 @@ class RobotHudBar(QWidget):
 
     def set_pose(self, pose_text: str) -> None:
         self.pose_label.setText(f"位姿 (x,y,yaw): {pose_text}")
+
+    def set_warning_amount(self, amount: float) -> None:
+        warn = max(0.0, min(1.0, float(amount)))
+        if warn <= 0.0:
+            self.setStyleSheet(self._base_style)
+            return
+        red = int(240 + 15 * warn)
+        green = int(240 * (1.0 - 0.65 * warn))
+        blue = int(240 * (1.0 - 0.65 * warn))
+        self.setStyleSheet(
+            f"background: rgb({red},{green},{blue});"
+            " border-bottom: 1px solid #ddd; padding: 4px;"
+        )

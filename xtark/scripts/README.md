@@ -49,6 +49,22 @@ Commands: `start` `stop` `status` `watch-nav` `logs`
 | **stop** | Camera roslaunch and related nodes |
 | **Conflicts with** | None if only camera; port 8080 if another camera stack runs |
 
+### `robot_control_stack.sh`
+
+| | |
+|--|--|
+| **Purpose** | Qt **机器人**页专用：底盘 + JSON，不含摄像头/导航 |
+| **Starts** | `roscore`（如需）, `xtark_bringup`, `json_base_adapter` |
+| **Depends on** | ROS Melodic, `~/ros_ws` built |
+| **stop** | 仅停止本脚本登记的 PID |
+| **Conflicts with** | `robot_stack.sh`, `android_stack.sh`（bringup / 8765） |
+
+```bash
+~/ros_ws/scripts/robot_control_stack.sh start
+~/ros_ws/scripts/robot_control_stack.sh status
+~/ros_ws/scripts/robot_control_stack.sh stop
+```
+
 ### `json_stack.sh`
 
 | | |
@@ -102,7 +118,7 @@ Shared connection settings: `_xtark_remote_env.bat` (host, PuTTY paths, password
 | Script | Responsibility |
 |--------|----------------|
 | `android_remote.bat` | Android stack: `deploy` uploads; `start`/`stop`/`status`/`logs`/`watch-nav` do **not** upload |
-| `deploy_json_bridge.bat` | Sync `json_stack.sh` + `xtark_json_bridge`, build, optional `restart` |
+| `deploy_json_bridge.bat` | Sync `json_stack.sh`, `robot_control_stack.sh` + `xtark_json_bridge`, build, optional `restart` |
 | `deploy_laser_odom_compare.bat` | Sync compare stack + `../tools/analyze_laser_odom_bag.py`, laser odom packages, build; `start`/`stop`/`record`/`status`/`pull` |
 
 ```bat

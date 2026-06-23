@@ -44,7 +44,14 @@ class RobotSideNav(QWidget):
 
     def _build_ui(self) -> None:
         self.setFixedWidth(320)
-        self.setStyleSheet("background: #ffffff; border-right: 1px solid #ddd;")
+        # RobotSideNav is a custom QWidget.  Force its styled background to
+        # paint across the stretch area below the last button; otherwise the
+        # underlying page controls can show through there on some Qt styles.
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet(
+            "RobotSideNav { background-color: #ffffff; "
+            "border-right: 1px solid #ddd; }"
+        )
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)

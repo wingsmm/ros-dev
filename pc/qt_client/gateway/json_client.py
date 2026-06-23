@@ -159,7 +159,7 @@ class JsonTcpClient:
             return
         self.last_feedback_time = time.time()
         msg_type = msg.get("type")
-        if msg_type not in ("odom_base", "scan_warning"):
+        if msg_type not in ("odom_base", "scan_warning", "laser_scan"):
             self._emit_log("RX " + line)
         self._bridge.message.emit(msg)
 

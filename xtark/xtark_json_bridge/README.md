@@ -6,7 +6,7 @@ JSON 底盘协议到 xtark ROS1 接口的适配包。
 
 ```text
 JSON cmd_vel -> ROS1 /cmd_vel
-ROS1 /odom /voltage -> JSON odom_base / base_status
+ROS1 /odom /voltage /scan -> JSON odom_base / base_status / laser_scan / scan_warning
 ```
 
 ## 运行位置
@@ -55,6 +55,53 @@ roslaunch xtark_json_bridge json_base_adapter.launch
 ```json
 {"type":"cmd_vel","linear_x":0.00,"linear_y":0.00,"angular_z":0.00}
 ```
+
+## 下行反馈
+
+除 `odom_base`、`base_status` 外，适配节点还广播：
+
+### scan_warning（10Hz，完整 /scan 计算）
+
+```json
+{"type":"scan_warning","stamp_ms":1780000000000,"front_min_m":1.24,"stale":false}
+```
+
+### laser_scan（默认 10Hz，可配置 stride 抽样）
+
+```json
+{
+  "type": "laser_scan",
+  "stamp_ms": 1780000000000,
+  "frame_id": "laser",
+  "angle_min": -2.356,
+  "angle_max": 2.356,
+  "angle_increment": 0.0087,
+  "range_min": 0.25,
+  "range_max": 12.0,
+  "ranges": [1.24, 1.25, null, 2.18]
+}
+```
+
+- `laser_scan_stride` 抽样后 `angle_increment` 同步放大。
+- `NaN` / `Inf` / 超范围距离序列化为 JSON `null`。
+- `scan_warning` 始终使用完整分辨率 `/scan`，与 `laser_scan` 独立。
+- `laser_scan` 保留原始 `frame_id` 和扫描角，不在网关内伪装成底盘坐标。
+- 当前 MEC + XAS 外参约为 `base_footprint -> laser: x=0.05m, y=0, yaw=pi`；Qt 机器人页负责在绘制前应用该静态外参。
+
+配置项见 `config/json_base_adapter.yaml`：
+
+```yaml
+laser_scan_send_rate_hz: 10.0
+laser_scan_stride: 1
+scan_stale_sec: 1.0
+```
+
+Qt 机器人页专用启动脚本：`xtark/scripts/robot_control_stack.sh`（仅 bringup + JSON，不含摄像头/导航）。
+
+`scan_warning` 当前按原始扫描角 `+-40 deg` 计算，与 Android `WarningSystem` 的基础扇区一致，
+但尚未加入 Android 使用的当前转速修正，也没有套用 `laser -> base_footprint` 外参。
+因此 MEC + XAS 的真实“车头前方”告警扇区必须在真车上确认；确认前 Qt 默认配置保持
+`warning_enabled=false`、`warning_safemode=false`。
 
 ## 外部控制端
 
@@ -105,3 +152,6 @@ xtark /odom /voltage -> JSON odom_base / base_status -> PC
 - `odom_base` 的 `x / y / yaw` 能随小车运动变化。
 - 当 xtark `/odom` 的 twist 为 0 时，适配节点会用位姿差分估算 `linear_x / linear_y / angular_z`。
 - `base_status` 能回传 `online / estop / battery_v`。
+
+2026-06-23 Qt “机器人”页扩展状态：`laser_scan`、独立启动脚本和 Qt 接收/绘制代码已完成，
+但尚未在本记录中证明远端部署、真车激光方向、六向控制和 `scan_warning` 前方扇区。

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from PyQt5.QtCore import QTimer, pyqtSignal
-from PyQt5.QtWidgets import QGridLayout, QGroupBox, QPushButton, QVBoxLayout, QWidget
+from PyQt5.QtCore import QEvent, Qt, QTimer, pyqtSignal
+from PyQt5.QtWidgets import QApplication, QGridLayout, QGroupBox, QPushButton, QVBoxLayout, QWidget
 
 
 class ManualControlStrip(QWidget):
@@ -20,9 +20,16 @@ class ManualControlStrip(QWidget):
         self._repeat_timer.timeout.connect(self._repeat_active_velocity)
         self._build_ui()
 
+        app = QApplication.instance()
+        if app is not None:
+            app.applicationStateChanged.connect(self._on_app_state_changed)
+
     def set_speeds(self, linear: float, angular: float) -> None:
         self._linear = float(linear)
         self._angular = float(angular)
+
+    def _motion_active(self) -> bool:
+        return self._repeat_timer.isActive()
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -36,7 +43,7 @@ class ManualControlStrip(QWidget):
             (2, 1, "后退", lambda: self._emit_vel(-self._linear, 0.0, 0.0), False),
             (1, 0, "左移", lambda: self._emit_vel(0.0, self._linear, 0.0), False),
             (1, 2, "右移", lambda: self._emit_vel(0.0, -self._linear, 0.0), False),
-            (1, 1, "停止", self._emit_stop, True),
+            (1, 1, "停止", self._on_stop_button, True),
             (0, 0, "左转", lambda: self._emit_vel(0.0, 0.0, self._angular), False),
             (0, 2, "右转", lambda: self._emit_vel(0.0, 0.0, -self._angular), False),
         ]
@@ -50,7 +57,6 @@ class ManualControlStrip(QWidget):
                 )
                 btn.clicked.connect(handler)
             else:
-                # Dead-man control: motion is active only while the button is held.
                 btn.pressed.connect(handler)
                 btn.released.connect(self._emit_stop)
             grid.addWidget(btn, row, col)
@@ -67,10 +73,35 @@ class ManualControlStrip(QWidget):
         lx, ly, az = self._active_velocity
         self.velocity_requested.emit(lx, ly, az)
 
-    def _emit_stop(self) -> None:
+    def _on_stop_button(self) -> None:
         self._repeat_timer.stop()
         self._active_velocity = (0.0, 0.0, 0.0)
         self.stop_requested.emit()
 
+    def _emit_stop(self) -> None:
+        if not self._motion_active():
+            return
+        self._on_stop_button()
+
     def stop(self) -> None:
-        self._emit_stop()
+        if self._motion_active():
+            self._on_stop_button()
+
+    def hideEvent(self, event) -> None:
+        if self._motion_active():
+            self.stop()
+        super().hideEvent(event)
+
+    def closeEvent(self, event) -> None:
+        if self._motion_active():
+            self.stop()
+        super().closeEvent(event)
+
+    def _on_app_state_changed(self, state: Qt.ApplicationState) -> None:
+        if state != Qt.ApplicationActive and self._motion_active():
+            self.stop()
+
+    def changeEvent(self, event) -> None:
+        if event.type() == QEvent.WindowDeactivate and self._motion_active():
+            self.stop()
+        super().changeEvent(event)

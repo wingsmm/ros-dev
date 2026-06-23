@@ -1,5 +1,6 @@
-from .placeholder_page import PlaceholderPage
 from .camera_page import CameraPage
+from .placeholder_page import PlaceholderPage
+from .robot_page import RobotPage
 from .robot_delete_page import RobotDeletePage
 from .robot_form_page import RobotFormPage
 from .robot_list_page import RobotListPage
@@ -12,6 +13,7 @@ __all__ = [
     "RobotDeletePage",
     "RobotFormPage",
     "RobotListPage",
+    "RobotPage",
     "RobotWorkspacePage",
     "SettingsPage",
 ]

@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QApplication
 
 from core.robot_state import RobotConnectionState
 from core.warning_controller import WarningController, WarningSettings
+from core.laser_scan_frame import LaserScanFrame
 
 _MAX_LINEAR = 0.50
 _MAX_ANGULAR = 1.00
@@ -18,6 +19,7 @@ class RobotSession(QObject):
     odom_updated = pyqtSignal(object)
     base_status_updated = pyqtSignal(object)
     warning_updated = pyqtSignal(object)
+    laser_scan_updated = pyqtSignal(object)
     gateway_connection_changed = pyqtSignal(bool, str)
 
     def __init__(self, profile, backend, parent=None):
@@ -30,6 +32,7 @@ class RobotSession(QObject):
         self.last_odom: Optional[Dict[str, Any]] = None
         self.last_base_status: Optional[Dict[str, Any]] = None
         self.last_warning: Optional[Dict[str, Any]] = None
+        self.last_laser_scan: Optional[Any] = None
         self._warning = WarningController(self._warning_settings_from_profile())
         self._warning_timer = QTimer(self)
         self._warning_timer.setInterval(100)
@@ -84,6 +87,15 @@ class RobotSession(QObject):
             if self._warning.should_beep():
                 QApplication.beep()
             self._emit_warning_state()
+        elif msg_type == "laser_scan":
+            frame = LaserScanFrame.from_message(
+                msg,
+                reverse=bool(getattr(self.profile, "reverse_laser_scan", False)),
+            )
+            if frame is None:
+                return
+            self.last_laser_scan = frame
+            self.laser_scan_updated.emit(frame)
 
     def _on_warning_timer(self) -> None:
         before = self._warning.warn_amount
