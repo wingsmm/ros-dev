@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
 from PyQt5.QtWidgets import QApplication
@@ -33,6 +33,7 @@ class RobotSession(QObject):
         self.last_base_status: Optional[Dict[str, Any]] = None
         self.last_warning: Optional[Dict[str, Any]] = None
         self.last_laser_scan: Optional[Any] = None
+        self._odom_origin_xy: Optional[Tuple[float, float]] = None
         self._warning = WarningController(self._warning_settings_from_profile())
         self._warning_timer = QTimer(self)
         self._warning_timer.setInterval(100)
@@ -64,6 +65,7 @@ class RobotSession(QObject):
     def _handle_json_message(self, msg: Dict[str, Any]) -> None:
         msg_type = msg.get("type")
         if msg_type == "odom_base":
+            self._ensure_odom_origin(msg)
             self.last_odom = msg
             self._warning.on_odom(float(msg.get("linear_x", 0.0)))
             self.odom_updated.emit(msg)
@@ -120,8 +122,31 @@ class RobotSession(QObject):
         if not ok:
             self.last_error = detail or "JSON 网关连接中断"
 
+    def _ensure_odom_origin(self, msg: Dict[str, Any]) -> None:
+        if self._odom_origin_xy is not None:
+            return
+        self._odom_origin_xy = (
+            float(msg.get("x", 0.0)),
+            float(msg.get("y", 0.0)),
+        )
+
+    def relative_odom_pose(
+        self, msg: Dict[str, Any]
+    ) -> Tuple[float, float, float]:
+        """Return Android-style position relative to this connection's first odom."""
+        self._ensure_odom_origin(msg)
+        assert self._odom_origin_xy is not None
+        origin_x, origin_y = self._odom_origin_xy
+        return (
+            float(msg.get("x", 0.0)) - origin_x,
+            float(msg.get("y", 0.0)) - origin_y,
+            float(msg.get("yaw", 0.0)),
+        )
+
     def connect(self) -> bool:
         self.state = RobotConnectionState.CONNECTING
+        self._odom_origin_xy = None
+        self.last_odom = None
         try:
             self.backend.connect(self.profile)
             self.state = RobotConnectionState.CONNECTED

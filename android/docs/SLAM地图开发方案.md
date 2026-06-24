@@ -136,11 +136,63 @@ ROS 导航栈
   - 提供 TF: odom -> base_footprint -> laser
 ```
 
+### 4.1 车端位姿链（从传感器到 SLAM 地图上车标）
+
+SLAM 地图页上的小车位置**不是**把 `/odom` 的 x、y 直接画到 `/map` 像素上。Android `SlamMapFragment` 订阅 `/map` 与 `/robot_pose_in_map`，在栅格图上画车标；`/robot_pose_in_map` 由车端查 TF 得到，上游依次经过里程计、建图与 TF 串联。
+
+```text
+车端传感器 / 底盘
+  ├─ 轮速、IMU 等 → xtark_driver / odom_ekf
+  │                    └─ 发布 /odom
+  │                    └─ 广播 TF: odom → base_footprint
+  │
+  └─ 激光雷达 → /scan
+           │
+           ▼
+      gmapping（android_stack 启动）
+           ├─ 输入: /scan + /odom
+           ├─ 输出: /map（OccupancyGrid）
+           └─ 广播 TF: map → odom
+           │
+           ▼
+      move_base（导航栈）
+           └─ 用 /map + /odom + costmap 规划路径
+           │
+           ▼
+      publish_robot_pose_in_map.py（xtark_nav）
+           └─ lookupTransform(map, base_footprint)
+           └─ 发布 /robot_pose_in_map（map 坐标系 PoseStamped）
+           │
+           ▼
+      Android SlamMapFragment / SlamMapView
+           └─ mapWorldToBitmap(x, y) 把车标画在 /map 栅格上
+```
+
+TF 可记为：
+
+```text
+T_map→base = T_map→odom × T_odom→base
+              ↑ gmapping      ↑ /odom 对应 TF
+```
+
+| 层级 | 话题 / 产物 | 坐标系 | 说明 |
+|------|-------------|--------|------|
+| 底盘反馈 | `/odom` | `odom` | 轮速/IMU 积分或 EKF 后的里程计 |
+| 建图 | `/map` + `map→odom` | `map` | gmapping 用 `/scan`+`/odom` 建图并修正 map 与 odom 关系 |
+| 地图上车标 | `/robot_pose_in_map` | `map` | `xtark_nav` 查 TF 后发布，供 `SlamMapView.setRobotPose()` |
+| 导航 | `/move_base_simple/goal` 等 | `map` | 目标点与规划路径均在 map 系 |
+
+实现入口：
+
+- 车端：`xtark/xtark_nav/scripts/publish_robot_pose_in_map.py`
+- Android 订阅与绘制：`SlamMapFragment` → `robotPoseInMapListener` → `SlamMapView.setRobotPose()` → `drawRobotPose()` / `mapWorldToBitmap()`
+
 Android 与 ROS 的接口：
 
 | 功能 | Topic | 类型 | 方向 |
 |---|---|---|---|
 | 地图显示 | `/map` | `nav_msgs/OccupancyGrid` | ROS -> Android |
+| 地图上车标 | `/robot_pose_in_map` | `geometry_msgs/PoseStamped` | ROS -> Android |
 | 激光诊断 | `/scan` | `sensor_msgs/LaserScan` | ROS -> Android |
 | 里程计诊断 | `/odom` | `nav_msgs/Odometry` | ROS -> Android |
 | 下发导航目标 | `/move_base_simple/goal` | `geometry_msgs/PoseStamped` | Android -> ROS |

@@ -407,6 +407,8 @@ class LaserScanView(QWidget):
                 )
 
     def _draw_origin(self, painter: QPainter) -> None:
+        # RobotPage supplies x/y relative to the first odom frame of the
+        # current connection, mirroring Android RobotController startPos.
         if self._heading_locked:
             ox, oy = world_to_robot_frame(
                 0.0, 0.0, self._odom_x, self._odom_y, self._odom_yaw

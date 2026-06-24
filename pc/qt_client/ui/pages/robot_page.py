@@ -69,11 +69,11 @@ class RobotPage(QWidget):
     def _on_odom_updated(self, msg: object) -> None:
         if not isinstance(msg, dict):
             return
-        self._laser_view.set_odom(
-            float(msg.get("x", 0.0)),
-            float(msg.get("y", 0.0)),
-            float(msg.get("yaw", 0.0)),
-        )
+        session = self._binder.session if self._binder is not None else None
+        if session is None:
+            return
+        relative_x, relative_y, yaw = session.relative_odom_pose(msg)
+        self._laser_view.set_odom(relative_x, relative_y, yaw)
 
     def on_page_activated(self) -> None:
         if self._binder is not None:

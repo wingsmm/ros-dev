@@ -68,15 +68,15 @@
 
 ### 蓝色三角形 / 蓝色机器人标记
 
-这是机器人当前位置和朝向指示，不是障碍物，也不是地图点。
+机器人朝向指示，固定在激光**视图中心**，不随 `/odom` 平移。不是障碍物，也不是 SLAM 地图上的像素点。
 
-代码里会先画一个起始参考点，再画机器人本体和朝向标记。
+`LaserScanRenderer.onDrawFrame()` 中在变换后的原点调用 `Utils.drawShape()` 绘制。
 
 ### 紫色方块
 
-你怀疑得很对，这个通常就是起始点 / 参考原点。
+表示 `RobotController` 本次生命周期收到的**第一帧 `/odom` 位置**所建立的相对原点，会随行驶在屏幕上移动。它不是原始 ROS `odom` 坐标系的绝对 `(0,0)`，也不是 SLAM `/map` 上的点。
 
-代码中在 `(0, 0)` 位置专门绘制了一个浅紫灰色的起始位置标记，所以它更像“世界原点”或“起点参考”，不是普通激光点。
+渲染器虽然对 `(0,0)` 调用 `drawPoint()`，但 `RobotController.getX()/getY()` 已经是 `currentPos - startPos`，因此这里的 `(0,0)` 属于首帧平移后的相对坐标系。
 
 ### 四周密集的小点 / 放射状线条
 
@@ -104,12 +104,65 @@
 - PGM/YAML 保存的建图结果
 - 传统意义上的“黑白方格地图”
 
-它更偏向实时感知和控制，用来观察机器人周围激光回波、当前位置、朝向，以及手动驱动。
+它更偏向实时感知和控制，用来观察机器人周围激光回波、当前位置、朝向，以及手动驱动。本页**不在** SLAM 栅格地图上标定小车位置；位姿链路见下一节。
+
+## 位姿数据链
+
+机器人页只接 **`/scan` + `/odom`**，不经过 gmapping、`/map`、`/robot_pose_in_map` 或 move_base。
+
+```text
+车端传感器 / 底盘
+  ├─ 轮速、IMU 等 → xtark_driver / odom_ekf
+  │                    └─ 发布 /odom
+  │                    └─ 广播 TF: odom → base_footprint
+  │
+  └─ 激光雷达 → /scan（laser 坐标系，经 TF 与车体对齐）
+           │
+           ├────────────────────────────┐
+           ▼                            ▼
+    Android 订 /scan              Android 订 /odom
+    LaserScanRenderer           RobotController.setOdometry()
+           │                            │
+           ├─ 激光点：机体坐标系          ├─ startPos = 本会话首帧 position
+           │  绕视图中心展开              ├─ currentPos = 后续帧 position
+           │                            ├─ getX/Y = currentPos − startPos
+           │                            ├─ getHeading() → 车体朝向
+           │                            │
+           ▼                            ├─→ HUDFragment（速度、位姿文字）
+    蓝三角：永远在屏幕中心               ├─→ 未锁朝向：相机绕 heading 旋转
+    （不随 odom 平移）                   └─→ drawPoint(0,0)：紫块 = 首帧相对原点
+           │                                 相对当前车体的位置
+           │
+           └─ 航点：screenToWorld / drawPoint
+              用 getX、getY、heading 做坐标换算
+
+（链在此结束）
+```
+
+| 层级 | 话题 | 在机器人页的用途 |
+|------|------|------------------|
+| 底盘反馈 | `/odom` | 朝向、相对首帧位移、HUD、首帧相对原点紫块、航点换算 |
+| 激光 | `/scan` | 点云与扇面，机体坐标系，画在视图中心周围 |
+| 手动控制 | `/cmd_vel` | 左下按钮 / 摇杆经 `RobotController` 发布（出站，非位姿输入） |
+
+**`/odom` 在 App 内的记法：**
+
+- `startPos`：`RobotController` 创建后**收到的第一帧** `/odom` 的 `position`（不是上电瞬间，也不是 map 原点）。
+- `currentPos`：第二帧及以后每帧的 `position`；首帧只写 `startPos`，不写 `currentPos`。
+- `getX()` / `getY()`：`currentPos − startPos`，表示相对「连接后第一帧」的位移。
+
+这里的基准属于 `RobotController` 生命周期，不是每次进入 Robot 页面都重置。通常重启 App、重建控制器并重新连接后才会重新采集首帧。
+
+实现入口：
+
+- 激光：`LaserScanFragment` → `LaserScanView` → `LaserScanRenderer.onNewMessage(LaserScan)`
+- 里程计：`RobotController` 订阅可配置话题（默认 `/odom`）→ `setOdometry()` → `getX()` / `getY()` / `getHeading()`
+- 绘制：`LaserScanRenderer.onDrawFrame()`、`drawPoint()`、`screenToWorld()`
 
 ## 简单图例
 
-- 蓝色三角形：机器人
-- 紫色方块：起点 / 原点
+- 蓝色三角形：机器人（永远在激光视图中心）
+- 紫色方块：本次连接首帧 `/odom` 建立的相对原点
 - 密集放射点：激光雷达扫描点
 - 线状路径：航点轨迹
 - 左下按钮：手动驾驶
