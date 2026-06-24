@@ -56,7 +56,7 @@ catkin_make
 source devel/setup.bash
 ```
 
-前提：主线 bringup 已运行，`/scan` 与 `/odom` 正常（例如 `robot_stack.sh start` 或 `android_stack.sh start`）。
+前提：主线 bringup 已运行，`/scan` 与 `/odom` 正常（例如 `qt_stack.sh start` 或 `android_stack.sh start`）。
 
 ## 启动
 
@@ -66,7 +66,7 @@ source ~/ros_ws/devel/setup.bash
 roslaunch xtark_laser_odometry rf2o_odom_laser.launch
 ```
 
-或使用轻量脚本（不并入 `robot_stack.sh` / `android_stack.sh`）：
+或使用轻量脚本（不并入正式 `qt_stack.sh` / `android_stack.sh`）：
 
 ```bash
 ~/ros_ws/scripts/laser_odom_experiment.sh start
@@ -75,15 +75,15 @@ roslaunch xtark_laser_odometry rf2o_odom_laser.launch
 **Qt 遥控 + 三路对照 + rosbag**：
 
 ```bash
-robot_stack.sh stop                    # 手动停其它栈
-laser_odom_compare_stack.sh start
-laser_odom_compare_stack.sh record
-laser_odom_compare_stack.sh stop
-robot_stack.sh start
+android_stack.sh stop    # 若 Android 栈在跑，先停
+qt_stack.sh start
+qt_stack.sh record
+qt_stack.sh stop
 ```
 
-`compare_stack` 的 `record` 含 `/cmd_vel`、`/odom_raw`、`/odom`、`/imu`、
-`/odom_laser`、`/scan`、`/tf_static` 以及四轮 `set/vel` 反馈。各脚本互不调用。
+`qt_stack.sh record` 含 `/cmd_vel`、`/odom_raw`、`/odom`、`/imu`、
+`/odom_laser`、`/scan`、`/tf_static` 以及四轮 `set/vel` 反馈。bag 目录：
+`~/xtark_logs/qt_stack/bags/`。
 
 ## 验证
 

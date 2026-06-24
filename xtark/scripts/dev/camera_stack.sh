@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# camera_stack.sh: shared robot camera entrypoint (Android ROS + Qt/Browser HTTP)
-#
-# Android observation:
-#   /image_raw/compressed  (sensor_msgs/CompressedImage)
-# Qt / Browser preview:
-#   web_video_server http://<HOST>:8080/stream?topic=/camera/image_raw
-#
-# Copied to robot: /home/xtark/ros_ws/scripts/camera_stack.sh
+# dev/camera_stack.sh — camera-only debugging (not a daily entrypoint; use qt_stack.sh).
 
 HOST_IP="${HOST_IP:-192.168.1.169}"
 export ROS_MASTER_URI="${ROS_MASTER_URI:-http://${HOST_IP}:11311}"
@@ -35,12 +28,7 @@ Commands:
   urls    Print Android ROS topic and Qt/Browser camera URLs
   logs    Tail recent camera log
 
-Env:
-  ROS_MASTER_URI=${ROS_MASTER_URI}
-  ROS_IP=${ROS_IP}
-  CAMERA_PKG=${CAMERA_PKG}
-  CAMERA_LAUNCH=${CAMERA_LAUNCH}
-  LOG_DIR=${LOG_DIR}
+Daily use: ~/ros_ws/scripts/qt_stack.sh start
 EOF
 }
 
@@ -51,7 +39,6 @@ source_ros() {
   fi
   if [ ! -f "$WS_SETUP" ]; then
     echo "[ERR] workspace setup not found: $WS_SETUP"
-    echo "      run: cd ~/ros_ws && catkin_make && source devel/setup.bash"
     exit 1
   fi
   set +u
@@ -72,7 +59,7 @@ wait_for_rosmaster_api() {
   while ! rostopic list &>/dev/null; do
     i=$((i + 1))
     if [ "$i" -ge "$max" ]; then
-      echo "[ERR] rosmaster API not ready after ${max}s (ROS_MASTER_URI=$ROS_MASTER_URI)"
+      echo "[ERR] rosmaster API not ready after ${max}s"
       return 1
     fi
     sleep 1
@@ -85,7 +72,6 @@ start_roscore_if_needed() {
     wait_for_rosmaster_api 10 || true
     return 0
   fi
-
   mkdir -p "$LOG_DIR"
   echo "[INFO] Starting roscore (ROS_IP=$ROS_IP)"
   nohup roscore >"$LOG_DIR/roscore.log" 2>&1 &
@@ -99,7 +85,7 @@ start() {
   start_roscore_if_needed
 
   if pgrep -af "roslaunch $CAMERA_PKG $CAMERA_LAUNCH" >/dev/null; then
-    echo "[OK] camera already running: roslaunch $CAMERA_PKG $CAMERA_LAUNCH"
+    echo "[OK] camera already running"
     return 0
   fi
 
@@ -109,7 +95,6 @@ start() {
 }
 
 stop() {
-  # Do not require ROS env for stopping processes.
   pkill -f "roslaunch $CAMERA_PKG $CAMERA_LAUNCH" || true
   pkill -f 'uvc_camera_node' || true
   pkill -f 'image_transport/republish' || true
@@ -120,48 +105,14 @@ stop() {
 status() {
   source_ros
   echo "ROS_MASTER_URI=$ROS_MASTER_URI"
-  echo "ROS_IP=$ROS_IP"
-  echo "ANDROID_ROS_TOPIC=/image_raw/compressed"
   echo "QT_MJPEG_URL=http://$HOST_IP:8080/stream?topic=/camera/image_raw"
-  echo "BROWSER_SNAPSHOT_URL=http://$HOST_IP:8080/snapshot?topic=/camera/image_raw"
-  echo "---11311---"
-  if is_listening_11311; then echo "listening"; else echo "closed"; fi
-  echo "---8080(web_video_server)---"
-  if (ss -lnt 2>/dev/null || netstat -lnt 2>/dev/null) | grep -q ':8080'; then
-    echo "listening"
-  else
-    echo "closed"
-  fi
-  echo "---processes---"
-  pgrep -af "roslaunch $CAMERA_PKG $CAMERA_LAUNCH|uvc_camera_node|image_transport/republish|web_video_server" || true
-  echo "---topics(image)---"
-  rostopic list 2>/dev/null | grep -i image || echo "(no image topics)"
-  echo "---/image_raw/compressed---"
-  rostopic info /image_raw/compressed 2>/dev/null || true
-  echo "---/camera/image_raw---"
   rostopic info /camera/image_raw 2>/dev/null || true
-  if command -v curl >/dev/null 2>&1; then
-    echo "---HTTP snapshot probe---"
-    curl -fsS --max-time 2 -o /dev/null \
-      -w 'http_code=%{http_code} content_type=%{content_type}\n' \
-      "http://$HOST_IP:8080/snapshot?topic=/camera/image_raw" || true
-  fi
 }
 
 urls() {
   cat <<EOF
-Android / ROS camera topic:
-  /image_raw/compressed
-
 Qt / Browser MJPEG preview:
   http://$HOST_IP:8080/stream?topic=/camera/image_raw
-
-Browser snapshot probe:
-  http://$HOST_IP:8080/snapshot?topic=/camera/image_raw
-
-Note:
-  Keep this script neutral. It starts the robot camera stack for both
-  Android observation and Qt preview; do not make it Qt-only.
 EOF
 }
 

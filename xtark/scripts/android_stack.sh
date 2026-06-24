@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=stack_common.sh
+source "$ROOT/stack_common.sh"
+
 HOST_IP="${HOST_IP:-192.168.1.169}"
 export ROS_MASTER_URI="${ROS_MASTER_URI:-http://${HOST_IP}:11311}"
 export ROS_IP="${ROS_IP:-${HOST_IP}}"
@@ -60,6 +64,8 @@ Commands:
 
 Android app Master URI:
   ${ROS_MASTER_URI}
+
+Mutually exclusive with qt_stack.sh (JSON :8765 / rf2o). Start will fail if qt_stack is active.
 
 Environment exported before launch:
   ROS_MASTER_URI=${ROS_MASTER_URI}
@@ -562,6 +568,9 @@ start() {
   STEP_N=0
   source_ros
   mkdir -p "$XTARK_LOG_DIR"
+  stack_assert_no_other_owner android_stack
+  stack_assert_no_qt_sidecars
+  stack_claim_owner android_stack
 
   step_banner "roscore"
   if ! is_listening_11311; then
@@ -614,6 +623,8 @@ start() {
 }
 
 stop() {
+  stack_assert_android_stop_safe
+
   pkill -f "$ROBOT_POSE_LAUNCH" || true
   pkill -f "$ROBOT_POSE_NODE" || true
   pkill -f "$NAV_SPEED_SYNC_MARKER" || true
@@ -635,12 +646,14 @@ stop() {
   while [ "$i" -lt 15 ]; do
     if ! (ss -lnt 2>/dev/null || netstat -lnt 2>/dev/null) | grep -q ':11311'; then
       echo "roscore port 11311 closed (${i}s)"
+      stack_release_owner android_stack
       return 0
     fi
     sleep 1
     i=$((i + 1))
   done
   echo "[WARN] roscore port 11311 still open after 15s; continuing anyway"
+  stack_release_owner android_stack
 }
 
 cmd="${1:-help}"

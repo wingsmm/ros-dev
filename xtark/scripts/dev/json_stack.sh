@@ -1,5 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -eo pipefail
+
+# dev/json_stack.sh — foreground/background bringup+JSON debugging (not a daily entrypoint).
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 
@@ -14,7 +16,6 @@ source_ros() {
   fi
   if [ ! -f "$WS_SETUP" ]; then
     echo "ERROR: workspace setup not found: $WS_SETUP"
-    echo "Run: cd ~/ros_ws && catkin_make && source devel/setup.bash"
     exit 1
   fi
   # shellcheck disable=SC1090,SC1091
@@ -36,39 +37,19 @@ wait_for_master() {
   done
 }
 
-wait_for_odom() {
-  local max="${1:-20}"
-  local i=0
-  while ! rostopic list 2>/dev/null | grep -qx '/odom'; do
-    sleep 1
-    i=$((i + 1))
-    if [ "$i" -ge "$max" ]; then
-      echo "WARN: /odom not seen after ${max}s; starting json adapter anyway"
-      return 0
-    fi
-  done
-}
-
 usage() {
   cat <<'EOF'
 Usage: json_stack.sh <command>
 
 Commands:
   bringup   Foreground: xtark_driver bringup (terminal 1)
-  json      Foreground: json_base_adapter (terminal 2, bringup must be up)
-  start     Background: bringup then json adapter (logs under ~/xtark_logs)
+  json      Foreground: json_base_adapter (terminal 2)
+  start     Background: bringup then json adapter
   stop      Stop background bringup + json adapter
   status    Show matching roslaunch processes
-  logs      Tail background logs (bringup + json)
+  logs      Tail background logs
 
-Environment:
-  ROS_SETUP      default /opt/ros/melodic/setup.bash
-  WS_SETUP       default ~/ros_ws/devel/setup.bash
-  XTARK_LOG_DIR  default ~/xtark_logs
-
-Copy to xtark (example):
-  scp -r xtark/scripts xtark@192.168.1.169:~/ros_ws/
-  ssh xtark@192.168.1.169 '~/ros_ws/scripts/json_stack.sh start'
+Daily use: ~/ros_ws/scripts/qt_stack.sh start
 EOF
 }
 
@@ -99,7 +80,6 @@ cmd_start() {
   fi
 
   wait_for_master 30
-  wait_for_odom 20
 
   if is_running "json_base_adapter.launch"; then
     echo "json adapter already running"
@@ -110,7 +90,6 @@ cmd_start() {
   fi
 
   echo "JSON TCP should listen on 0.0.0.0:8765 when adapter is ready"
-  echo "Check: $0 status   or   $0 logs"
 }
 
 cmd_stop() {
@@ -118,18 +97,11 @@ cmd_stop() {
   pkill -f "json_base_adapter_node.py" 2>/dev/null || true
   pkill -f "xtark_bringup.launch" 2>/dev/null || true
   sleep 1
-  if is_running "json_base_adapter" || is_running "xtark_bringup.launch"; then
-    echo "WARN: some processes may still be running; run: $0 status"
-    exit 1
-  fi
   echo "stopped"
 }
 
 cmd_status() {
-  if pgrep -af "xtark_bringup.launch|json_base_adapter" 2>/dev/null; then
-    return 0
-  fi
-  echo "not running"
+  pgrep -af "xtark_bringup.launch|json_base_adapter" 2>/dev/null || echo "not running"
 }
 
 cmd_logs() {

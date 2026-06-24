@@ -17,6 +17,8 @@ class RobotSession(QObject):
     """Robot control session; emits JSON gateway telemetry for UI layers."""
 
     odom_updated = pyqtSignal(object)
+    odom_raw_updated = pyqtSignal(object)
+    odom_laser_updated = pyqtSignal(object)
     base_status_updated = pyqtSignal(object)
     warning_updated = pyqtSignal(object)
     laser_scan_updated = pyqtSignal(object)
@@ -30,6 +32,8 @@ class RobotSession(QObject):
         self.last_error = ""
         self.manual_control_enabled = True
         self.last_odom: Optional[Dict[str, Any]] = None
+        self.last_odom_raw: Optional[Dict[str, Any]] = None
+        self.last_odom_laser: Optional[Dict[str, Any]] = None
         self.last_base_status: Optional[Dict[str, Any]] = None
         self.last_warning: Optional[Dict[str, Any]] = None
         self.last_laser_scan: Optional[Any] = None
@@ -70,6 +74,12 @@ class RobotSession(QObject):
             self._warning.on_odom(float(msg.get("linear_x", 0.0)))
             self.odom_updated.emit(msg)
             self._emit_warning_state()
+        elif msg_type == "odom_raw":
+            self.last_odom_raw = msg
+            self.odom_raw_updated.emit(msg)
+        elif msg_type == "odom_laser":
+            self.last_odom_laser = msg
+            self.odom_laser_updated.emit(msg)
         elif msg_type == "base_status":
             self.last_base_status = msg
             self.base_status_updated.emit(msg)
@@ -147,6 +157,8 @@ class RobotSession(QObject):
         self.state = RobotConnectionState.CONNECTING
         self._odom_origin_xy = None
         self.last_odom = None
+        self.last_odom_raw = None
+        self.last_odom_laser = None
         try:
             self.backend.connect(self.profile)
             self.state = RobotConnectionState.CONNECTED

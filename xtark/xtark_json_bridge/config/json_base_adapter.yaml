@@ -3,6 +3,8 @@ port: 8765
 
 cmd_vel_topic: "/cmd_vel"
 odom_topic: "/odom"
+odom_raw_topic: "/odom_raw"
+odom_laser_topic: "/odom_laser"
 voltage_topic: "/voltage"
 scan_topic: "/scan"
 

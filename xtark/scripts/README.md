@@ -1,158 +1,87 @@
 # xtark Script Entrypoints
 
-Orchestration, deployment, and diagnostics for the robot-side xtark stack. Long-running ROS nodes live in packages under `../` (for example `../xtark_nav/`, `../xtark_json_bridge/`).
+Orchestration, deployment, and diagnostics for the robot-side xtark stack.
 
-Offline bag analysis lives in `../tools/analyze_laser_odom_bag.py` (not in this directory).
+## Production stacks (pick one)
 
-## 1. Daily stack (robot shell)
+Two mutually exclusive daily entrypoints:
 
-### `robot_stack.sh`
+### `android_stack.sh` — Android full stack
 
 | | |
 |--|--|
-| **Purpose** | Qt / JSON daily stack |
-| **Starts** | `roscore`, `xtark_bringup`, `xtark_camera`, `json_base_adapter` |
-| **Depends on** | ROS Melodic, `~/ros_ws` built |
-| **roscore** | Yes, starts if not listening on 11311 |
-| **stop** | JSON adapter, camera, bringup, roscore (this stack only) |
-| **Conflicts with** | `android_stack.sh`, `laser_odom_compare_stack.sh` (same roscore/bringup/8765) |
+| **Purpose** | Android SLAM + navigation validation |
+| **Starts** | roscore, bringup, camera, gmapping, move_base, `/robot_pose_in_map`, nav speed sync |
+| **Does not use** | JSON `:8765`, rf2o `/odom_laser` |
 
 ```bash
-~/ros_ws/scripts/robot_stack.sh start
-~/ros_ws/scripts/robot_stack.sh status
-~/ros_ws/scripts/robot_stack.sh stop
+~/ros_ws/scripts/android_stack.sh start
+~/ros_ws/scripts/android_stack.sh status
+~/ros_ws/scripts/android_stack.sh stop
 ```
 
-## 2. Dedicated stacks (robot shell)
+Windows: `xtark\scripts\android_remote.bat`
 
-### `android_stack.sh`
-
-| | |
-|--|--|
-| **Purpose** | Android validation: SLAM + navigation |
-| **Starts** | `roscore`, bringup, camera, gmapping, move_base, `/robot_pose_in_map`, nav speed sync |
-| **Depends on** | `xtark_nav` in workspace |
-| **roscore** | Yes |
-| **stop** | All Android-test processes started by this script |
-| **Conflicts with** | `robot_stack.sh`, `laser_odom_compare_stack.sh` |
-
-Commands: `start` `stop` `status` `watch-nav` `logs`
-
-### `camera_stack.sh`
+### `qt_stack.sh` — Qt full stack
 
 | | |
 |--|--|
-| **Purpose** | Camera only (Android topic + Qt/browser MJPEG) |
-| **Starts** | `roscore` (if needed), `xtark_camera` |
-| **Depends on** | Existing or new roscore |
-| **roscore** | Starts only when 11311 is down |
-| **stop** | Camera roslaunch and related nodes |
-| **Conflicts with** | None if only camera; port 8080 if another camera stack runs |
-
-### `robot_control_stack.sh`
-
-| | |
-|--|--|
-| **Purpose** | Qt **机器人**页专用：底盘 + JSON，不含摄像头/导航 |
-| **Starts** | `roscore`（如需）, `xtark_bringup`, `json_base_adapter` |
-| **Depends on** | ROS Melodic, `~/ros_ws` built |
-| **stop** | 仅停止本脚本登记的 PID |
-| **Conflicts with** | `robot_stack.sh`, `android_stack.sh`（bringup / 8765） |
+| **Purpose** | PC Qt client: 摄像头 / 机器人 / 里程计对照 |
+| **Starts** | roscore, bringup, JSON `:8765`, camera `:8080`, rf2o → `/odom_laser` |
+| **Does not start** | gmapping, move_base, rosbag (use `record` separately) |
 
 ```bash
-~/ros_ws/scripts/robot_control_stack.sh start
-~/ros_ws/scripts/robot_control_stack.sh status
-~/ros_ws/scripts/robot_control_stack.sh stop
+~/ros_ws/scripts/qt_stack.sh start
+~/ros_ws/scripts/qt_stack.sh status
+~/ros_ws/scripts/qt_stack.sh stop
+~/ros_ws/scripts/qt_stack.sh record   # optional bag
 ```
 
-### `json_stack.sh`
-
-| | |
-|--|--|
-| **Purpose** | **Bridge-only / foreground debugging** — not a replacement for `robot_stack.sh` |
-| **Starts** | `bringup` (foreground `bringup`) or `json_base_adapter` (foreground `json`), or background `start` = bringup + JSON |
-| **Depends on** | `/odom` optional for JSON start |
-| **roscore** | Via bringup path (bringup typically expects master) |
-| **stop** | `json_base_adapter` and `xtark_bringup` via pkill |
-| **Conflicts with** | Another stack owning bringup or 8765 |
-
-Use two terminals: `json_stack.sh bringup` then `json_stack.sh json`, or `json_stack.sh start` for background logs under `~/xtark_logs/`.
-
-## 3. Experiment stacks (robot shell)
-
-### `laser_odom_experiment.sh`
-
-| | |
-|--|--|
-| **Purpose** | Sidecar: add `/odom_laser` only |
-| **Starts** | `rf2o_laser_odometry` launch |
-| **Depends on** | **Another stack** already providing roscore and `/scan` |
-| **roscore** | No |
-| **stop** | rf2o + this stack's rosbag PID only |
-| **Conflicts with** | None if daily bringup already up; do not stop other stacks |
-
-### `laser_odom_compare_stack.sh`
-
-| | |
-|--|--|
-| **Purpose** | Isolated Qt manual-drive odometry compare + rosbag |
-| **Starts** | `roscore`, bringup, JSON :8765, camera preview, rf2o, optional rosbag |
-| **Depends on** | `xtark_laser_odometry`, `xtark_json_bridge`, rf2o in workspace |
-| **roscore** | Yes (or reuses existing listener) |
-| **stop** | **Only PIDs recorded by this script** (rosbag, rf2o, camera, json, bringup, roscore) |
-| **Conflicts with** | `robot_stack.sh`, `android_stack.sh` — stop them first |
+Lightweight (no camera, no laser odom):
 
 ```bash
-~/ros_ws/scripts/laser_odom_compare_stack.sh start
-~/ros_ws/scripts/laser_odom_compare_stack.sh record
-# Qt: 192.168.1.169:8765  camera: http://192.168.1.169:8080/stream?topic=/camera/image_raw
-~/ros_ws/scripts/laser_odom_compare_stack.sh stop
+CAMERA_ENABLE=0 LASER_ODOM_ENABLE=0 qt_stack.sh start
 ```
 
-Cold boot: nothing auto-starts. `CAMERA_ENABLE=0` skips Qt camera preview.
+Windows: `xtark\scripts\qt_remote.bat`
 
-## 4. Windows remote helpers
+Logs: `~/xtark_logs/qt_stack/` and `~/xtark_logs/android/` (owner markers under `~/xtark_logs/android_stack/` and `~/xtark_logs/qt_stack/`).
 
-Shared connection settings: `_xtark_remote_env.bat` (host, PuTTY paths, passwords). Override via environment before calling any helper.
+**Conflict rule:** starting either stack fails if the other stack's owner file is present or Qt/Android sidecar processes are detected (`stack_common.sh`).
 
-| Script | Responsibility |
-|--------|----------------|
-| `android_remote.bat` | Android stack: `deploy` uploads; `start`/`stop`/`status`/`logs`/`watch-nav` do **not** upload |
-| `deploy_json_bridge.bat` | Sync `json_stack.sh`, `robot_control_stack.sh` + `xtark_json_bridge`, build, optional `restart` |
-| `deploy_laser_odom_compare.bat` | Sync compare stack + `../tools/analyze_laser_odom_bag.py`, laser odom packages, build; `start`/`stop`/`record`/`status`/`pull` |
+## Deprecated wrappers (forward to `qt_stack.sh`)
 
-```bat
-xtark\scripts\android_remote.bat all
-xtark\scripts\android_remote.bat status
-xtark\scripts\android_remote.bat stop
-xtark\scripts\android_remote.bat logs
+| Script | Replacement |
+|--------|-------------|
+| `robot_stack.sh` | `qt_stack.sh` |
+| `laser_odom_compare_stack.sh` | `qt_stack.sh` |
+| `robot_control_stack.sh` | `CAMERA_ENABLE=0 LASER_ODOM_ENABLE=0 qt_stack.sh` |
 
-xtark\scripts\deploy_json_bridge.bat help
-xtark\scripts\deploy_laser_odom_compare.bat deploy
-xtark\scripts\deploy_laser_odom_compare.bat pull laser_odom_compare_20260623_095953
-```
+## Development / experiment tools
 
-Remote analyze tool path after deploy: `/home/xtark/ros_ws/tools/analyze_laser_odom_bag.py`
+正式日常入口只有 `android_stack.sh` 与 `qt_stack.sh`。下列脚本在 `dev/` 下，仅供单模块调试：
 
-## Local recordings
+| Script | Purpose |
+|--------|---------|
+| `dev/camera_stack.sh` | Camera + web_video_server only |
+| `dev/json_stack.sh` | Foreground or background bringup + JSON debugging |
+| `laser_odom_experiment.sh` | RF2O sidecar when bringup already up |
 
-```text
-xtark/record/bags/
-xtark/record/reports/
-```
+## Windows remote helpers
 
-(gitignored except `.gitkeep`)
+| Script | Role |
+|--------|------|
+| `android_remote.bat` | Deploy + control Android stack |
+| `qt_remote.bat` | Deploy Qt packages + control `qt_stack.sh` |
+| `deploy_json_bridge.bat` | Deprecated → `qt_remote.bat` |
+| `deploy_laser_odom_compare.bat` | Deprecated → `qt_remote.bat` |
 
-## Placement rules
+Shared env: `_xtark_remote_env.bat`
 
-| Kind | Location |
-|------|----------|
-| Robot stack orchestration | `xtark/scripts/*.sh` |
-| Offline analysis | `xtark/tools/` |
-| ROS runtime nodes | `xtark/*/` packages |
-| Android APK build | `android/scripts/` |
-| PC Qt client | `pc/qt_client/` |
+## Offline analysis
+
+`../tools/analyze_laser_odom_bag.py` — three-way bag analysis (`/odom_raw`, `/odom`, `/odom_laser`).
 
 ## Line endings
 
-`.gitattributes` keeps `*.sh` as LF. Do not add repair scripts for CRLF.
+`.gitattributes` keeps `*.sh` as LF.

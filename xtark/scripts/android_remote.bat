@@ -45,13 +45,15 @@ if not exist "%PSCP%" (
     echo [ERR] pscp not found: %PSCP%
     exit /b 1
 )
-echo [1/3] sync android_stack.sh + xtark_nav ...
+echo [1/3] sync android_stack.sh stack_common.sh + xtark_nav ...
 "%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% "%SCRIPT_SRC%" "%XTARK_REMOTE%:%XTARK_REMOTE_SCRIPTS%/android_stack.sh"
+if errorlevel 1 exit /b 1
+"%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% "%REPO_ROOT%xtark\scripts\stack_common.sh" "%XTARK_REMOTE%:%XTARK_REMOTE_SCRIPTS%/stack_common.sh"
 if errorlevel 1 exit /b 1
 "%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% -r "%REPO_ROOT%xtark\xtark_nav" %XTARK_REMOTE%:%XTARK_REMOTE_WS%/src/
 if errorlevel 1 exit /b 1
 echo [2/3] chmod +x ...
-"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "chmod +x %XTARK_REMOTE_SCRIPTS%/android_stack.sh %XTARK_REMOTE_WS%/src/xtark_nav/scripts/publish_robot_pose_in_map.py"
+"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "chmod +x %XTARK_REMOTE_SCRIPTS%/android_stack.sh %XTARK_REMOTE_SCRIPTS%/stack_common.sh %XTARK_REMOTE_WS%/src/xtark_nav/scripts/publish_robot_pose_in_map.py"
 if errorlevel 1 exit /b 1
 echo [3/3] deploy done
 exit /b 0

@@ -10,6 +10,7 @@ from core.robot_telemetry_binder import RobotTelemetryBinder
 from ui.models.robot_info import RobotInfo
 from ui.models.robot_store import RobotStore
 from ui.pages.camera_page import CameraPage
+from ui.pages.odom_compare_page import OdomComparePage
 from ui.pages.placeholder_page import PlaceholderPage
 from ui.pages.robot_page import RobotPage
 from ui.pages.settings_page import SettingsPage
@@ -28,6 +29,7 @@ _NAV_TITLES: Dict[str, str] = {
     "overview": "总览",
     "camera": "摄像头",
     "robot": "机器人",
+    "odom_compare": "里程计对照",
     "slam_map": "SLAM 地图",
     "gps_map": "GPS 地图",
     "settings": "设置",
@@ -84,6 +86,10 @@ class RobotWorkspacePage(QWidget):
                 page = CameraPage(self.robot, telemetry_binder=self._telemetry_binder)
             elif page_id == "robot":
                 page = RobotPage(self.robot, telemetry_binder=self._telemetry_binder)
+            elif page_id == "odom_compare":
+                page = OdomComparePage(
+                    self.robot, telemetry_binder=self._telemetry_binder
+                )
             elif page_id == "settings" and self._robot_store is not None:
                 page = SettingsPage(
                     self.robot,
@@ -125,6 +131,9 @@ class RobotWorkspacePage(QWidget):
         robot = self._page_widget("robot")
         if robot is not None and hasattr(robot, "refresh_robot_settings"):
             robot.refresh_robot_settings()
+        compare = self._page_widget("odom_compare")
+        if compare is not None and hasattr(compare, "refresh_robot_settings"):
+            compare.refresh_robot_settings()
 
     def _on_hud_stop_motion(self) -> None:
         if self.session is None:

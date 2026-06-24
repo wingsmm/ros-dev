@@ -60,6 +60,8 @@ class JsonBaseAdapter(object):
 
         cmd_topic = rospy.get_param("~cmd_vel_topic", "/cmd_vel")
         odom_topic = rospy.get_param("~odom_topic", "/odom")
+        odom_raw_topic = rospy.get_param("~odom_raw_topic", "/odom_raw")
+        odom_laser_topic = rospy.get_param("~odom_laser_topic", "/odom_laser")
         voltage_topic = rospy.get_param("~voltage_topic", "/voltage")
         scan_topic = rospy.get_param("~scan_topic", "/scan")
 
@@ -69,13 +71,15 @@ class JsonBaseAdapter(object):
         self.last_cmd_time = 0.0
         self.stop_sent = True
         self.latest_voltage = None
-        self.last_pose_sample = None
+        self._odom_streams = {}
         self.latest_front_min = float("inf")
         self.last_scan_time = 0.0
         self.latest_scan_msg = None
         self.latest_scan_lock = threading.Lock()
 
-        rospy.Subscriber(odom_topic, Odometry, self.on_odom, queue_size=10)
+        self._register_odom_stream("odom_base", odom_topic, self.on_odom)
+        self._register_odom_stream("odom_raw", odom_raw_topic)
+        self._register_odom_stream("odom_laser", odom_laser_topic)
         rospy.Subscriber(voltage_topic, Float32, self.on_voltage, queue_size=2)
         rospy.Subscriber(scan_topic, LaserScan, self.on_scan, queue_size=5)
 
@@ -184,13 +188,30 @@ class JsonBaseAdapter(object):
         self.stop_sent = True
         rospy.logwarn("cmd_vel timeout, published stop")
 
+    def _register_odom_stream(self, msg_type, topic, callback=None):
+        state = {"last_send": 0.0, "last_pose_sample": None}
+        self._odom_streams[msg_type] = state
+        handler = callback or self._make_odom_callback(msg_type)
+        rospy.Subscriber(topic, Odometry, handler, queue_size=10)
+
+    def _make_odom_callback(self, msg_type):
+        def on_odom(msg):
+            self._publish_odom_message(msg_type, msg)
+
+        return on_odom
+
     def on_odom(self, msg):
-        now = time.time()
-        if not hasattr(self, "_last_odom_send"):
-            self._last_odom_send = 0.0
-        if now - self._last_odom_send < 1.0 / max(self.odom_send_rate_hz, 0.1):
+        self._publish_odom_message("odom_base", msg)
+
+    def _publish_odom_message(self, msg_type, msg):
+        state = self._odom_streams.get(msg_type)
+        if state is None:
             return
-        self._last_odom_send = now
+
+        now = time.time()
+        if now - state["last_send"] < 1.0 / max(self.odom_send_rate_hz, 0.1):
+            return
+        state["last_send"] = now
 
         q = msg.pose.pose.orientation
         quat = [q.x, q.y, q.z, q.w]
@@ -203,19 +224,20 @@ class JsonBaseAdapter(object):
         linear_y = msg.twist.twist.linear.y
         angular_z = msg.twist.twist.angular.z
 
+        last_pose_sample = state["last_pose_sample"]
         if (
             abs(linear_x) < 1e-6
             and abs(linear_y) < 1e-6
             and abs(angular_z) < 1e-6
-            and self.last_pose_sample is not None
+            and last_pose_sample is not None
         ):
-            last_time, last_x, last_y, last_yaw = self.last_pose_sample
+            last_time, last_x, last_y, last_yaw = last_pose_sample
             dt = max(now - last_time, 1e-6)
             linear_x = (msg.pose.pose.position.x - last_x) / dt
             linear_y = (msg.pose.pose.position.y - last_y) / dt
             angular_z = normalize_angle(yaw - last_yaw) / dt
 
-        self.last_pose_sample = (
+        state["last_pose_sample"] = (
             now,
             msg.pose.pose.position.x,
             msg.pose.pose.position.y,
@@ -223,7 +245,7 @@ class JsonBaseAdapter(object):
         )
 
         payload = {
-            "type": "odom_base",
+            "type": msg_type,
             "stamp_ms": int(time.time() * 1000),
             "x": msg.pose.pose.position.x,
             "y": msg.pose.pose.position.y,

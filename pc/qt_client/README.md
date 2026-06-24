@@ -38,6 +38,7 @@ cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
   ├─ 总览（占位）
   ├─ 摄像头（HTTP/MJPEG 已实现）
   ├─ 机器人（实时激光扫描 + 手动控制已实现）
+  ├─ 里程计对照（三路 odom 轨迹对比 + 手动控制已实现）
   ├─ SLAM 地图（占位）
   ├─ GPS 地图（占位）
   ├─ 设置（占位）
@@ -78,15 +79,23 @@ http://192.168.1.169:8080/stream?topic=/camera/image_raw
 - Android / ROS 长期契约仍是 `/image_raw/compressed`。
 - 后续应通过 `ros1_bridge`、`ros1_gateway` 或 `ros2_native` backend 对齐 ROS 话题模型。
 
-机器人端日常启动推荐用一个脚本拉起底盘、相机和 JSON 网关：
+机器人端 Qt 全功能栈（摄像头 + 机器人 + 里程计对照）：
 
 ```bash
-~/ros_ws/scripts/robot_stack.sh start
-~/ros_ws/scripts/robot_stack.sh status
-~/ros_ws/scripts/robot_stack.sh stop
+~/ros_ws/scripts/qt_stack.sh start
+~/ros_ws/scripts/qt_stack.sh status
+~/ros_ws/scripts/qt_stack.sh stop
 ```
 
-如果只想观察相机、不想启动底盘，再单独用 `camera_stack.sh`。
+与 `android_stack.sh` 互斥，不能同时运行。Windows 部署与控制：`xtark\scripts\qt_remote.bat`。
+
+轻量模式（仅底盘 + JSON，无相机、无激光里程计）：
+
+```bash
+CAMERA_ENABLE=0 LASER_ODOM_ENABLE=0 qt_stack.sh start
+```
+
+相机/JSON 单模块调试见 `xtark/scripts/dev/`（非日常入口）。
 
 ## 机器人页
 
@@ -133,19 +142,48 @@ http://192.168.1.169:8080/stream?topic=/camera/image_raw
 仍供 HUD 使用。切换页面不重新归零，重启 Qt 或重新连接机器人后重新采集首帧。
 heading 继续使用当前 odom yaw，不减首帧 yaw。
 
-机器人端单独联调入口：
-
-```bash
-~/ros_ws/scripts/robot_control_stack.sh start
-~/ros_ws/scripts/robot_control_stack.sh status
-~/ros_ws/scripts/robot_control_stack.sh stop
-```
-
-该脚本只启动 roscore、底盘 bringup 和 JSON adapter，不启动摄像头、SLAM 或导航。
-
 验收状态：代码和本地静态检查已完成；机器人端部署、真车六向运动、停车、激光方向
 及告警扇区仍需现场验证。`./run.sh --no-ros` 只能检查界面，机器人页会显示
 “等待激光数据”，不会生成 Mock 激光。
+
+## 里程计对照页
+
+实验观察页，不参与导航或 SLAM。同时在画布上对比三路位姿估计：
+
+| JSON type | ROS 话题 | 轨迹颜色 |
+|-----------|----------|----------|
+| `odom_raw` | `/odom_raw` | 灰 |
+| `odom_base` | `/odom` | 蓝 |
+| `odom_laser` | `/odom_laser` | 橙 |
+
+车端需使用带旁路消息的 JSON bridge；`qt_stack.sh` 默认一并启动 RF2O。
+
+部署顺序：
+
+1. Windows：`xtark\scripts\qt_remote.bat deploy`（或车端手动同步 `xtark_json_bridge` + `xtark_laser_odometry` 后 `catkin_make`）。
+2. 停掉 `android_stack.sh`（若正在运行）。
+3. 启动 Qt 栈：
+
+```bash
+~/ros_ws/scripts/qt_stack.sh start
+~/ros_ws/scripts/qt_stack.sh status
+~/ros_ws/scripts/qt_stack.sh logs
+~/ros_ws/scripts/qt_stack.sh record   # 可选录包
+~/ros_ws/scripts/qt_stack.sh stop
+```
+
+4. PC 侧 `./run.sh`，进入「里程计对照」页验收。
+
+该栈拉起 roscore、bringup、JSON `:8765`、相机预览和 `rf2o -> /odom_laser`。
+`record` 不随 `start` 自动执行。
+
+页面操作：
+
+- 小车静止后点「重新归零」：分别记录三路首帧 `x0/y0/yaw0`，平移并旋转到共同局部坐标。
+- 灰/蓝/橙轨迹与末端箭头可单独开关；超时后仍绘制已有轨迹（半透明虚线），仅停止末端箭头并在顶栏标红。
+- 底部复用 `ManualControlStrip`（六向 + 停止，无摇杆）。
+
+`/odom_laser` 是估计值，不是真值；三路不一致只能说明估计器存在差异。
 
 ## 摄像头页远程控制
 
@@ -176,7 +214,7 @@ ManualControlStrip
 - Android 观察：`/image_raw/compressed`
 - Qt/浏览器预览：`http://192.168.1.169:8080/stream?topic=/camera/image_raw`
 
-控车需要底盘和 JSON 网关，因此使用 `robot_stack.sh start`，不要只启动 `camera_stack.sh`。
+控车需要底盘和 JSON 网关，使用 `qt_stack.sh start`，不要只启动 `dev/camera_stack.sh`。
 
 ## legacy 调试台
 
