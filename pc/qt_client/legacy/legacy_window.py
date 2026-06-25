@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from typing import Any, Dict, Set, Tuple
 
@@ -18,10 +19,13 @@ from PyQt5.QtWidgets import (
 )
 
 from gateway.json_client import JsonClientBridge, JsonTcpClient, SEND_RATE_HZ
+from core.logging_config import is_json_gateway_line, log_json_gateway_line, log_ui_line
 from mapping.ros_stack import RosStackManager
 from ui.widgets import CameraPanel, ControlPanel, LogPanel, NavPanel, StackPanel, StatusPanel
 
 APP_TITLE = "xtark Console"
+
+logger = logging.getLogger(__name__)
 
 
 class LegacyWindow(QMainWindow):
@@ -37,7 +41,7 @@ class LegacyWindow(QMainWindow):
             self._ros2 = try_create()
             if self._ros2 is None:
                 reason = ros2_unavailable_reason()
-                print("WARN: ROS2 publish unavailable:", reason or "unknown")
+                logger.warning("ROS2 publish unavailable: %s", reason or "unknown")
                 self._ros2_fail_reason = reason or "初始化失败"
             else:
                 self._ros2_fail_reason = ""
@@ -89,7 +93,7 @@ class LegacyWindow(QMainWindow):
         try:
             self._ros2.spin_once()
         except Exception as exc:
-            print("WARN: ROS2 spin stopped:", exc)
+            logger.warning("ROS2 spin stopped: %s", exc)
             self._ros2 = None
             if hasattr(self, "_ros_timer"):
                 self._ros_timer.stop()
@@ -241,6 +245,10 @@ class LegacyWindow(QMainWindow):
         stamp = datetime.now().strftime("%H:%M:%S")
         line = "[{stamp}] {text}".format(stamp=stamp, text=text)
         self.log_panel.append(line)
+        if is_json_gateway_line(text):
+            log_json_gateway_line(text)
+        else:
+            log_ui_line(text)
 
     def _on_message(self, msg: Dict[str, Any]) -> None:
         msg_type = msg.get("type")

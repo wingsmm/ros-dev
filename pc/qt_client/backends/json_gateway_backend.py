@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import logging
 from typing import Callable, Optional, Tuple, TYPE_CHECKING
 from urllib.parse import urlparse
 
 from backends.base import RobotBackend
+from core.logging_config import log_json_gateway_line
 from gateway.json_client import JsonClientBridge, JsonTcpClient
 
 if TYPE_CHECKING:
     from ui.models.robot_info import RobotInfo
+
+logger = logging.getLogger(__name__)
 
 MessageHandler = Callable[[object], None]
 ConnectionHandler = Callable[[bool, str], None]
@@ -42,7 +46,7 @@ class JsonGatewayBackend(RobotBackend):
         self._port = 8765
         self._message_handlers: list[MessageHandler] = []
         self._connection_handlers: list[ConnectionHandler] = []
-        self._bridge.log_line.connect(lambda text: print(f"JSON gateway: {text}"))
+        self._bridge.log_line.connect(log_json_gateway_line)
         self._bridge.message.connect(self._dispatch_message)
         self._bridge.connection_changed.connect(self._dispatch_connection)
 
@@ -78,13 +82,13 @@ class JsonGatewayBackend(RobotBackend):
 
     def connect(self, profile: RobotInfo) -> None:
         host, port = _parse_json_gateway(profile)
-        print(f"JSON gateway connect: {host}:{port}")
+        logger.info("JSON gateway connect: %s:%s", host, port)
         self._client.connect(host, port)
         self._host = host
         self._port = port
 
     def disconnect(self) -> None:
-        print(f"JSON gateway disconnect: {self._host}:{self._port}")
+        logger.info("JSON gateway disconnect: %s:%s", self._host, self._port)
         self._client.disconnect(send_stop=True)
 
     def is_connected(self) -> bool:
@@ -96,10 +100,12 @@ class JsonGatewayBackend(RobotBackend):
         if not self.is_connected():
             raise RuntimeError("JSON gateway not connected")
         ok = self._client.send_cmd_vel(linear_x, linear_y, angular_z)
-        print(
-            "JSON velocity:",
-            f"lx={linear_x:.3f} ly={linear_y:.3f} az={angular_z:.3f}",
-            f"sent={ok}",
+        logger.debug(
+            "JSON velocity: lx=%.3f ly=%.3f az=%.3f sent=%s",
+            linear_x,
+            linear_y,
+            angular_z,
+            ok,
         )
         if not ok:
             raise RuntimeError("JSON gateway send_cmd_vel failed")
@@ -107,10 +113,10 @@ class JsonGatewayBackend(RobotBackend):
     def stop_motion(self) -> None:
         if self.is_connected():
             ok = self._client.send_cmd_vel(0.0, 0.0, 0.0)
-            print("JSON stop_motion:", f"sent={ok}")
+            logger.info("JSON stop_motion: sent=%s", ok)
             if not ok:
                 raise RuntimeError("JSON gateway stop_motion failed")
 
     def emergency_stop(self) -> None:
-        print("JSON emergency_stop")
+        logger.warning("JSON emergency_stop")
         self.stop_motion()

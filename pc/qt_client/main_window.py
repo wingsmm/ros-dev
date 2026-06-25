@@ -4,6 +4,8 @@ from datetime import datetime
 
 from PyQt5.QtWidgets import QMainWindow
 
+from core.logging_config import log_ui_line
+
 from legacy.legacy_window import LegacyWindow
 from ui.models import RobotStore
 from ui.pages import PlaceholderPage, RobotListPage
@@ -43,7 +45,7 @@ class ShellMainWindow(QMainWindow):
     def _on_log(self, text: str) -> None:
         stamp = datetime.now().strftime("%H:%M:%S")
         line = "[{stamp}] {text}".format(stamp=stamp, text=text)
-        print(line)
+        log_ui_line(line)
 
     def cleanup(self) -> None:
         if self._cleanup_done:

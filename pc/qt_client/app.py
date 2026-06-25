@@ -2,14 +2,18 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import signal
 import sys
 
 from PyQt5.QtCore import QDir, QLockFile, QTimer
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
+from core.logging_config import install_excepthook, setup_logging, shutdown_logging
 from main_window import APP_TITLE, create_main_window
 from ui.fonts import setup_app_font
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -29,6 +33,21 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    settings = setup_logging()
+    install_excepthook()
+    logger.info(
+        "starting %s legacy=%s no_ros=%s log_dir=%s level=%s "
+        "odom_log=%s odom_interval=%.1fs file_logging=%s",
+        APP_TITLE,
+        args.legacy,
+        args.no_ros,
+        settings.log_dir,
+        settings.level,
+        settings.odom_log_enabled,
+        settings.odom_log_interval_sec,
+        settings.file_logging_enabled,
+    )
+
     app = QApplication(sys.argv)
     app.setApplicationName(APP_TITLE)
     app.setApplicationDisplayName(APP_TITLE)
@@ -38,6 +57,8 @@ def main() -> int:
     lock.setStaleLockTime(0)
     if not lock.tryLock(100):
         QMessageBox.warning(None, APP_TITLE, "xtark Console is already running.")
+        logger.warning("second instance blocked by lock file")
+        shutdown_logging()
         return 1
 
     if args.legacy:
@@ -58,6 +79,8 @@ def main() -> int:
     result = app.exec_()
     signal_timer.stop()
     lock.unlock()
+    logger.info("exiting with code %s", result)
+    shutdown_logging()
     return result
 
 

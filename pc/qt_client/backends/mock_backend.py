@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import Optional, Tuple, TYPE_CHECKING
 
 from backends.base import RobotBackend
 
 if TYPE_CHECKING:
     from ui.models.robot_info import RobotInfo
+
+logger = logging.getLogger(__name__)
 
 
 class MockRobotBackend(RobotBackend):
@@ -36,9 +39,11 @@ class MockRobotBackend(RobotBackend):
         self, linear_x: float, linear_y: float, angular_z: float
     ) -> None:
         self._last_velocity = (linear_x, linear_y, angular_z)
-        print(
-            "MOCK velocity:",
-            f"lx={linear_x:.3f} ly={linear_y:.3f} az={angular_z:.3f}",
+        logger.debug(
+            "MOCK velocity: lx=%.3f ly=%.3f az=%.3f",
+            linear_x,
+            linear_y,
+            angular_z,
         )
 
     def stop_motion(self) -> None:
@@ -47,4 +52,4 @@ class MockRobotBackend(RobotBackend):
     def emergency_stop(self) -> None:
         self._emergency_stopped = True
         self.stop_motion()
-        print("MOCK emergency_stop")
+        logger.warning("MOCK emergency_stop")

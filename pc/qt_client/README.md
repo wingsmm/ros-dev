@@ -24,6 +24,49 @@ cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 ./run.sh --legacy
 ```
 
+## 日志
+
+默认日志目录：`pc/qt_client/logs/`（相对路径始终以 `pc/qt_client` 为基准，不受启动目录影响）。
+
+每日一个文件，多次启动同日追加，跨午夜自动切换：
+
+```text
+logs/xtark-console-YYYY-MM-DD.log
+```
+
+`.env` 可覆盖（示例见 `.env.example`）：
+
+```dotenv
+XTARK_LOG_DIR=logs
+XTARK_LOG_LEVEL=INFO
+XTARK_LOG_RETENTION_DAYS=30
+```
+
+WSL 下也可使用绝对路径，例如 `XTARK_LOG_DIR=/home/<user>/xtark-logs`。
+
+配置优先级：进程环境变量 > `pc/qt_client/.env` > 默认值。默认保留最近 30 个自然日的 `xtark-console-*.log`；不匹配该命名规则的文件不会被自动删除。
+
+可选开启三路 odom 采样落盘（与 `XTARK_LOG_LEVEL` 独立，默认关闭）：
+
+```dotenv
+XTARK_LOG_ODOM=1
+XTARK_LOG_ODOM_INTERVAL=1.0
+```
+
+开启后，客户端按间隔记录 `odom_raw` / `odom_base` / `odom_laser` 的 `x,y,yaw` 与速度，便于事后对照；不会把整帧 JSON 或激光点云写入日志。配置在启动时注入内存，热路径不会每帧重读 `.env`；修改后需重启客户端，或调用 `reload_odom_telemetry_settings()`。
+
+文件落盘经 `QueueHandler` 异步写入，避免主线程在 `/mnt/d` 上同步 `flush`；日志行里的 `thread=MainThread` 表示事件产生线程，不是写文件线程。
+
+日志同时输出到控制台和文件。`INFO` 模式下不会记录高频 JSON `TX cmd_vel`、速度命令等调试信息；需要排查控车链路时，将 `XTARK_LOG_LEVEL=DEBUG` 写入 `.env` 后重启。
+
+实时查看当天日志：
+
+```bash
+tail -f logs/xtark-console-$(date +%F).log
+```
+
+legacy 调试台的 UI 日志面板仍正常显示；文件落盘由统一 logging 系统处理。
+
 ## 当前默认 Shell
 
 ```text
@@ -200,7 +243,7 @@ ManualControlStrip
 - `MockRobotBackend`：只记录速度请求，用于 `--no-ros` UI 验证。
 - `JsonGatewayBackend`：复用 legacy JSON 控制链路，用于真车远控。
 - 运动按钮是 dead-man 模式：按住立即发速度，并以约 10Hz 持续发送；松开按钮或点击停止会调用 `stop_motion()`。
-- 调试日志会打印 `RobotSession velocity`、`JSON velocity sent=True`、底层 `TX ...`，用于确认 Qt -> JSON 网关是否真的发出。
+- 调试时在 `XTARK_LOG_LEVEL=DEBUG` 下可看到 `RobotSession velocity`、JSON `TX cmd_vel` 等链路日志；默认 `INFO` 不会高速刷屏。
 
 长期再接：
 
@@ -234,7 +277,7 @@ qt_client/
 ├── main_window.py            # 默认 Shell / legacy 路由
 ├── run.sh
 ├── backends/                 # RobotBackend 抽象和 mock / ros1 / ros2 backend 骨架
-├── core/                     # RobotSession / RobotConnectionState
+├── core/                     # RobotSession / logging_config / 状态与几何
 ├── data/                     # robots.json
 ├── gateway/                  # JSON / ROS2 网关旧调试能力
 ├── legacy/                   # LegacyWindow，旧调试台
@@ -273,6 +316,6 @@ qt_client/
 代码检查：
 
 ```bash
-python -m py_compile app.py main_window.py
+python -m py_compile app.py core/logging_config.py core/odom_telemetry_logger.py
 git diff --check
 ```

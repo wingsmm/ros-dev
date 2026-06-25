@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional, Tuple
 
 from PyQt5.QtCore import QObject, QTimer, pyqtSignal
@@ -8,9 +9,12 @@ from PyQt5.QtWidgets import QApplication
 from core.robot_state import RobotConnectionState
 from core.warning_controller import WarningController, WarningSettings
 from core.laser_scan_frame import LaserScanFrame
+from core.odom_telemetry_logger import maybe_log_odom, reset_odom_telemetry_log
 
 _MAX_LINEAR = 0.50
 _MAX_ANGULAR = 1.00
+
+logger = logging.getLogger(__name__)
 
 
 class RobotSession(QObject):
@@ -72,13 +76,16 @@ class RobotSession(QObject):
             self._ensure_odom_origin(msg)
             self.last_odom = msg
             self._warning.on_odom(float(msg.get("linear_x", 0.0)))
+            maybe_log_odom("odom_base", msg)
             self.odom_updated.emit(msg)
             self._emit_warning_state()
         elif msg_type == "odom_raw":
             self.last_odom_raw = msg
+            maybe_log_odom("odom_raw", msg)
             self.odom_raw_updated.emit(msg)
         elif msg_type == "odom_laser":
             self.last_odom_laser = msg
+            maybe_log_odom("odom_laser", msg)
             self.odom_laser_updated.emit(msg)
         elif msg_type == "base_status":
             self.last_base_status = msg
@@ -169,11 +176,12 @@ class RobotSession(QObject):
         except Exception as exc:
             self.state = RobotConnectionState.FAILED
             self.last_error = str(exc)
-            print("RobotSession connect failed:", self.last_error)
+            logger.error("connect failed: %s", self.last_error)
             return False
 
     def disconnect(self) -> None:
         self.backend.disconnect()
+        reset_odom_telemetry_log()
         self.state = RobotConnectionState.DISCONNECTED
 
     def cleanup(self) -> None:
@@ -195,11 +203,11 @@ class RobotSession(QObject):
     ) -> bool:
         if not self.is_connected():
             self.last_error = "not connected; velocity rejected"
-            print("RobotSession velocity rejected:", self.last_error)
+            logger.warning("velocity rejected: %s", self.last_error)
             return False
         if not self.manual_control_enabled:
             self.last_error = "manual control disabled"
-            print("RobotSession velocity rejected:", self.last_error)
+            logger.warning("velocity rejected: %s", self.last_error)
             return False
 
         lx = max(-_MAX_LINEAR, min(_MAX_LINEAR, float(linear_x)))
@@ -218,44 +226,46 @@ class RobotSession(QObject):
         lx *= scale
 
         try:
-            print(
-                "RobotSession velocity:",
-                f"lx={lx:.3f} ly={ly:.3f} az={az:.3f}",
-                f"warn_scale={scale:.3f}",
+            logger.debug(
+                "velocity: lx=%.3f ly=%.3f az=%.3f warn_scale=%.3f",
+                lx,
+                ly,
+                az,
+                scale,
             )
             self.backend.send_velocity(lx, ly, az)
             self.last_error = ""
             return True
         except Exception as exc:
             self.last_error = str(exc)
-            print("RobotSession velocity failed:", self.last_error)
+            logger.exception("velocity failed")
             return False
 
     def stop_motion(self) -> bool:
         if not self.is_connected():
-            print("RobotSession stop ignored: not connected")
+            logger.debug("stop ignored: not connected")
             return False
         try:
-            print("RobotSession stop_motion")
+            logger.info("stop_motion")
             self.backend.stop_motion()
             self.last_error = ""
             return True
         except Exception as exc:
             self.last_error = str(exc)
-            print("RobotSession stop_motion failed:", self.last_error)
+            logger.exception("stop_motion failed")
             return False
 
     def emergency_stop(self) -> bool:
         self.manual_control_enabled = False
         if not self.is_connected():
-            print("RobotSession emergency_stop ignored: not connected")
+            logger.warning("emergency_stop ignored: not connected")
             return False
         try:
-            print("RobotSession emergency_stop")
+            logger.warning("emergency_stop")
             self.backend.emergency_stop()
             self.last_error = ""
             return True
         except Exception as exc:
             self.last_error = str(exc)
-            print("RobotSession emergency_stop failed:", self.last_error)
+            logger.exception("emergency_stop failed")
             return False

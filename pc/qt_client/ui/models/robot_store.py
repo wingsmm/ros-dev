@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import List, Optional
 
 from .robot_info import RobotInfo, default_robot
 from .env_config import apply_env_overrides
+
+logger = logging.getLogger(__name__)
 
 
 def default_store_path() -> Path:
@@ -64,7 +67,7 @@ class RobotStore:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            print(f"WARN: robot config directory unavailable: {exc}")
+            logger.warning("robot config directory unavailable: %s", exc)
             self._robots = [default_robot()]
             return
         if not self._path.is_file():
@@ -106,7 +109,7 @@ class RobotStore:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
-            print(f"WARN: robot config directory unavailable: {exc}")
+            logger.warning("robot config directory unavailable: %s", exc)
             return False
         payload = [robot.to_dict() for robot in self._robots]
         try:
@@ -115,6 +118,6 @@ class RobotStore:
                 encoding="utf-8",
             )
         except OSError as exc:
-            print(f"WARN: robot config save failed: {exc}")
+            logger.warning("robot config save failed: %s", exc)
             return False
         return True

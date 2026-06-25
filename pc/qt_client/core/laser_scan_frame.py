@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import time
 from dataclasses import dataclass
@@ -9,6 +10,8 @@ _MAX_RANGE_COUNT = 4096
 _PARSE_ERROR_INTERVAL_SEC = 5.0
 _last_parse_error_log = 0.0
 
+logger = logging.getLogger(__name__)
+
 
 def _log_parse_error(message: str) -> None:
     global _last_parse_error_log
@@ -16,7 +19,7 @@ def _log_parse_error(message: str) -> None:
     if now - _last_parse_error_log < _PARSE_ERROR_INTERVAL_SEC:
         return
     _last_parse_error_log = now
-    print("LaserScanFrame:", message)
+    logger.warning(message)
 
 
 def _clean_range(

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 from typing import Any, Callable, Dict, Optional, Tuple
 
 CmdVelFn = Callable[[float, float, float], None]
+
+logger = logging.getLogger(__name__)
 
 try:
     import rclpy
@@ -163,7 +166,7 @@ def try_create() -> Optional[Ros2Publisher]:
     except RuntimeError:
         return None
     except Exception as exc:
-        print("WARN: Ros2Publisher init failed:", exc)
+        logger.warning("Ros2Publisher init failed: %s", exc)
         return None
 
 
