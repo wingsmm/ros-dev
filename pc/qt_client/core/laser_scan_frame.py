@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Optional, Tuple
 
+from core.robot_frames import LASER_FRAME
+
 _MAX_RANGE_COUNT = 4096
 _PARSE_ERROR_INTERVAL_SEC = 5.0
 _last_parse_error_log = 0.0
@@ -128,7 +130,7 @@ class LaserScanFrame:
 
         return cls(
             stamp_ms=stamp_ms,
-            frame_id=str(msg.get("frame_id") or "laser"),
+            frame_id=str(msg.get("frame_id") or LASER_FRAME),
             angle_min=angle_min,
             angle_max=angle_max,
             angle_increment=eff_increment,

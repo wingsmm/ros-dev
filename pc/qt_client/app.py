@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import signal
 import sys
 
@@ -10,10 +11,17 @@ from PyQt5.QtCore import QDir, QLockFile, QTimer
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
 from core.logging_config import install_excepthook, setup_logging, shutdown_logging
+from core.ros2_runtime import boot_ros2_runtime
 from main_window import APP_TITLE, create_main_window
 from ui.fonts import setup_app_font
 
 logger = logging.getLogger(__name__)
+
+_LEGACY_ENV_OK = frozenset({"1", "true", "yes", "on"})
+
+
+def _legacy_entry_allowed() -> bool:
+    return os.environ.get("XTARK_ALLOW_LEGACY", "").strip().lower() in _LEGACY_ENV_OK
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,15 +34,35 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--legacy",
         action="store_true",
-        help="Use legacy debug dashboard layout (old MainWindow UI)",
+        help=argparse.SUPPRESS,
     )
     return parser.parse_args()
 
 
+def _reject_legacy_without_env() -> int:
+    logger.error("legacy UI blocked; set XTARK_ALLOW_LEGACY=1 to use --legacy")
+    print(
+        "ERROR: legacy debug window is deprecated. "
+        "Set XTARK_ALLOW_LEGACY=1 only when you must compare old behavior.",
+        file=sys.stderr,
+    )
+    shutdown_logging()
+    return 2
+
+
 def main() -> int:
     args = parse_args()
+
+    if args.legacy and not _legacy_entry_allowed():
+        setup_logging()
+        return _reject_legacy_without_env()
+
     settings = setup_logging()
     install_excepthook()
+
+    ros2_enabled = not args.no_ros
+    ros2_status = boot_ros2_runtime(enabled=ros2_enabled)
+
     logger.info(
         "starting %s legacy=%s no_ros=%s log_dir=%s level=%s "
         "odom_log=%s odom_interval=%.1fs file_logging=%s",
@@ -47,6 +75,12 @@ def main() -> int:
         settings.odom_log_interval_sec,
         settings.file_logging_enabled,
     )
+
+    if ros2_enabled and not ros2_status.bridge_ready:
+        logger.warning(
+            "ROS2 bridge not ready at boot (robot page panel will show details):\n%s",
+            ros2_status.format_report(),
+        )
 
     app = QApplication(sys.argv)
     app.setApplicationName(APP_TITLE)
@@ -62,13 +96,22 @@ def main() -> int:
         return 1
 
     if args.legacy:
+        logger.warning(
+            "DEPRECATED: starting legacy debug window; "
+            "do not add new features here; use the new robot shell"
+        )
         window = create_main_window(enable_ros2=not args.no_ros, legacy_ui=True)
     else:
         window = create_main_window(enable_ros2=False, legacy_ui=False)
 
+    def _request_quit() -> None:
+        logger.info("quit requested (signal or platform)")
+        window.cleanup()
+        app.quit()
+
     app.aboutToQuit.connect(window.cleanup)
-    signal.signal(signal.SIGINT, lambda *_args: window.close())
-    signal.signal(signal.SIGTERM, lambda *_args: window.close())
+    signal.signal(signal.SIGINT, lambda *_args: QTimer.singleShot(0, _request_quit))
+    signal.signal(signal.SIGTERM, lambda *_args: QTimer.singleShot(0, _request_quit))
 
     signal_timer = QTimer()
     signal_timer.setInterval(500)

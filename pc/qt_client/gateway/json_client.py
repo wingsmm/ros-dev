@@ -138,7 +138,8 @@ class JsonTcpClient:
             except socket.timeout:
                 continue
             except OSError as exc:
-                self._emit_log("RECV ERR {exc}".format(exc=exc))
+                if not self._stop_event.is_set():
+                    self._emit_log("RECV ERR {exc}".format(exc=exc))
                 self._handle_disconnect()
                 break
             if not chunk:

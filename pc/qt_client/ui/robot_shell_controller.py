@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Callable, Optional
 
 from PyQt5.QtCore import QTimer
@@ -11,6 +12,8 @@ from ui.dialogs import exec_modal_dialog, make_modal_dialog
 from ui.models import RobotStore
 from ui.pages import RobotDeletePage, RobotFormPage, RobotListPage, RobotWorkspacePage
 from ui.shell import AppShell
+
+logger = logging.getLogger(__name__)
 
 
 class RobotShellController:
@@ -44,6 +47,10 @@ class RobotShellController:
             self._workspace.shutdown()
             self._workspace = None
         if self._session is not None:
+            try:
+                self._session.stop_motion()
+            except Exception:
+                logger.exception("stop_motion on exit failed")
             self._session.cleanup()
             self._session = None
 

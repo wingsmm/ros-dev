@@ -1,4 +1,8 @@
-"""JSON feedback -> ROS2 topics + TF. Runs in the same process as app.py."""
+"""JSON feedback -> ROS2 topics + TF.
+
+DEPRECATED in-process bridge: only legacy LegacyWindow spins this node.
+Future PC/WSL ROS2 sidecar should own these topics; see pc/docs/控制端与ROS2硬件平台架构方案.md §9.3.
+"""
 
 from __future__ import annotations
 
@@ -171,11 +175,6 @@ def try_create() -> Optional[Ros2Publisher]:
 
 
 def ros2_unavailable_reason() -> str:
-    try:
-        import rclpy  # noqa: F401
-        from tf2_ros import TransformBroadcaster  # noqa: F401
-    except ImportError as exc:
-        return "ROS2 未加载: {exc}".format(exc=exc)
-    if not _ROS2_AVAILABLE:
-        return "ROS2 消息模块导入失败，请 source /opt/ros/humble/setup.bash 后重启客户端"
-    return "Ros2Publisher 初始化失败"
+    from core.ros2_runtime import ros2_unavailable_reason as _runtime_reason
+
+    return _runtime_reason()

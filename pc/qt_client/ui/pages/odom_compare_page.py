@@ -97,15 +97,16 @@ class OdomComparePage(QWidget):
         self._refresh_timer.start()
         self._refresh_ui()
         self._apply_manual_speed_defaults()
+        self._manual.set_keyboard_enabled(True)
 
     def on_page_deactivated(self) -> None:
         self._ui_active = False
-        self._manual.stop()
+        self._manual.set_keyboard_enabled(False)
         self._refresh_timer.stop()
         self._view.set_repaint_enabled(False)
 
     def shutdown(self) -> None:
-        self._manual.stop()
+        self._manual.set_keyboard_enabled(False)
         self._refresh_timer.stop()
         session = self._binder.session if self._binder is not None else None
         if session is not None:

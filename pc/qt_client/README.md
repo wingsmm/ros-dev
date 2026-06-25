@@ -1,9 +1,8 @@
 # xtark Console / PC Qt Client
 
-`pc/qt_client` 是 PC / WSL2 侧的机器人联调入口。当前采用“双入口”结构：
+`pc/qt_client` 是 PC / WSL2 侧的机器人联调入口。**默认入口**为新版机器人 Shell（机器人选择、工作区、摄像头、里程计对照等）。
 
-- 默认入口：新版机器人 Shell，用于机器人选择、机器人工作区、摄像头页等面向使用的页面。
-- legacy 入口：旧调试台，保留 JSON、ROS2、建图、导航等调试能力。
+> legacy 旧调试台已 **deprecated**，不再承载新功能；仅作历史对照，且需 `XTARK_ALLOW_LEGACY=1` 才能启动（见文末说明）。
 
 ## 启动
 
@@ -18,11 +17,7 @@ cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 ./run.sh --no-ros
 ```
 
-启动旧调试台：
-
-```bash
-./run.sh --legacy
-```
+（`--no-ros` 仅影响已废弃的 legacy 窗口；默认新 shell 不依赖 ROS2。）
 
 ## 日志
 
@@ -65,7 +60,7 @@ XTARK_LOG_ODOM_INTERVAL=1.0
 tail -f logs/xtark-console-$(date +%F).log
 ```
 
-legacy 调试台的 UI 日志面板仍正常显示；文件落盘由统一 logging 系统处理。
+legacy 调试台的 UI 日志面板仍正常显示；文件落盘由统一 logging 系统处理。（仅在使用 deprecated legacy 窗口时适用。）
 
 ## 当前默认 Shell
 
@@ -103,6 +98,7 @@ CameraPage
   ├─ RobotHudBar
   ├─ CameraToolbar
   ├─ CameraViewport
+  ├─ CameraRos2Panel（独立 Camera Bridge，无 RViz2）
   └─ ManualControlStrip
 
 MjpegStreamController
@@ -118,9 +114,22 @@ http://192.168.1.169:8080/stream?topic=/camera/image_raw
 
 说明：
 
-- 当前 HTTP/MJPEG 是“先能看图”的临时方案。
-- Android / ROS 长期契约仍是 `/image_raw/compressed`。
-- 后续应通过 `ros1_bridge`、`ros1_gateway` 或 `ros2_native` backend 对齐 ROS 话题模型。
+- **主功能**：HTTP/MJPEG → `CameraViewport` 低延迟预览（不依赖 ROS2）。
+- **Camera Bridge**（本页独立，默认**手动**启动）：从 MJPEG 解码发布
+  `sensor_msgs/Image` 到 `/camera/image_raw`（约 5fps）及 `base_link→camera_link`
+  静态 TF，用于 `ros2 topic hz` 等数据链验收。
+- **本页不提供 RViz2**：WSL2 下摄像头相关 RViz/OpenGL 不稳定（`failed to create drawable` /
+  segfault），不作为验收项；看图用 Qt 预览。机器人页 RViz2 仍用于激光/TF。
+- `config/xtark_camera.rviz` 仅保留给**原生 Linux** 手工调试，不在 WSL 默认流程使用。
+- 进入摄像头页**只自动连 MJPEG**；`XTARK_AUTO_CAMERA_BRIDGE=1` 才在进入页时自动启 Bridge。
+
+### 摄像头页验收
+
+| 项目 | 验收 |
+|------|------|
+| Qt MJPEG 预览 | 是 |
+| 手动启 Camera Bridge 后 `ros2 topic hz /camera/image_raw` | 是 |
+| 摄像头页 RViz2 / Image display | **否**（不支持作验收） |
 
 机器人端 Qt 全功能栈（摄像头 + 机器人 + 里程计对照）：
 
@@ -180,10 +189,27 @@ CAMERA_ENABLE=0 LASER_ODOM_ENABLE=0 qt_stack.sh start
 离开机器人页或关闭页面时发送零速度。中间“停止”和顶部“停止”始终走
 `RobotSession.stop_motion()`。
 
-位置基准与 Android 相同：`RobotSession` 在每次连接的第一帧 `odom_base` 保存
-`start_x/start_y`，机器人页使用 `current - start` 绘制紫色原点；原始 `last_odom`
-仍供 HUD 使用。切换页面不重新归零，重启 Qt 或重新连接机器人后重新采集首帧。
-heading 继续使用当前 odom yaw，不减首帧 yaw。
+位置基准：`RobotSession` 在每次连接的第一帧 `odom_base` 锁定 session 原点
+（`x0/y0/yaw0`，见 `core/odom_session_origin.py`），机器人页与 ROS2 `/odom`、
+RViz2 使用同一套归一化位姿；HUD 仍显示车端原始 odom。
+
+### ROS2 / RViz2 联调（机器人页）
+
+折叠面板「ROS2 / RViz2 联调」；进入机器人页且已连车时可自动启动 Bridge（可用
+`XTARK_AUTO_BRIDGE=0` 关闭）。RViz2 **仅手动**启动。
+
+Bridge 发布（session 坐标 + `core/robot_frames.py` 外参）：
+
+| 话题 | 来源 |
+|------|------|
+| `/scan` | JSON laser_scan |
+| `/odom` | JSON odom_base（session 原点） |
+| `/odom_raw` / `/odom_laser` | JSON 原始值 |
+| `/tf` / `/tf_static` | odom→base_link、base_link→laser |
+
+预配置：`config/xtark_robot.rviz`（Fixed Frame=`odom`，LaserScan + TF）。摄像头见摄像头页。
+
+**RViz2 硬验收（机器人页）**：LaserScan、`/odom` 相关 TF tree。不含 Image。
 
 验收状态：代码和本地静态检查已完成；机器人端部署、真车六向运动、停车、激光方向
 及告警扇区仍需现场验证。`./run.sh --no-ros` 只能检查界面，机器人页会显示
@@ -259,28 +285,39 @@ ManualControlStrip
 
 控车需要底盘和 JSON 网关，使用 `qt_stack.sh start`，不要只启动 `dev/camera_stack.sh`。
 
-## legacy 调试台
+## legacy 调试台（deprecated，冻结）
 
-`./run.sh --legacy` 保留原有调试能力：
+**不要在此添加新功能。** 新控制、遥测、地图比对、SLAM 相关能力一律进 `ui/` 新 shell，算法进程将来由 PC/WSL ROS2 sidecar 承担（见 `pc/docs/控制端与ROS2硬件平台架构方案.md`）。
 
-- TCP JSON 连接 xtark 底盘。
-- 发布 ROS2 `/odom_base`、`/base_status`、TF。
-- `/cmd_vel` 转 JSON 控制底盘。
-- 启停 RViz2 / slam_toolbox / Nav2。
-- legacy `CameraPanel` 继续可用，并复用新版 `MjpegStreamController`。
+仅在必须对照旧 ROS2 调试行为时，可临时启用：
+
+```bash
+XTARK_ALLOW_LEGACY=1 ./run.sh --legacy
+```
+
+未设置 `XTARK_ALLOW_LEGACY=1` 时，`--legacy` 会拒绝启动。启动时会打印 `DEPRECATED` 警告。
+
+旧窗口曾集成的能力（供 sidecar 设计参考，已迁出到架构文档 §9.3）：
+
+- TCP JSON 连接 xtark 底盘
+- 进程内 `Ros2Publisher`：`/odom_base`、`/odom`、`/base_status`、TF、`/cmd_vel` 回调
+- `RosStackManager`：RViz2、slam_toolbox、Nav2 定位/导航、map save
+- legacy `CameraPanel`（HTTP/MJPEG，新版已用 `MjpegStreamController` 替代）
+
+相关代码仍保留在 `legacy/`、`mapping/`、`gateway/ros2_pub.py`，**默认启动路径不 import 它们**。
 
 ## 目录结构
 
 ```text
 qt_client/
 ├── app.py                    # 轻量入口：参数、QApplication、单实例锁
-├── main_window.py            # 默认 Shell / legacy 路由
+├── main_window.py            # 默认 Shell；legacy 仅 lazy import
 ├── run.sh
 ├── backends/                 # RobotBackend 抽象和 mock / ros1 / ros2 backend 骨架
 ├── core/                     # RobotSession / logging_config / 状态与几何
 ├── data/                     # robots.json
 ├── gateway/                  # JSON / ROS2 网关旧调试能力
-├── legacy/                   # LegacyWindow，旧调试台
+├── legacy/                   # DEPRECATED LegacyWindow（冻结，勿扩写）
 ├── mapping/                  # RViz2 / SLAM / Nav2 process manager
 ├── ui/
 │   ├── assets/               # 从 Android 复制的图标资源
@@ -316,6 +353,6 @@ qt_client/
 代码检查：
 
 ```bash
-python -m py_compile app.py core/logging_config.py core/odom_telemetry_logger.py
+python -m py_compile app.py main_window.py core/logging_config.py
 git diff --check
 ```

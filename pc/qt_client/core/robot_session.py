@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QApplication
 from core.robot_state import RobotConnectionState
 from core.warning_controller import WarningController, WarningSettings
 from core.laser_scan_frame import LaserScanFrame
+from core.odom_session_origin import OdomSessionOrigin
 from core.odom_telemetry_logger import maybe_log_odom, reset_odom_telemetry_log
 
 _MAX_LINEAR = 0.50
@@ -41,7 +42,7 @@ class RobotSession(QObject):
         self.last_base_status: Optional[Dict[str, Any]] = None
         self.last_warning: Optional[Dict[str, Any]] = None
         self.last_laser_scan: Optional[Any] = None
-        self._odom_origin_xy: Optional[Tuple[float, float]] = None
+        self._odom_origin = OdomSessionOrigin()
         self._warning = WarningController(self._warning_settings_from_profile())
         self._warning_timer = QTimer(self)
         self._warning_timer.setInterval(100)
@@ -73,7 +74,6 @@ class RobotSession(QObject):
     def _handle_json_message(self, msg: Dict[str, Any]) -> None:
         msg_type = msg.get("type")
         if msg_type == "odom_base":
-            self._ensure_odom_origin(msg)
             self.last_odom = msg
             self._warning.on_odom(float(msg.get("linear_x", 0.0)))
             maybe_log_odom("odom_base", msg)
@@ -139,30 +139,21 @@ class RobotSession(QObject):
         if not ok:
             self.last_error = detail or "JSON 网关连接中断"
 
-    def _ensure_odom_origin(self, msg: Dict[str, Any]) -> None:
-        if self._odom_origin_xy is not None:
-            return
-        self._odom_origin_xy = (
-            float(msg.get("x", 0.0)),
-            float(msg.get("y", 0.0)),
-        )
-
     def relative_odom_pose(
         self, msg: Dict[str, Any]
     ) -> Tuple[float, float, float]:
-        """Return Android-style position relative to this connection's first odom."""
-        self._ensure_odom_origin(msg)
-        assert self._odom_origin_xy is not None
-        origin_x, origin_y = self._odom_origin_xy
-        return (
-            float(msg.get("x", 0.0)) - origin_x,
-            float(msg.get("y", 0.0)) - origin_y,
-            float(msg.get("yaw", 0.0)),
-        )
+        """Session-local pose (x/y/yaw aligned to first odom_base after connect)."""
+        return self._odom_origin.relative_pose(msg)
+
+    def odom_origin_summary(self) -> str:
+        return self._odom_origin.format_summary()
+
+    def odom_origin_is_set(self) -> bool:
+        return self._odom_origin.is_set()
 
     def connect(self) -> bool:
         self.state = RobotConnectionState.CONNECTING
-        self._odom_origin_xy = None
+        self._odom_origin.reset()
         self.last_odom = None
         self.last_odom_raw = None
         self.last_odom_laser = None
@@ -182,6 +173,7 @@ class RobotSession(QObject):
     def disconnect(self) -> None:
         self.backend.disconnect()
         reset_odom_telemetry_log()
+        self._odom_origin.reset()
         self.state = RobotConnectionState.DISCONNECTED
 
     def cleanup(self) -> None:

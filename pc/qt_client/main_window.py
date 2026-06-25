@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 
 from PyQt5.QtWidgets import QMainWindow
 
+from core.app_shutdown import run_shutdown
 from core.logging_config import log_ui_line
-
-from legacy.legacy_window import LegacyWindow
 from ui.models import RobotStore
 from ui.pages import PlaceholderPage, RobotListPage
 from ui.robot_shell_controller import RobotShellController
 from ui.shell import AppShell
 
 APP_TITLE = "xtark Console"
+
+logger = logging.getLogger(__name__)
 
 
 class ShellMainWindow(QMainWindow):
@@ -51,7 +53,9 @@ class ShellMainWindow(QMainWindow):
         if self._cleanup_done:
             return
         self._cleanup_done = True
+        logger.info("main window cleanup")
         self._shell_controller.cleanup()
+        run_shutdown()
 
     def closeEvent(self, event) -> None:
         self.cleanup()
@@ -60,5 +64,7 @@ class ShellMainWindow(QMainWindow):
 
 def create_main_window(enable_ros2: bool, legacy_ui: bool) -> QMainWindow:
     if legacy_ui:
+        from legacy.legacy_window import LegacyWindow
+
         return LegacyWindow(enable_ros2=enable_ros2)
     return ShellMainWindow()

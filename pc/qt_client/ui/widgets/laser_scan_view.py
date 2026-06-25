@@ -17,6 +17,7 @@ from PyQt5.QtGui import (
 from PyQt5.QtWidgets import QCheckBox, QHBoxLayout, QPushButton, QWidget
 
 from core.laser_scan_frame import LaserScanFrame
+from core.robot_frames import LASER_X, LASER_Y, LASER_YAW
 from core.laser_scan_geometry import (
     DEFAULT_PIXELS_PER_METER,
     clamp_pixels_per_meter,
@@ -37,14 +38,7 @@ _SCAN_POINT_SIZE = 10.0
 _ORIGIN_SIZE = 32.0
 _MIN_POINT_DISTANCE_SQUARED = 0.20
 
-# Current xtark MEC + XAS mounting transform (base_footprint -> laser).
-# LaserScan angles are expressed in the laser frame, while the robot marker is
-# expressed in the base frame.  Apply the static extrinsic before drawing so
-# the scan and the vehicle heading share the same coordinate system.
-_LASER_X_OFFSET_M = 0.05
-_LASER_Y_OFFSET_M = 0.0
-_LASER_YAW_OFFSET_RAD = math.pi
-
+# Laser extrinsic: base_link -> laser (see core/robot_frames.py).
 
 class LaserToolbar(QWidget):
     center_requested = pyqtSignal()
@@ -265,10 +259,10 @@ class LaserScanView(QWidget):
                 local_x, local_y = scan_point_to_local(
                     angle,
                     distance,
-                    _LASER_YAW_OFFSET_RAD,
+                    LASER_YAW,
                 )
-                local_x += _LASER_X_OFFSET_M
-                local_y += _LASER_Y_OFFSET_M
+                local_x += LASER_X
+                local_y += LASER_Y
                 raw_segment.append(
                     (
                         self._map_scan_point(local_x, local_y),

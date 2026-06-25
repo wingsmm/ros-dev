@@ -1,4 +1,9 @@
-"""Start/stop RViz2 and slam_toolbox from the GUI (no extra terminal)."""
+"""Start/stop RViz2 and slam_toolbox from the GUI (no extra terminal).
+
+DEPRECATED path: only used by legacy LegacyWindow. New shell must not import
+this module; reuse commands documented in pc/docs/控制端与ROS2硬件平台架构方案.md §9.3
+for future PC/WSL ROS2 sidecar.
+"""
 
 from __future__ import annotations
 

@@ -1,3 +1,17 @@
+"""DEPRECATED legacy Qt debug dashboard (frozen).
+
+This window is no longer the mainline entry. New control, telemetry, map compare,
+and SLAM-related UI belong in pc/qt_client/ui/ and consume RobotSession / future
+PC-WSL ROS2 sidecar output — not this module.
+
+Reusable ROS2 stack experience from legacy has been recorded in:
+  pc/docs/控制端与ROS2硬件平台架构方案.md  (section 9.3)
+  pc/docs/legacy清理与机器人地图比对改造任务书.md
+
+To open this window (fallback only):
+  XTARK_ALLOW_LEGACY=1 ./run.sh --legacy
+"""
+
 from __future__ import annotations
 
 import logging
@@ -536,6 +550,9 @@ class LegacyWindow(QMainWindow):
             self._ros2.set_nav_cmd_enabled(False)
         if self._ros2 is not None:
             self._ros2.shutdown()
+        from core.app_shutdown import run_shutdown
+
+        run_shutdown()
 
     def closeEvent(self, event):
         self.cleanup()
