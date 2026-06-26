@@ -21,6 +21,7 @@ if /I "%CMD%"=="-h" goto :help
 if /I "%CMD%"=="--help" goto :help
 if /I "%CMD%"=="deploy" goto :deploy
 if /I "%CMD%"=="build" goto :build_only
+if /I "%CMD%"=="restart-raw" goto :restart_raw
 if /I "%CMD%"=="start" goto :stack
 if /I "%CMD%"=="stop" goto :stack
 if /I "%CMD%"=="restart" goto :stack
@@ -37,6 +38,7 @@ echo Usage: qt_remote.bat [deploy^|build^|start^|stop^|restart^|status^|check^|l
 echo.
 echo   deploy   Sync qt_stack + packages, catkin_make
 echo   build    catkin_make only
+echo   restart-raw  qt_stack.sh restart with PROFILE=camera_raw
 echo   start    qt_stack.sh start on robot (no upload)
 echo   stop     qt_stack.sh stop
 echo   restart  qt_stack.sh restart
@@ -77,11 +79,16 @@ if errorlevel 1 exit /b 1
 
 :build_only
 echo [6/7] chmod + strip CRLF + catkin_make ...
-"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "for f in %XTARK_REMOTE_SCRIPTS%/qt_stack.sh %XTARK_REMOTE_SCRIPTS%/qt_camera_modules.sh %XTARK_REMOTE_SCRIPTS%/stack_common.sh %XTARK_REMOTE_SCRIPTS%/robot_stack.sh %XTARK_REMOTE_SCRIPTS%/laser_odom_compare_stack.sh %XTARK_REMOTE_SCRIPTS%/robot_control_stack.sh %XTARK_REMOTE_TOOLS%/analyze_laser_odom_bag.py; do sed -i 's/\r$//' \"$f\"; chmod +x \"$f\"; done && sed -i 's/\r$//' %XTARK_REMOTE_WS%/src/xtark_depth_preview/scripts/depth_preview_node.py && chmod +x %XTARK_REMOTE_WS%/src/xtark_depth_preview/scripts/depth_preview_node.py && cd %XTARK_REMOTE_WS% && source /opt/ros/melodic/setup.bash && catkin_make --cmake-args -DCATKIN_WHITELIST_PACKAGES=\"xtark_json_bridge;xtark_nav;xtark_depth_preview\""
+"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "for f in %XTARK_REMOTE_SCRIPTS%/qt_stack.sh %XTARK_REMOTE_SCRIPTS%/qt_camera_modules.sh %XTARK_REMOTE_SCRIPTS%/stack_common.sh %XTARK_REMOTE_SCRIPTS%/robot_stack.sh %XTARK_REMOTE_SCRIPTS%/laser_odom_compare_stack.sh %XTARK_REMOTE_SCRIPTS%/robot_control_stack.sh %XTARK_REMOTE_TOOLS%/analyze_laser_odom_bag.py; do sed -i 's/\r$//' \"$f\"; chmod +x \"$f\"; done && for f in %XTARK_REMOTE_WS%/src/xtark_depth_preview/scripts/depth_preview_node.py %XTARK_REMOTE_WS%/src/xtark_depth_preview/scripts/depth_http_server.py; do sed -i 's/\r$//' \"$f\"; chmod +x \"$f\"; done && cd %XTARK_REMOTE_WS% && source /opt/ros/melodic/setup.bash && catkin_make --cmake-args -DCATKIN_WHITELIST_PACKAGES=\"xtark_json_bridge;xtark_nav;xtark_depth_preview\""
 if errorlevel 1 exit /b 1
 
 echo [7/7] verify packages ...
 "%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "source /opt/ros/melodic/setup.bash && source %XTARK_REMOTE_WS%/devel/setup.bash && rospack find rf2o_laser_odometry && rospack find xtark_laser_odometry && rospack find xtark_json_bridge && rospack find xtark_depth_preview"
+exit /b %ERRORLEVEL%
+
+:restart_raw
+echo running qt_stack.sh restart PROFILE=camera_raw ...
+"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "source /opt/ros/melodic/setup.bash && source %XTARK_REMOTE_WS%/devel/setup.bash && export ROS_MASTER_URI=http://%XTARK_HOST%:11311 && export ROS_IP=%XTARK_HOST% && PROFILE=camera_raw %XTARK_REMOTE_SCRIPTS%/qt_stack.sh restart"
 exit /b %ERRORLEVEL%
 
 :stack

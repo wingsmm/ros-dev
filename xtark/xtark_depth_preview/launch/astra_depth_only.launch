@@ -15,7 +15,7 @@
 
   <arg name="depth_registration" default="false" />
 
-  <arg name="color_depth_synchronization"     default="true" />
+  <arg name="color_depth_synchronization"     default="false" />
   <arg name="auto_exposure"                   default="true" />
   <arg name="auto_white_balance"              default="true" />
 
@@ -26,20 +26,8 @@
   <arg name="load_driver" default="true" />
   <arg name="publish_tf" default="true" />
 
-  <arg name="rgb_processing"                  default="true"  />
-  <arg name="debayer_processing"              default="false" />
-  <arg name="ir_processing"                   default="false" />
-  <arg name="depth_processing"                default="true" />
-  <arg name="depth_registered_processing"     default="true" />
-  <arg name="disparity_processing"            default="false" />
-  <arg name="disparity_registered_processing" default="false" />
-  <arg name="hw_registered_processing"        default="true" if="$(arg depth_registration)" />
-  <arg name="sw_registered_processing"        default="false" if="$(arg depth_registration)" />
-  <arg name="hw_registered_processing"        default="false" unless="$(arg depth_registration)" />
-  <arg name="sw_registered_processing"        default="true" unless="$(arg depth_registration)" />
-
   <arg name="respawn" default="false" />
-  <arg name="num_worker_threads" default="4" />
+  <arg name="num_worker_threads" default="2" />
 
   <group ns="$(arg camera)">
 
@@ -71,22 +59,9 @@
       <arg name="auto_white_balance"              value="$(arg auto_white_balance)" />
     </include>
 
-    <include file="$(find rgbd_launch)/launch/includes/processing.launch.xml">
-      <arg name="manager"                         value="$(arg manager)" />
-      <arg name="rgb"                             value="$(arg rgb)" />
-      <arg name="ir"                              value="$(arg ir)" />
-      <arg name="depth"                           value="$(arg depth)" />
-      <arg name="respawn"                         value="$(arg respawn)" />
-      <arg name="rgb_processing"                  value="$(arg rgb_processing)" />
-      <arg name="debayer_processing"              value="$(arg debayer_processing)" />
-      <arg name="ir_processing"                   value="$(arg ir_processing)" />
-      <arg name="depth_processing"                value="$(arg depth_processing)" />
-      <arg name="depth_registered_processing"     value="$(arg depth_registered_processing)" />
-      <arg name="disparity_processing"            value="$(arg disparity_processing)" />
-      <arg name="disparity_registered_processing" value="$(arg disparity_registered_processing)" />
-      <arg name="hw_registered_processing"        value="$(arg hw_registered_processing)" />
-      <arg name="sw_registered_processing"        value="$(arg sw_registered_processing)" />
-    </include>
+    <!-- Raw depth and CameraInfo come directly from AstraDriverNodelet.
+         Do not load rgbd_launch processing: rectification, registration,
+         metric conversion and point clouds are PC-side work for this stack. -->
 
   </group>
 

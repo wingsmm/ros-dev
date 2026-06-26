@@ -1,6 +1,6 @@
 # PC 端摄像头模块与 ROS2 视觉演进方案
 
-最后更新：2026-06-25
+最后更新：2026-06-26
 
 目标：在 `pc/qt_client` 的**摄像头模块**里承接 RGB/深度相机显示、诊断、ROS2/RViz 展示和后续视觉算法联调；xtark 侧尽量只作为硬件采集平台，算法、转换、可视化和较重的业务逻辑优先放到 PC/WSL2/ROS2 侧，降低后续对接其他硬件平台的难度。
 
@@ -53,12 +53,12 @@ core/camera_*
 
 **Phase 1.5（RGB+Depth 双预览，Qt 双渲染）**
 
-目标：Qt 摄像头页必须同时可看 RGB 和 Depth。Depth 优先走 PC raw worker；如果 PC 没有 ROS1→ROS2 depth bridge，3 秒后自动走 MJPEG fallback。MJPEG fallback 默认依次尝试 `/camera/depth/preview` 和 `/camera/depth/image_raw`，不再卡死在单一路径。
+目标：Qt 摄像头页必须同时可看 RGB 和 Depth。RGB 保持 `:8080` MJPEG；Depth 统一从 xtark `:8082` 拉取 `16UC1` raw frame，由 PC/Qt 本地伪彩渲染和计算距离。不要再使用 ROS1->ROS2 Docker bridge、深度 MJPEG 或 JSON 传图。
 
 xtark 侧固定两档：
 
-- `PROFILE=camera_raw`：低负载，发布 RGB、depth raw、camera_info；不启动 `xtark_depth_preview`。
-- `PROFILE=camera_preview`：验收/兜底，在 `camera_raw` 基础上启动 `xtark_depth_preview` 并发布 `/camera/depth/preview`。
+- `PROFILE=camera_raw`：低负载，发布 RGB、depth raw、camera_info，并启动 `:8082` raw depth HTTP；不启动 `xtark_depth_preview`。
+- `PROFILE=camera_preview`：保留为兼容别名，行为与 `camera_raw` 一致，不再启动深度 MJPEG preview。
 - 两档都保留 bringup、JSON `:8765`、RGB `:8080`、Depth raw。
 - 不在 xtark 上做楼梯、墙面、障碍物、点云分割、3D 地图等算法。
 
@@ -68,7 +68,7 @@ PC/Qt 侧新增：
 - 支持 `16UC1`，必要时兼容 `32FC1`。
 - 在 worker 中完成深度 clip、无效值过滤、伪彩色/灰度 preview、中心距离、最近有效距离、有效像素比例、FPS、延迟统计。
 - Depth / 分屏优先显示 PC/Qt 生成的 preview。
-- Raw 3 秒无帧后自动 MJPEG fallback，默认候选为 `/camera/depth/preview` → `/camera/depth/image_raw`。
+- Qt Depth worker 从 `http://<xtark>:8082/v1/depth/latest` 拉取 raw frame；`/v1/depth/camera_info` 提供标定参数。
 
 建议新增文件：
 
@@ -102,7 +102,7 @@ PROFILE=camera_preview ~/ros_ws/scripts/qt_stack.sh start
 ~/ros_ws/scripts/qt_stack.sh status
 ```
 
-Phase 1.5 完成后进入 Phase 2.0：在 PC/WSL2/ROS2/Python3 侧继续做障碍物、墙面、楼梯候选、Marker、debug image 等感知输出。
+Phase 1.5 完成后进入 Phase 2.0：在 PC/WSL2/ROS2/Python3 侧消费同一份 HTTP raw depth，做障碍物、墙面、楼梯候选、Marker、debug image 等感知输出。
 
 当前默认 HTTP/MJPEG URL：
 

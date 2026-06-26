@@ -11,6 +11,7 @@ catkin_package()
 
 catkin_install_python(PROGRAMS
   scripts/depth_preview_node.py
+  scripts/depth_http_server.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

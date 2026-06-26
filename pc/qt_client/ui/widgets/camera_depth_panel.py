@@ -25,8 +25,8 @@ class CameraDepthPanel(QWidget):
         self._source_kind = DepthSourceKind.OFFLINE
         self._stream_label = QLabel("深度流: 未接入")
         self._source_label = QLabel("深度源: Offline")
-        self._fallback_topic_label = QLabel(f"Fallback topic: {QT_MJPEG_DEPTH_TOPIC}")
-        self._fallback_url_label = QLabel("Fallback URL: —")
+        self._fallback_topic_label = QLabel("Raw depth transport: HTTP :8082")
+        self._fallback_url_label = QLabel("Raw HTTP URL: —")
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -90,6 +90,10 @@ class CameraDepthPanel(QWidget):
         self._fallback_topic_label.setText(f"Fallback topic: {topic}")
         self._fallback_url_label.setText(f"Fallback URL: {url or '—'}")
 
+    def set_http_info(self, url: str) -> None:
+        self._fallback_topic_label.setText("Raw depth transport: HTTP :8082")
+        self._fallback_url_label.setText(f"Raw HTTP URL: {url or '—'}")
+
     def set_stream_status(self, text: str) -> None:
         self._stream_label.setText(f"深度流: {text}")
 
@@ -101,6 +105,7 @@ class CameraDepthPanel(QWidget):
                 kind = DepthSourceKind.OFFLINE
         self._source_kind = kind
         labels = {
+            DepthSourceKind.RAW_HTTP: "Raw HTTP :8082",
             DepthSourceKind.RAW_ROS2: "Raw ROS2",
             DepthSourceKind.MJPEG_FALLBACK: "MJPEG fallback",
             DepthSourceKind.OFFLINE: "Offline",

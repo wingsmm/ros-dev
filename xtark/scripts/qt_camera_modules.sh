@@ -19,6 +19,8 @@ CAMERA_ENABLE="${CAMERA_ENABLE:-1}"
 DEPTH_CAMERA_ENABLE="${DEPTH_CAMERA_ENABLE:-0}"
 DEPTH_PREVIEW_ENABLE="${DEPTH_PREVIEW_ENABLE:-0}"
 DEPTH_PREVIEW_MODE="${DEPTH_PREVIEW_MODE:-off}"
+DEPTH_HTTP_ENABLE="${DEPTH_HTTP_ENABLE:-0}"
+DEPTH_HTTP_PORT="${DEPTH_HTTP_PORT:-8082}"
 LASER_ODOM_ENABLE="${LASER_ODOM_ENABLE:-1}"
 
 BRINGUP_PKG="${BRINGUP_PKG:-xtark_driver}"
@@ -34,6 +36,8 @@ DEPTH_CAMERA_PKG="${DEPTH_CAMERA_PKG:-xtark_depth_preview}"
 DEPTH_CAMERA_LAUNCH="${DEPTH_CAMERA_LAUNCH:-astra_depth_only.launch}"
 DEPTH_PREVIEW_PKG="${DEPTH_PREVIEW_PKG:-xtark_depth_preview}"
 DEPTH_PREVIEW_LAUNCH="${DEPTH_PREVIEW_LAUNCH:-depth_preview.launch}"
+DEPTH_HTTP_PKG="${DEPTH_HTTP_PKG:-xtark_depth_preview}"
+DEPTH_HTTP_LAUNCH="${DEPTH_HTTP_LAUNCH:-depth_http_server.launch}"
 DEPTH_INPUT_TOPIC="${DEPTH_INPUT_TOPIC:-/camera/depth/image_raw}"
 DEPTH_PREVIEW_TOPIC="${DEPTH_PREVIEW_TOPIC:-/camera/depth/preview}"
 
@@ -57,6 +61,7 @@ JSON_LOG="$LOG_DIR/json_adapter.log"
 CAMERA_LOG="$LOG_DIR/camera.log"
 DEPTH_CAMERA_LOG="$LOG_DIR/depth_camera.log"
 DEPTH_PREVIEW_LOG="$LOG_DIR/depth_preview.log"
+DEPTH_HTTP_LOG="$LOG_DIR/depth_http.log"
 WEB_VIDEO_LOG="$LOG_DIR/web_video.log"
 RF2O_LOG="$LOG_DIR/rf2o.log"
 BAG_LOG="$LOG_DIR/rosbag.log"
@@ -81,7 +86,7 @@ Commands:
 Profiles:
   PROFILE=full            daily Qt stack
   PROFILE=camera_raw      RGB + depth raw, no depth preview
-  PROFILE=camera_preview  RGB + depth raw + /camera/depth/preview
+  PROFILE=camera_preview  Deprecated alias of camera_raw
   PROFILE=camera_depth    depth hardware diagnostic only
 EOF
 }
@@ -128,6 +133,7 @@ qt_resolve_profile() {
       DEPTH_CAMERA_ENABLE=1
       DEPTH_PREVIEW_ENABLE=0
       DEPTH_PREVIEW_MODE=off
+      DEPTH_HTTP_ENABLE=1
       LASER_ODOM_ENABLE=0
       CAMERA_MODE=rgb_depth
       RGB_SOURCE="${RGB_SOURCE:-auto}"
@@ -137,8 +143,9 @@ qt_resolve_profile() {
       JSON_ENABLE=1
       CAMERA_ENABLE=1
       DEPTH_CAMERA_ENABLE=1
-      DEPTH_PREVIEW_ENABLE=1
-      DEPTH_PREVIEW_MODE=xtark
+      DEPTH_PREVIEW_ENABLE=0
+      DEPTH_PREVIEW_MODE=off
+      DEPTH_HTTP_ENABLE=1
       LASER_ODOM_ENABLE=0
       CAMERA_MODE=rgb_depth
       RGB_SOURCE="${RGB_SOURCE:-auto}"
@@ -150,6 +157,7 @@ qt_resolve_profile() {
       DEPTH_CAMERA_ENABLE=1
       DEPTH_PREVIEW_ENABLE=0
       DEPTH_PREVIEW_MODE=off
+      DEPTH_HTTP_ENABLE=0
       LASER_ODOM_ENABLE=0
       CAMERA_MODE=depth_only
       RGB_SOURCE="${RGB_SOURCE:-uvc_astra}"
@@ -443,6 +451,41 @@ stop_depth_preview() {
   pkill -f "roslaunch ${DEPTH_PREVIEW_PKG} ${DEPTH_PREVIEW_LAUNCH}" 2>/dev/null || true
 }
 
+start_depth_http() {
+  if [ "$DEPTH_HTTP_ENABLE" != "1" ]; then
+    echo "[SKIP] depth HTTP disabled"
+    return 0
+  fi
+  if stack_is_listening "$DEPTH_HTTP_PORT" && ! qt_pid_alive depth_http; then
+    echo "[ERR] port $DEPTH_HTTP_PORT in use but not owned by qt_stack"
+    return 1
+  fi
+  if ! qt_pid_alive depth_http; then
+    nohup roslaunch "$DEPTH_HTTP_PKG" "$DEPTH_HTTP_LAUNCH" \
+      input_topic:="$DEPTH_INPUT_TOPIC" \
+      camera_info_topic:=/camera/depth/camera_info \
+      port:="$DEPTH_HTTP_PORT" \
+      >"$DEPTH_HTTP_LOG" 2>&1 &
+    qt_write_pid depth_http "$!"
+  fi
+  qt_wait_port "$DEPTH_HTTP_PORT" 30
+  local i=0
+  while ! curl -fsS --connect-timeout 2 --max-time 3 "http://127.0.0.1:${DEPTH_HTTP_PORT}/healthz" \
+    | grep -q '"depth_ready":true'; do
+    i=$((i + 1))
+    if [ "$i" -ge 20 ]; then
+      echo "[ERR] depth HTTP has no raw frame after 20s"
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+stop_depth_http() {
+  qt_stop_pid depth_http
+  pkill -f "roslaunch ${DEPTH_HTTP_PKG} ${DEPTH_HTTP_LAUNCH}" 2>/dev/null || true
+}
+
 start_web_video() {
   if [ "$CAMERA_ENABLE" != "1" ]; then
     echo "[SKIP] web_video disabled"
@@ -504,12 +547,16 @@ qt_start() {
   qt_start_step json start_json stop_json
   qt_start_step rgb_camera start_rgb_camera stop_rgb_camera
   qt_start_step depth_camera start_depth_camera stop_depth_camera
+  qt_start_step depth_http start_depth_http stop_depth_http
   qt_start_step depth_preview start_depth_preview stop_depth_preview
   qt_start_step web_video start_web_video stop_web_video
   qt_start_step rf2o start_rf2o stop_rf2o
   echo "[DONE] qt stack ready"
   echo "Qt JSON: ${HOST_IP}:8765"
   echo "Qt RGB: http://${HOST_IP}:8080/stream?topic=${QT_RGB_TOPIC}"
+  if [ "$DEPTH_HTTP_ENABLE" = "1" ]; then
+    echo "Qt Depth raw: http://${HOST_IP}:${DEPTH_HTTP_PORT}/v1/depth/latest"
+  fi
   if qt_depth_preview_enabled; then
     echo "Qt Depth: http://${HOST_IP}:8080/stream?topic=${DEPTH_PREVIEW_TOPIC}"
   fi
@@ -522,6 +569,7 @@ qt_stop() {
   stop_rf2o || true
   stop_web_video || true
   stop_depth_preview || true
+  stop_depth_http || true
   stop_depth_camera || true
   stop_rgb_camera || true
   stop_json || true
@@ -544,7 +592,7 @@ qt_status() {
   else
     echo "owner=inactive"
   fi
-  for spec in "11311:roscore" "8765:json" "8080:web_video"; do
+  for spec in "11311:roscore" "8765:json" "8080:web_video" "${DEPTH_HTTP_PORT}:depth_http"; do
     local port="${spec%%:*}"
     local name="${spec#*:}"
     if stack_is_listening "$port"; then
@@ -554,7 +602,7 @@ qt_status() {
     fi
   done
   echo "---PIDs---"
-  for name in roscore bringup json camera rgb_relay depth_camera depth_preview web_video rf2o rosbag; do
+  for name in roscore bringup json camera rgb_relay depth_camera depth_http depth_preview web_video rf2o rosbag; do
     if qt_pid_alive "$name"; then
       echo "$name pid=$(cat "$(qt_pid_file "$name")")"
     else
@@ -642,7 +690,7 @@ qt_record() {
 qt_logs() {
   mkdir -p "$LOG_DIR"
   touch "$ROSCORE_LOG" "$BRINGUP_LOG" "$JSON_LOG" "$CAMERA_LOG" "$DEPTH_CAMERA_LOG" \
-    "$DEPTH_PREVIEW_LOG" "$WEB_VIDEO_LOG" "$RF2O_LOG" "$BAG_LOG"
+    "$DEPTH_PREVIEW_LOG" "$DEPTH_HTTP_LOG" "$WEB_VIDEO_LOG" "$RF2O_LOG" "$BAG_LOG"
   tail -n 40 -f "$ROSCORE_LOG" "$BRINGUP_LOG" "$JSON_LOG" "$CAMERA_LOG" \
-    "$DEPTH_CAMERA_LOG" "$DEPTH_PREVIEW_LOG" "$WEB_VIDEO_LOG" "$RF2O_LOG" "$BAG_LOG"
+    "$DEPTH_CAMERA_LOG" "$DEPTH_PREVIEW_LOG" "$DEPTH_HTTP_LOG" "$WEB_VIDEO_LOG" "$RF2O_LOG" "$BAG_LOG"
 }

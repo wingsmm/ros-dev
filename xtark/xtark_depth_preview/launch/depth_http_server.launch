@@ -1,0 +1,13 @@
+<launch>
+  <arg name="input_topic" default="/camera/depth/image_raw"/>
+  <arg name="camera_info_topic" default="/camera/depth/camera_info"/>
+  <arg name="host" default="0.0.0.0"/>
+  <arg name="port" default="8082"/>
+
+  <node pkg="xtark_depth_preview" type="depth_http_server.py" name="depth_http_server" output="screen">
+    <param name="input_topic" value="$(arg input_topic)"/>
+    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="host" value="$(arg host)"/>
+    <param name="port" value="$(arg port)"/>
+  </node>
+</launch>

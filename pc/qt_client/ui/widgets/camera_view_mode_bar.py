@@ -36,6 +36,10 @@ class CameraViewModeBar(QWidget):
         self._style_active("rgb")
 
     def _on_mode(self, mode: str) -> None:
+        if mode == "split":
+            # Split view disabled: dual-stream preview overloads the UI thread.
+            self._style_active(self._mode)
+            return
         if self._mode == mode:
             self._buttons[mode].setChecked(True)
             return

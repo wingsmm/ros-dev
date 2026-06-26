@@ -39,13 +39,21 @@ def _decode_depth_array(
     raise ValueError(f"unsupported depth encoding: {encoding}")
 
 
-def _apply_jet(norm_u8: np.ndarray) -> np.ndarray:
-    """Map HxW uint8 -> HxWx3 uint8 RGB (jet-like)."""
-    v = norm_u8.astype(np.float32) / 255.0
+def _build_jet_lut() -> np.ndarray:
+    """Build once; per-frame conversion is a cheap uint8 lookup."""
+    v = np.arange(256, dtype=np.float32) / 255.0
     r = np.clip(1.5 - np.abs(4.0 * v - 3.0), 0.0, 1.0)
     g = np.clip(1.5 - np.abs(4.0 * v - 2.0), 0.0, 1.0)
     b = np.clip(1.5 - np.abs(4.0 * v - 1.0), 0.0, 1.0)
     return (np.stack([r, g, b], axis=-1) * 255.0).astype(np.uint8)
+
+
+_JET_LUT = _build_jet_lut()
+
+
+def _apply_jet(norm_u8: np.ndarray) -> np.ndarray:
+    """Map HxW uint8 -> HxWx3 uint8 RGB without per-frame float stacks."""
+    return _JET_LUT[norm_u8]
 
 
 def compute_depth_stats(
@@ -102,6 +110,55 @@ def depth_meters_to_rgb(
     rgb = _apply_jet(norm)
     rgb[~valid] = 0
     return rgb
+
+
+def ros_image_to_depth_preview(
+    *,
+    data,
+    width: int,
+    height: int,
+    encoding: str,
+    timestamp_ns: int,
+    min_depth_m: float = DEFAULT_MIN_DEPTH_M,
+    max_depth_m: float = DEFAULT_MAX_DEPTH_M,
+    camera_info_online: bool = False,
+    fps: float = 0.0,
+    latency_ms: float = 0.0,
+    preview_downscale: int = 1,
+) -> Tuple[DepthFrame, np.ndarray]:
+    """Faster preview path: decimate depth before float colormap."""
+    factor = max(1, int(preview_downscale))
+    depth_m = _decode_depth_array(
+        data, width=width, height=height, encoding=encoding
+    )
+    if factor > 1:
+        depth_m = depth_m[::factor, ::factor]
+    stats = compute_depth_stats(
+        depth_m, min_depth_m=min_depth_m, max_depth_m=max_depth_m
+    )
+    stats = DepthFrameStats(
+        center_distance_m=stats.center_distance_m,
+        nearest_valid_m=stats.nearest_valid_m,
+        valid_ratio=stats.valid_ratio,
+        min_depth_m=stats.min_depth_m,
+        max_depth_m=stats.max_depth_m,
+        fps=fps,
+        latency_ms=latency_ms,
+        encoding=encoding,
+        camera_info_online=camera_info_online,
+    )
+    rgb = depth_meters_to_rgb(
+        depth_m, min_depth_m=min_depth_m, max_depth_m=max_depth_m
+    )
+    frame = DepthFrame(
+        width=width,
+        height=height,
+        encoding=encoding,
+        timestamp_ns=timestamp_ns,
+        stats=stats,
+        depth_meters=depth_m,
+    )
+    return frame, rgb
 
 
 def ros_image_to_depth_frame(

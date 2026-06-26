@@ -18,7 +18,7 @@ from core.camera_mjpeg_url import (
 )
 from core.camera_ros2_bridge_manager import CameraRos2BridgeManager
 from core.camera_topic_probe import CameraTopicProbeResult
-from core.camera_depth_worker import DepthPreviewPacket
+from core.camera_depth_http_worker import DepthPreviewPacket
 from core.robot_telemetry_binder import RobotTelemetryBinder
 from core.ros2_runtime import auto_camera_bridge_enabled
 from ui.models.robot_info import RobotInfo
@@ -47,10 +47,15 @@ class CameraPage(QWidget):
         self._robot = robot
         self._binder = telemetry_binder
         self._view_mode = "rgb"
-        self._stream = MjpegStreamController(self)
-        self._depth_stream = MjpegStreamController(self, timeout_s=5.0)
-        self._depth_preview = CameraDepthPreviewManager(parent=self)
-        self._depth_config = DepthSourceConfig.from_env()
+        self._stream = MjpegStreamController(self, timeout_s=5.0, max_fps=8.0)
+        self._depth_stream = MjpegStreamController(self, timeout_s=5.0, max_fps=5.0)
+        self._depth_config = DepthSourceConfig.from_env(
+            master_uri=getattr(robot, "master_uri", "") or ""
+        )
+        self._depth_preview = CameraDepthPreviewManager(
+            config=self._depth_config,
+            parent=self,
+        )
         self._depth_raw_frame_received = False
         self._depth_mjpeg_frame_received = False
         self._depth_using_mjpeg_fallback = False
@@ -62,10 +67,15 @@ class CameraPage(QWidget):
         self._depth_mjpeg_wait_timer = QTimer(self)
         self._depth_mjpeg_wait_timer.setSingleShot(True)
         self._depth_mjpeg_wait_timer.timeout.connect(self._on_depth_mjpeg_wait_timeout)
+        self._depth_stats_pending: Optional[object] = None
+        self._depth_stats_timer = QTimer(self)
+        self._depth_stats_timer.setInterval(350)
+        self._depth_stats_timer.timeout.connect(self._flush_depth_stats)
         self._toolbar = CameraToolbar()
         self._view_mode_bar = CameraViewModeBar()
         self._viewport = CameraViewport()
         self._depth_panel = CameraDepthPanel()
+        self._depth_panel.set_http_info(self._depth_config.http_frame_url)
         self._scan_panel = CameraScanPanel()
         self._telemetry = TelemetryDetailsStrip()
         self._ros2_panel = CameraRos2Panel()
@@ -123,7 +133,7 @@ class CameraPage(QWidget):
         )
 
         self._depth_preview.preview_ready.connect(self._on_depth_preview_packet)
-        self._depth_preview.stats_updated.connect(self._depth_panel.apply_stats)
+        self._depth_preview.stats_updated.connect(self._on_depth_stats)
         self._depth_preview.status_changed.connect(self._on_depth_worker_status)
         self._depth_preview.source_kind_changed.connect(self._on_depth_source_kind)
         self._depth_preview.worker_failed.connect(self._on_depth_worker_failed)
@@ -180,6 +190,7 @@ class CameraPage(QWidget):
 
     def shutdown(self) -> None:
         self._manual.set_keyboard_enabled(False)
+        self._depth_stats_timer.stop()
         self._depth_preview.shutdown()
         self._ros2_bridge.shutdown()
         if self._binder is not None:
@@ -191,11 +202,28 @@ class CameraPage(QWidget):
     def _on_view_mode_changed(self, mode: str) -> None:
         self._view_mode = mode
         self._viewport.set_view_mode(mode)
-        if mode in ("depth", "split"):
+        if mode == "rgb":
+            self._stream.set_max_fps(8.0)
+            self._stream.resume()
+            self._stop_depth_preview_for_rgb()
+        elif mode == "depth":
+            self._stream.pause()
+            self._start_depth_preview()
+        elif mode == "split":
+            self._stream.set_max_fps(5.0)
+            self._stream.resume()
             self._start_depth_preview()
         if mode == "depth" and not self._depth_preview.is_running() and not self._depth_preview.is_starting():
             if not self._depth_using_mjpeg_fallback:
                 self._viewport.set_depth_empty()
+
+    def _stop_depth_preview_for_rgb(self) -> None:
+        """Release raw-depth HTTP work while the depth pane is hidden."""
+        self._depth_raw_wait_timer.stop()
+        self._depth_mjpeg_wait_timer.stop()
+        self._depth_using_mjpeg_fallback = False
+        self._depth_stream.disconnect()
+        self._depth_preview.pause()
 
     def _on_connect(self) -> None:
         url = resolve_mjpeg_url_for_robot(self._robot)
@@ -241,7 +269,9 @@ class CameraPage(QWidget):
         self._depth_panel.set_stream_status("连接中…")
         self._depth_panel.set_source_kind(DepthSourceKind.OFFLINE)
         self._viewport.set_depth_loading()
-        if not self._depth_preview.is_running() and not self._depth_preview.is_starting():
+        if self._depth_preview.is_running() or self._depth_preview.is_starting():
+            self._depth_preview.resume()
+        else:
             self._depth_preview.start()
         wait_ms = int(self._depth_config.raw_wait_s * 1000)
         self._depth_raw_wait_timer.start(wait_ms)
@@ -333,6 +363,8 @@ class CameraPage(QWidget):
         self._depth_mjpeg_current_topic = ""
 
     def _on_depth_preview_packet(self, packet: object) -> None:
+        if self._view_mode not in ("depth", "split"):
+            return
         if not isinstance(packet, DepthPreviewPacket):
             return
         try:
@@ -342,13 +374,30 @@ class CameraPage(QWidget):
             self._depth_using_mjpeg_fallback = False
             if self._depth_stream.is_streaming():
                 self._depth_stream.disconnect()
-            self._viewport.set_depth_frame_rgb(
-                packet.width, packet.height, packet.rgb_bytes
-            )
+            if self._view_mode in ("depth", "split"):
+                self._viewport.set_depth_frame_rgb(
+                    packet.width, packet.height, packet.rgb_bytes
+                )
             self._depth_panel.set_stream_status("已连接")
-            self._depth_panel.set_source_kind(DepthSourceKind.RAW_ROS2)
+            self._depth_panel.set_source_kind(DepthSourceKind.RAW_HTTP)
         except Exception:
             logger.exception("depth preview frame render failed")
+
+    def _on_depth_stats(self, stats: object) -> None:
+        if self._view_mode not in ("depth", "split"):
+            return
+        self._depth_stats_pending = stats
+        if not self._depth_stats_timer.isActive():
+            self._flush_depth_stats()
+            self._depth_stats_timer.start()
+
+    def _flush_depth_stats(self) -> None:
+        from core.camera_depth_frame import DepthFrameStats
+
+        stats = self._depth_stats_pending
+        self._depth_stats_pending = None
+        if isinstance(stats, DepthFrameStats):
+            self._depth_panel.apply_stats(stats)
 
     def _on_depth_mjpeg_frame(self, jpeg: bytes) -> None:
         if not self._depth_using_mjpeg_fallback:
@@ -368,7 +417,7 @@ class CameraPage(QWidget):
             )
 
     def _on_depth_source_kind(self, kind: str) -> None:
-        if self._depth_using_mjpeg_fallback and kind == DepthSourceKind.RAW_ROS2.value:
+        if self._depth_using_mjpeg_fallback and kind == DepthSourceKind.RAW_HTTP.value:
             return
         self._depth_panel.set_source_kind(kind)
 

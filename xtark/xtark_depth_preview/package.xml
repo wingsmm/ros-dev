@@ -2,7 +2,7 @@
 <package format="2">
   <name>xtark_depth_preview</name>
   <version>0.1.0</version>
-  <description>Depth image to pseudo-color preview for web_video_server MJPEG.</description>
+  <description>Depth preview and lightweight raw-depth HTTP transport.</description>
 
   <maintainer email="dev@example.com">xtark</maintainer>
   <license>Proprietary</license>

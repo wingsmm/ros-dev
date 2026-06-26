@@ -1,8 +1,9 @@
-"""Depth data source configuration (ROS2 topics on PC/WSL)."""
+"""Depth data source configuration (xtark raw-depth HTTP on port 8082)."""
 
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 from dataclasses import dataclass
 
 from core.camera_topics import (
@@ -12,65 +13,62 @@ from core.camera_topics import (
     QT_MJPEG_DEPTH_RAW_TOPIC,
 )
 
-# Seconds to wait for PC raw depth before trying MJPEG fallback.
-DEPTH_RAW_WAIT_S = float(os.environ.get("DEPTH_RAW_WAIT_S", "3") or "3")
-DEPTH_MJPEG_WAIT_S = float(os.environ.get("DEPTH_MJPEG_WAIT_S", "3") or "3")
+DEPTH_HTTP_PORT = int(os.environ.get("XTARK_DEPTH_HTTP_PORT", "8082") or "8082")
+DEPTH_HTTP_POLL_MS = int(os.environ.get("DEPTH_HTTP_POLL_MS", "200") or "200")
+DEPTH_HTTP_TIMEOUT_S = float(os.environ.get("DEPTH_HTTP_TIMEOUT_S", "1.5") or "1.5")
 
 
-def depth_mjpeg_fallback_enabled() -> bool:
-    """MJPEG /camera/depth/preview after raw wait (default on; set XTARK_DEPTH_MJPEG_FALLBACK=0 to disable)."""
-    raw = os.environ.get("XTARK_DEPTH_MJPEG_FALLBACK", "1").strip().lower()
-    return raw not in ("0", "false", "no", "off")
-
-
-def depth_mjpeg_fallback_topics() -> tuple[str, ...]:
-    """Ordered MJPEG fallback topics.
-
-    Default tries xtark pseudo-color preview first, then raw depth through
-    web_video_server. The raw fallback lets PROFILE=camera_raw still display
-    something when ROS1->ROS2 depth bridging is not available.
-    """
-    raw = os.environ.get(
-        "DEPTH_MJPEG_FALLBACK_TOPICS",
-        f"{QT_MJPEG_DEPTH_TOPIC},{QT_MJPEG_DEPTH_RAW_TOPIC}",
-    )
-    topics = tuple(t.strip() for t in raw.split(",") if t.strip())
-    return topics or (QT_MJPEG_DEPTH_TOPIC, QT_MJPEG_DEPTH_RAW_TOPIC)
+def depth_http_base_url(*, master_uri: str = "", default_host: str = "192.168.1.169") -> str:
+    configured = os.environ.get("XTARK_DEPTH_HTTP_BASE_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    host = urlparse(master_uri).hostname or os.environ.get("XTARK_HOST", default_host)
+    return "http://%s:%d" % (host, DEPTH_HTTP_PORT)
 
 
 @dataclass(frozen=True)
 class DepthSourceConfig:
     image_topic: str = CAMERA_DEPTH_IMAGE_TOPIC
     camera_info_topic: str = CAMERA_DEPTH_INFO_TOPIC
-    mjpeg_fallback_topic: str = QT_MJPEG_DEPTH_TOPIC
+    http_base_url: str = ""
+    # Legacy fields keep the existing UI state machine inert. The HTTP raw
+    # transport is the only enabled path; MJPEG depth fallback stays off.
+    allow_mjpeg_fallback: bool = False
+    raw_wait_s: float = 3.0
+    mjpeg_wait_s: float = 3.0
     mjpeg_fallback_topics: tuple[str, ...] = (
         QT_MJPEG_DEPTH_TOPIC,
         QT_MJPEG_DEPTH_RAW_TOPIC,
     )
     min_depth_m: float = 0.2
     max_depth_m: float = 5.0
-    spin_interval_ms: int = 20
+    http_poll_ms: int = DEPTH_HTTP_POLL_MS
+    http_timeout_s: float = DEPTH_HTTP_TIMEOUT_S
     max_preview_fps: float = 10.0
     preview_downscale: int = 1
-    allow_mjpeg_fallback: bool = True
-    raw_wait_s: float = DEPTH_RAW_WAIT_S
-    mjpeg_wait_s: float = DEPTH_MJPEG_WAIT_S
+    @property
+    def http_frame_url(self) -> str:
+        return self.http_base_url.rstrip("/") + "/v1/depth/latest"
+
+    @property
+    def http_info_url(self) -> str:
+        return self.http_base_url.rstrip("/") + "/v1/depth/camera_info"
 
     @classmethod
-    def from_env(cls) -> "DepthSourceConfig":
-        max_fps = float(os.environ.get("DEPTH_PREVIEW_MAX_FPS", "10") or "10")
+    def from_env(cls, *, master_uri: str = "") -> "DepthSourceConfig":
+        max_fps = float(os.environ.get("DEPTH_PREVIEW_MAX_FPS", "4") or "4")
         if max_fps <= 0:
-            max_fps = 10.0
-        downscale = int(os.environ.get("DEPTH_PREVIEW_DOWNSCALE", "1") or "1")
-        if downscale not in (1, 2):
-            downscale = 1
-        raw_wait = float(os.environ.get("DEPTH_RAW_WAIT_S", "3") or "3")
-        mjpeg_wait = float(os.environ.get("DEPTH_MJPEG_WAIT_S", "8") or "8")
+            max_fps = 4.0
+        downscale = int(os.environ.get("DEPTH_PREVIEW_DOWNSCALE", "2") or "2")
+        if downscale not in (1, 2, 4):
+            downscale = 2
+        poll_ms = int(os.environ.get("DEPTH_HTTP_POLL_MS", "0") or "0")
+        if poll_ms <= 0:
+            poll_ms = int(1000.0 / max_fps) + 80
         return cls(
+            http_base_url=depth_http_base_url(master_uri=master_uri),
             max_preview_fps=max_fps,
             preview_downscale=downscale,
-            allow_mjpeg_fallback=depth_mjpeg_fallback_enabled(),
-            mjpeg_fallback_topics=depth_mjpeg_fallback_topics(),
-            raw_wait_s=max(raw_wait, 0.5),
-            mjpeg_wait_s=max(mjpeg_wait, 1.0),
+            http_poll_ms=max(120, poll_ms),
+            http_timeout_s=max(0.5, DEPTH_HTTP_TIMEOUT_S),
         )

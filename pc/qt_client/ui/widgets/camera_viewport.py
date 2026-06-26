@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -17,6 +19,8 @@ class CameraViewport(QWidget):
         self._mode = _VIEW_RGB
         self._rgb_state = "empty"
         self._depth_state = "empty"
+        self._rgb_pix: Optional[QPixmap] = None
+        self._depth_pix: Optional[QPixmap] = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -151,15 +155,23 @@ class CameraViewport(QWidget):
             self._depth_label.setText(message)
 
     def set_frame_jpeg(self, jpeg: bytes) -> None:
+        if self._mode == _VIEW_DEPTH:
+            return
         self._show_jpeg(jpeg, kind="rgb")
 
     def set_depth_frame_jpeg(self, jpeg: bytes) -> None:
+        if self._mode == _VIEW_RGB:
+            return
         self._show_jpeg(jpeg, kind="depth")
 
     def set_depth_frame_rgb(
         self, width: int, height: int, rgb_bytes: bytes
     ) -> None:
+        if self._mode == _VIEW_RGB:
+            return
         if not rgb_bytes or width <= 0 or height <= 0:
+            return
+        if len(rgb_bytes) != width * height * 3:
             return
         img = QImage(
             rgb_bytes, width, height, width * 3, QImage.Format_RGB888
@@ -176,6 +188,7 @@ class CameraViewport(QWidget):
 
     def _show_pixmap(self, pix: QPixmap, *, kind: str) -> None:
         if kind == "rgb":
+            self._rgb_pix = pix
             self._rgb_state = "streaming"
             if self._mode == _VIEW_SPLIT:
                 target = self._rgb_label
@@ -184,6 +197,7 @@ class CameraViewport(QWidget):
             else:
                 return
         else:
+            self._depth_pix = pix
             self._depth_state = "streaming"
             if self._mode == _VIEW_SPLIT:
                 target = self._depth_label
@@ -197,7 +211,7 @@ class CameraViewport(QWidget):
         target = label.size()
         if target.width() > 10 and target.height() > 10:
             label.setPixmap(
-                pix.scaled(target, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                pix.scaled(target, Qt.KeepAspectRatio, Qt.FastTransformation)
             )
         else:
             label.setPixmap(pix)
@@ -205,12 +219,19 @@ class CameraViewport(QWidget):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        for label, state in (
-            (self._single_label, self._rgb_state if self._mode == _VIEW_RGB else self._depth_state),
-            (self._rgb_label, self._rgb_state),
-            (self._depth_label, self._depth_state),
+        for label, kind in (
+            (
+                self._single_label,
+                "rgb" if self._mode == _VIEW_RGB else "depth",
+            ),
+            (self._rgb_label, "rgb"),
+            (self._depth_label, "depth"),
         ):
-            if label.isVisible() and state == "streaming":
-                pix = label.pixmap()
-                if pix is not None and not pix.isNull():
-                    self._scale_pixmap(label, pix)
+            if not label.isVisible():
+                continue
+            state = self._rgb_state if kind == "rgb" else self._depth_state
+            if state != "streaming":
+                continue
+            src = self._rgb_pix if kind == "rgb" else self._depth_pix
+            if src is not None and not src.isNull():
+                self._scale_pixmap(label, src)

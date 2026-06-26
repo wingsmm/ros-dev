@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 from urllib.parse import urlsplit
 
-from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal
+from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, pyqtSlot, QMetaObject, Qt
 
 
 @dataclass
@@ -26,13 +26,29 @@ class MjpegWorker(QObject):
     connected = pyqtSignal(int, bool)
     finished = pyqtSignal(int)
 
-    def __init__(self, session_id: int, url: str, timeout_s: float = 2.0):
+    def __init__(
+        self,
+        session_id: int,
+        url: str,
+        timeout_s: float = 2.0,
+        max_fps: float = 8.0,
+    ):
         super().__init__()
         self._session_id = session_id
         self._url = url
         self._timeout_s = timeout_s
+        self._min_emit_interval_s = 1.0 / max(max_fps, 0.1)
         self._stop = False
+        self._paused = False
         self._sock: Optional[socket.socket] = None
+
+    @pyqtSlot()
+    def pause_worker(self) -> None:
+        self._paused = True
+
+    @pyqtSlot()
+    def resume_worker(self) -> None:
+        self._paused = False
 
     def stop(self) -> None:
         self._stop = True
@@ -140,7 +156,9 @@ class MjpegWorker(QObject):
                         del buf[: end + 2]
 
                         now = time.time()
-                        if now - last_emit < 0.0:
+                        if now - last_emit < self._min_emit_interval_s:
+                            continue
+                        if self._paused:
                             continue
                         last_emit = now
                         self.frame.emit(self._session_id, jpeg, now)
@@ -178,9 +196,10 @@ class MjpegStreamController(QObject):
     fps_changed = pyqtSignal(float)
     log_line = pyqtSignal(str)
 
-    def __init__(self, parent=None, *, timeout_s: float = 2.0):
+    def __init__(self, parent=None, *, timeout_s: float = 2.0, max_fps: float = 8.0):
         super().__init__(parent)
         self._timeout_s = timeout_s
+        self._max_fps = max_fps
         self._thread: Optional[QThread] = None
         self._worker: Optional[MjpegWorker] = None
         self._stopping = False
@@ -189,6 +208,7 @@ class MjpegStreamController(QObject):
         self._current_url = ""
         self._stats = CameraStats()
         self._fps_window: List[float] = []
+        self._deliver_frames = True
 
         self._watchdog = QTimer(self)
         self._watchdog.setInterval(200)
@@ -232,19 +252,63 @@ class MjpegStreamController(QObject):
         self._stop_current()
 
     def shutdown(self) -> None:
-        self.disconnect(block=True)
+        self.disconnect(block=False)
+        thread = self._thread
+        worker = self._worker
+        if worker is not None:
+            try:
+                worker.stop()
+            except Exception:
+                pass
+        if thread is not None:
+            thread.quit()
+            if thread.isRunning() and not thread.wait(600):
+                thread.terminate()
+                thread.wait(300)
+        self._thread = None
+        self._worker = None
+        self._stopping = False
+        self._reset_stats()
+        self._emit_status("No Camera", connected=False)
+
+    def pause(self) -> None:
+        """Stop emitting frames to the UI (socket keeps draining)."""
+        self._deliver_frames = False
+        if self._worker is not None:
+            QMetaObject.invokeMethod(
+                self._worker, "pause_worker", Qt.QueuedConnection
+            )
+
+    def resume(self) -> None:
+        self._deliver_frames = True
+        if self._worker is not None:
+            QMetaObject.invokeMethod(
+                self._worker, "resume_worker", Qt.QueuedConnection
+            )
+
+    def set_max_fps(self, max_fps: float) -> None:
+        self._max_fps = max(max_fps, 0.5)
+        worker = self._worker
+        if worker is not None:
+            worker._min_emit_interval_s = 1.0 / self._max_fps
 
     def _start_stream(self, url: str) -> None:
         self._session_id += 1
         session_id = self._session_id
         self._current_url = url
         self._stopping = False
+        self._deliver_frames = True
         self._reset_stats()
         self._emit_status(f"Connecting: {url}", connected=False)
         self.log_line.emit(f"CAMERA connect {url}")
 
         thread = QThread(self)
-        worker = MjpegWorker(session_id=session_id, url=url, timeout_s=self._timeout_s)
+        worker = MjpegWorker(
+            session_id=session_id,
+            url=url,
+            timeout_s=self._timeout_s,
+            max_fps=self._max_fps,
+        )
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(thread.quit)
@@ -327,13 +391,16 @@ class MjpegStreamController(QObject):
     def _on_frame(self, session_id: int, jpeg: bytes, ts: float) -> None:
         if not self._is_current_session(session_id) or self._stopping:
             return
+        if not self._deliver_frames:
+            return
         self._stats.last_frame_ts = ts
         if not self._stats.connected:
             self._stats.connected = True
             self.connected_changed.emit(True)
 
         self.frame.emit(jpeg)
-        self._emit_status("OK", connected=True)
+        if self._stats.status != "OK":
+            self._emit_status("OK", connected=True)
 
         self._fps_window.append(ts)
         cutoff = ts - 1.0
@@ -343,13 +410,14 @@ class MjpegStreamController(QObject):
             fps = float(len(self._fps_window) - 1) / max(
                 1e-6, (self._fps_window[-1] - self._fps_window[0])
             )
-            self._stats.fps = fps
-            self.fps_changed.emit(fps)
+            if abs(fps - self._stats.fps) > 0.2:
+                self._stats.fps = fps
+                self.fps_changed.emit(fps)
 
     def _tick_watchdog(self) -> None:
         if self._stats.last_frame_ts <= 0:
             return
-        if time.time() - self._stats.last_frame_ts <= 2.0:
+        if time.time() - self._stats.last_frame_ts <= 4.0:
             return
         if self._stats.status != "No frames (timeout)" or self._stats.connected:
             self._emit_status("No frames (timeout)", connected=False)

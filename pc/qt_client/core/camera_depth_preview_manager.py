@@ -10,9 +10,18 @@ from PyQt5.QtCore import QObject, QThread, Qt, QTimer, pyqtSignal, QMetaObject
 from core.app_shutdown import register_shutdown
 from core.camera_depth_frame import DepthSourceKind
 from core.camera_depth_source import DepthSourceConfig
-from core.camera_depth_worker import CameraDepthWorker, DepthPreviewPacket
+from core.camera_depth_http_worker import CameraDepthHttpWorker, DepthPreviewPacket
 
 logger = logging.getLogger(__name__)
+
+
+class _PreviewDeliveryGate:
+    """Shared flag read by the HTTP worker; UI sets it synchronously on pause."""
+
+    __slots__ = ("enabled",)
+
+    def __init__(self) -> None:
+        self.enabled = False
 
 
 class CameraDepthPreviewManager(QObject):
@@ -31,12 +40,16 @@ class CameraDepthPreviewManager(QObject):
     ) -> None:
         super().__init__(parent)
         self._config = config or DepthSourceConfig.from_env()
+        self._delivery_gate = _PreviewDeliveryGate()
         self._thread: Optional[QThread] = None
-        self._worker: Optional[CameraDepthWorker] = None
+        self._worker: Optional[CameraDepthHttpWorker] = None
         self._running = False
         self._starting = False
         self._tearing_down = False
         self._source_kind = DepthSourceKind.OFFLINE
+        # Synchronous gate: drop worker frames before they reach the UI thread.
+        self._deliver_to_ui = False
+        self._delivery_gate.enabled = False
         register_shutdown(self.shutdown, name="camera_depth_preview_manager", priority=24)
 
     def is_running(self) -> bool:
@@ -55,8 +68,10 @@ class CameraDepthPreviewManager(QObject):
             self._thread = None
             self._worker = None
         self._starting = True
+        self._deliver_to_ui = True
+        self._delivery_gate.enabled = True
         thread = QThread()
-        worker = CameraDepthWorker(self._config)
+        worker = CameraDepthHttpWorker(self._config, delivery_gate=self._delivery_gate)
         worker.moveToThread(thread)
         worker.preview_ready.connect(self._on_preview)
         worker.status_changed.connect(self._on_status)
@@ -69,17 +84,23 @@ class CameraDepthPreviewManager(QObject):
         return True
 
     def stop(self) -> None:
-        self._request_stop(block=True)
+        self._request_stop(block=True, fast=False)
 
     def stop_async(self) -> None:
         """Stop without blocking the UI thread (e.g. before MJPEG fallback)."""
-        self._request_stop(block=False)
+        self._request_stop(block=False, fast=False)
 
     def stop_for_handoff(self) -> None:
         """Stop raw worker when handing off to MJPEG; do not mark source offline."""
-        self._request_stop(block=False, reset_source_kind=False)
+        self._request_stop(block=False, reset_source_kind=False, fast=False)
 
-    def _request_stop(self, *, block: bool, reset_source_kind: bool = True) -> None:
+    def _request_stop(
+        self,
+        *,
+        block: bool,
+        reset_source_kind: bool = True,
+        fast: bool = False,
+    ) -> None:
         thread = self._thread
         worker = self._worker
         if thread is None:
@@ -88,14 +109,17 @@ class CameraDepthPreviewManager(QObject):
             return
         self._running = False
         self._starting = False
+        self._deliver_to_ui = False
+        self._delivery_gate.enabled = False
         if worker is not None:
             QMetaObject.invokeMethod(worker, "stop_worker", Qt.QueuedConnection)
         thread.quit()
-        if block:
-            if not thread.wait(4000):
+        wait_ms = 600 if fast else 4000
+        if block or fast:
+            if not thread.wait(wait_ms):
                 logger.warning("depth preview thread did not stop in time")
                 thread.terminate()
-                thread.wait(1000)
+                thread.wait(400 if fast else 1000)
             if self._thread is thread:
                 self._finalize_thread(thread, worker)
         if reset_source_kind:
@@ -105,16 +129,36 @@ class CameraDepthPreviewManager(QObject):
         self.stop()
         return self.start()
 
+    def pause(self) -> None:
+        self._deliver_to_ui = False
+        self._delivery_gate.enabled = False
+        if self._worker is not None:
+            QMetaObject.invokeMethod(
+                self._worker, "pause_worker", Qt.QueuedConnection
+            )
+
+    def resume(self) -> bool:
+        if self._worker is None or self._thread is None:
+            self._deliver_to_ui = True
+            self._delivery_gate.enabled = True
+            return self.start()
+        self._deliver_to_ui = True
+        self._delivery_gate.enabled = True
+        QMetaObject.invokeMethod(
+            self._worker, "resume_worker", Qt.QueuedConnection
+        )
+        return True
+
     def set_mjpeg_fallback_active(self, active: bool) -> None:
         if active:
             self._set_source_kind(DepthSourceKind.MJPEG_FALLBACK)
         elif self.is_running():
-            self._set_source_kind(DepthSourceKind.RAW_ROS2)
+            self._set_source_kind(DepthSourceKind.RAW_HTTP)
         else:
             self._set_source_kind(DepthSourceKind.OFFLINE)
 
     def shutdown(self) -> None:
-        self.stop()
+        self._request_stop(block=False, fast=True)
 
     def _on_thread_started(self) -> None:
         if self._worker is None:
@@ -134,7 +178,7 @@ class CameraDepthPreviewManager(QObject):
         self._finalize_thread(thread, worker)
 
     def _finalize_thread(
-        self, thread: QThread, worker: Optional[CameraDepthWorker]
+        self, thread: QThread, worker: Optional[CameraDepthHttpWorker]
     ) -> None:
         if self._thread is thread:
             self._thread = None
@@ -148,8 +192,10 @@ class CameraDepthPreviewManager(QObject):
     def _on_preview(self, packet: object) -> None:
         if not isinstance(packet, DepthPreviewPacket):
             return
+        if not self._deliver_to_ui:
+            return
         self._running = True
-        self._set_source_kind(DepthSourceKind.RAW_ROS2)
+        self._set_source_kind(DepthSourceKind.RAW_HTTP)
         self.preview_ready.emit(packet)
         self.stats_updated.emit(packet.stats)
 
@@ -157,7 +203,6 @@ class CameraDepthPreviewManager(QObject):
         self._starting = False
         if self._worker is not None and self._worker.is_active():
             self._running = True
-            self._set_source_kind(DepthSourceKind.RAW_ROS2)
         self.status_changed.emit(text)
 
     def _on_failed(self, detail: str) -> None:
