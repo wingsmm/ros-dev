@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>xtark_depth_preview</name>
+  <version>0.1.0</version>
+  <description>Depth image to pseudo-color preview for web_video_server MJPEG.</description>
+
+  <maintainer email="dev@example.com">xtark</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>image_transport</exec_depend>
+  <exec_depend>topic_tools</exec_depend>
+  <exec_depend>uvc_camera</exec_depend>
+  <exec_depend>web_video_server</exec_depend>
+  <exec_depend>rgbd_launch</exec_depend>
+  <exec_depend>astra_launch</exec_depend>
+
+  <export/>
+</package>

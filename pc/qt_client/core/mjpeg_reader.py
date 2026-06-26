@@ -34,11 +34,11 @@ class MjpegReaderThread(threading.Thread):
         self._on_status = on_status
         self._timeout_s = timeout_s
         self._min_frame_interval_s = min_frame_interval_s
-        self._stop = threading.Event()
+        self._stop_event = threading.Event()
         self._sock: Optional[socket.socket] = None
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_event.set()
         sock = self._sock
         if sock is None:
             return
@@ -90,16 +90,16 @@ class MjpegReaderThread(threading.Thread):
         return sock, header_blob.decode("iso-8859-1", "replace"), bytes(rest)
 
     def run(self) -> None:
-        self._stop.clear()
+        self._stop_event.clear()
         self._emit_status("Connecting...")
         last_emit = 0.0
         try:
-            while not self._stop.is_set():
+            while not self._stop_event.is_set():
                 try:
                     sock, headers, rest = self._open_http10_stream()
                 except Exception as exc:
                     self._emit_status(f"Error: {exc}")
-                    if self._stop.wait(2.0):
+                    if self._stop_event.wait(2.0):
                         break
                     continue
 
@@ -107,13 +107,13 @@ class MjpegReaderThread(threading.Thread):
                     first = headers.splitlines()[0] if headers else ""
                     if "200" not in first:
                         self._emit_status(first.strip() or "HTTP error")
-                        if self._stop.wait(2.0):
+                        if self._stop_event.wait(2.0):
                             break
                         continue
 
                     self._emit_status("Streaming")
                     buf = bytearray(rest)
-                    while not self._stop.is_set():
+                    while not self._stop_event.is_set():
                         try:
                             chunk = sock.recv(4096)
                         except socket.timeout:
@@ -158,10 +158,10 @@ class MjpegReaderThread(threading.Thread):
                         pass
                     self._sock = None
 
-                if self._stop.is_set():
+                if self._stop_event.is_set():
                     break
                 self._emit_status("Reconnecting...")
-                if self._stop.wait(1.0):
+                if self._stop_event.wait(1.0):
                     break
         finally:
             self._sock = None

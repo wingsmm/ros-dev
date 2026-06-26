@@ -6,6 +6,8 @@ from urllib.parse import urlparse
 
 # ROS topic name on qt_stack web_video_server (also used as MJPEG query param)
 QT_MJPEG_TOPIC = "/camera/image_raw"
+QT_MJPEG_DEPTH_TOPIC = "/camera/depth/preview"
+QT_MJPEG_DEPTH_RAW_TOPIC = "/camera/depth/image_raw"
 ANDROID_CAMERA_TOPIC = "/image_raw/compressed"
 
 
@@ -27,4 +29,28 @@ def resolve_mjpeg_url_for_robot(robot) -> str:
     return resolve_mjpeg_url(
         camera_url=getattr(robot, "camera_url", "") or "",
         master_uri=getattr(robot, "master_uri", "") or "",
+    )
+
+
+def resolve_depth_mjpeg_url(
+    *,
+    master_uri: str = "",
+    default_host: str = "192.168.1.169",
+    topic: str = QT_MJPEG_DEPTH_TOPIC,
+) -> str:
+    parsed = urlparse(master_uri)
+    host = parsed.hostname or default_host
+    return f"http://{host}:8080/stream?topic={topic}"
+
+
+def resolve_depth_mjpeg_url_for_robot(robot) -> str:
+    return resolve_depth_mjpeg_url(
+        master_uri=getattr(robot, "master_uri", "") or "",
+    )
+
+
+def resolve_depth_mjpeg_url_for_robot_topic(robot, topic: str) -> str:
+    return resolve_depth_mjpeg_url(
+        master_uri=getattr(robot, "master_uri", "") or "",
+        topic=topic,
     )

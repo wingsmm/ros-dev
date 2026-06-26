@@ -1,0 +1,7 @@
+<launch>
+  <!-- rgb_depth: relay Astra color topic to Qt legacy /camera/image_raw name -->
+  <arg name="input_topic" default="/camera/rgb/image_raw"/>
+  <arg name="output_topic" default="/camera/image_raw"/>
+  <node pkg="topic_tools" type="relay" name="astra_rgb_relay"
+        args="$(arg input_topic) $(arg output_topic)"/>
+</launch>

@@ -8,6 +8,8 @@ This directory keeps robot-side ROS packages separate from deployment helpers.
 |------|----------------|
 | `xtark_nav/` | SLAM, navigation, costmap configuration, and map-overlay ROS nodes. |
 | `xtark_json_bridge/` | JSON bridge used by PC/Qt tools to command or inspect the robot. |
+| `xtark_depth_preview/` | Phase 1.5: depth 16UC1 → pseudo-color `/camera/depth/preview` for MJPEG. |
+| `xtark_laser_odometry/` | RF2O laser odometry (`/odom_laser`) for Qt compare page. |
 
 Runtime nodes should live inside a ROS package, not in `xtark/scripts/`.
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import time
 from typing import Optional
 
 from PyQt5.QtCore import Qt
@@ -19,23 +18,13 @@ from core.camera_ros2_bridge_manager import (
     CameraRos2BridgeManager,
     CameraRos2PanelSnapshot,
 )
+from core.camera_topics import CAMERA_DIAGNOSTIC_TOPICS
 from core.robot_frames import (
     BASE_FRAME,
     CAMERA_FRAME,
-    CAMERA_ROS_TOPIC,
     camera_frames_summary,
 )
-
-
-def _format_source_age(stamp_ms: int) -> str:
-    if stamp_ms <= 0:
-        return "—"
-    age_sec = max(0.0, time.time() - stamp_ms / 1000.0)
-    if age_sec < 1.0:
-        return "刚刚"
-    if age_sec < 60.0:
-        return f"{age_sec:.0f}s 前"
-    return f"{age_sec / 60.0:.1f}min 前"
+from core.ros2_runtime import rviz_rgbd_camera_config_path
 
 
 def _format_hz(hz_map: dict, topic: str) -> str:
@@ -47,8 +36,19 @@ def _format_hz(hz_map: dict, topic: str) -> str:
     return f"{value:.1f} Hz"
 
 
+def _topic_status_text(snapshot: CameraRos2PanelSnapshot, topic: str) -> str:
+    result = snapshot.topic_probe_result
+    if result is not None:
+        entry = result.entries.get(topic)
+        if entry is not None:
+            return entry.detail if entry.online else "离线"
+    if topic == "/camera/image_raw" and snapshot.bridge_running:
+        return _format_hz(snapshot.bridge_status.publish_hz, topic)
+    return "—"
+
+
 class CameraRos2Panel(QWidget):
-    """Camera page: MJPEG -> ROS2 topic bridge (no RViz2 on this page)."""
+    """Camera module: MJPEG bridge, RGB-D topic status, RViz2 entry."""
 
     def __init__(
         self,
@@ -58,8 +58,10 @@ class CameraRos2Panel(QWidget):
         super().__init__(parent)
         self._manager = manager
         self._labels: dict[str, QLabel] = {}
+        self._topic_labels: dict[str, QLabel] = {}
         self._build_ui()
-        self._wire_signals()
+        self._wire_button_signals()
+        self._wire_manager_signals()
         self.refresh_display()
 
     def set_manager(self, manager: Optional[CameraRos2BridgeManager]) -> None:
@@ -72,7 +74,7 @@ class CameraRos2Panel(QWidget):
             except TypeError:
                 pass
         self._manager = manager
-        self._wire_signals()
+        self._wire_manager_signals()
         self.refresh_display()
 
     def refresh_display(self) -> None:
@@ -87,7 +89,7 @@ class CameraRos2Panel(QWidget):
         root.setSpacing(4)
 
         self._collapse_btn = QToolButton()
-        self._collapse_btn.setText("ROS2 联调（摄像头）")
+        self._collapse_btn.setText("ROS2 / RViz2 诊断（摄像头）")
         self._collapse_btn.setCheckable(True)
         self._collapse_btn.setChecked(False)
         self._collapse_btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
@@ -107,12 +109,16 @@ class CameraRos2Panel(QWidget):
 
         row1 = QHBoxLayout()
         self._bridge_start_btn = QPushButton("启动 Camera Bridge")
-        self._bridge_stop_btn = QPushButton("停止")
+        self._bridge_stop_btn = QPushButton("停止 Bridge")
+        self._rviz_start_btn = QPushButton("启动 RViz2")
+        self._rviz_stop_btn = QPushButton("停止 RViz2")
         self._refresh_btn = QPushButton("刷新 topic 状态")
         self._copy_btn = QPushButton("复制诊断命令")
         for btn in (
             self._bridge_start_btn,
             self._bridge_stop_btn,
+            self._rviz_start_btn,
+            self._rviz_stop_btn,
             self._refresh_btn,
             self._copy_btn,
         ):
@@ -127,11 +133,10 @@ class CameraRos2Panel(QWidget):
             ("ros2_env", "ROS2 环境"),
             ("mjpeg_url", "MJPEG 源"),
             ("bridge", "Bridge 进程"),
-            ("camera_hz", f"{CAMERA_ROS_TOPIC} 发布"),
-            ("camera_src", "camera 源"),
+            ("rviz", "RViz2"),
             ("tf", "/tf_static"),
             ("frames", "坐标链"),
-            ("error", "最近错误"),
+            ("error", "最近状态"),
         ]
         for row, (key, title) in enumerate(rows):
             title_lbl = QLabel(title + ":")
@@ -143,12 +148,30 @@ class CameraRos2Panel(QWidget):
             grid.addWidget(value_lbl, row, 1)
         layout.addLayout(grid)
 
+        topic_title = QLabel("RGB-D topic 状态（仅诊断，不改导航）")
+        topic_title.setStyleSheet("font-weight: 600; color: #444; margin-top: 4px;")
+        layout.addWidget(topic_title)
+
+        topic_grid = QGridLayout()
+        topic_grid.setHorizontalSpacing(12)
+        topic_grid.setVerticalSpacing(2)
+        for row, topic in enumerate(CAMERA_DIAGNOSTIC_TOPICS):
+            name = QLabel(topic + ":")
+            name.setStyleSheet("color: #555; font-size: 11px;")
+            value = QLabel("—")
+            value.setStyleSheet("font-size: 11px;")
+            self._topic_labels[topic] = value
+            topic_grid.addWidget(name, row, 0, Qt.AlignTop)
+            topic_grid.addWidget(value, row, 1)
+        layout.addLayout(topic_grid)
+
+        rviz_cfg = rviz_rgbd_camera_config_path()
         hint = QLabel(
-            "看图请用上方 Qt MJPEG 预览。"
-            f"Camera Bridge 手动启动后发布 {CAMERA_ROS_TOPIC}（约 5fps）"
-            f"与 {BASE_FRAME}→{CAMERA_FRAME} TF，用 ros2 topic 验收。"
-            "本页不提供 RViz2：WSL2 下摄像头 RViz/OpenGL 不稳定，不作为验收项。"
-            "原生 Linux 可参考 config/xtark_camera.rviz 手工调试。"
+            "Phase 1 仅展示与诊断：RGB 预览仍走上方 MJPEG；"
+            "Camera Bridge 手动启动后发布 /camera/image_raw 与 TF。"
+            f"RViz2 使用 {rviz_cfg.name}（TF / PointCloud2 / LaserScan / Camera）。"
+            "WSL2 下 RViz OpenGL 可能不稳定；原生 Linux 优先验收。"
+            "/scan 仍来自主雷达，不把 /camera/scan_depth 接入导航。"
         )
         hint.setStyleSheet("color: #666; font-size: 11px;")
         hint.setWordWrap(True)
@@ -160,12 +183,20 @@ class CameraRos2Panel(QWidget):
         self._collapse_btn.setArrowType(
             Qt.DownArrow if expanded else Qt.RightArrow
         )
+        if self._manager is not None:
+            self._manager.set_diagnostics_expanded(expanded)
+            if expanded:
+                self._manager.refresh_topic_status()
 
-    def _wire_signals(self) -> None:
+    def _wire_button_signals(self) -> None:
         self._bridge_start_btn.clicked.connect(self._on_start_bridge)
         self._bridge_stop_btn.clicked.connect(self._on_stop_bridge)
+        self._rviz_start_btn.clicked.connect(self._on_start_rviz)
+        self._rviz_stop_btn.clicked.connect(self._on_stop_rviz)
         self._refresh_btn.clicked.connect(self._on_refresh_topics)
         self._copy_btn.clicked.connect(self._on_copy_diagnostics)
+
+    def _wire_manager_signals(self) -> None:
         if self._manager is None:
             return
         self._manager.snapshot_updated.connect(self._on_snapshot)
@@ -178,6 +209,14 @@ class CameraRos2Panel(QWidget):
     def _on_stop_bridge(self) -> None:
         if self._manager is not None:
             self._manager.stop_bridge()
+
+    def _on_start_rviz(self) -> None:
+        if self._manager is not None:
+            self._manager.start_rviz()
+
+    def _on_stop_rviz(self) -> None:
+        if self._manager is not None:
+            self._manager.stop_rviz()
 
     def _on_refresh_topics(self) -> None:
         if self._manager is not None:
@@ -201,6 +240,8 @@ class CameraRos2Panel(QWidget):
         if snapshot is None:
             for lbl in self._labels.values():
                 lbl.setText("—")
+            for lbl in self._topic_labels.values():
+                lbl.setText("—")
             self._labels["error"].setText("未绑定 Camera Bridge")
             return
 
@@ -211,6 +252,7 @@ class CameraRos2Panel(QWidget):
         env_parts.append(f"DOMAIN_ID={env.domain_id}")
         env_parts.append("rclpy OK" if env.rclpy_ok else "rclpy 缺失")
         env_parts.append("numpy OK" if env.numpy_ok else "numpy 缺失")
+        env_parts.append("rviz2 OK" if env.rviz2_ok else "rviz2 缺失")
         self._labels["ros2_env"].setText(" | ".join(env_parts))
 
         self._labels["mjpeg_url"].setText(snapshot.mjpeg_url or "—")
@@ -221,15 +263,6 @@ class CameraRos2Panel(QWidget):
             bridge_text += f" ({bridge.last_error})"
         self._labels["bridge"].setText(bridge_text)
 
-        src = bridge.last_source_ms
-        hz = bridge.publish_hz
-        self._labels["camera_hz"].setText(_format_hz(hz, CAMERA_ROS_TOPIC))
-        cam_age = _format_source_age(src.get("camera_image", 0))
-        cam_status = bridge.mjpeg_status or "—"
-        self._labels["camera_src"].setText(
-            f"{cam_age} | {cam_status}" if cam_age != "—" else cam_status
-        )
-
         tf_text = (
             f"{BASE_FRAME}→{CAMERA_FRAME} OK"
             if bridge.tf_static_ok
@@ -238,15 +271,28 @@ class CameraRos2Panel(QWidget):
         self._labels["tf"].setText(tf_text)
         self._labels["frames"].setText(camera_frames_summary())
 
+        rviz_text = "运行中" if snapshot.rviz_running else "未运行"
+        if snapshot.rviz_error:
+            rviz_text += f" ({snapshot.rviz_error})"
+        self._labels["rviz"].setText(rviz_text)
+
+        for topic, lbl in self._topic_labels.items():
+            lbl.setText(_topic_status_text(snapshot, topic))
+
         if snapshot.topic_probe:
             self._labels["error"].setText(snapshot.topic_probe)
         elif bridge.last_error:
             self._labels["error"].setText(bridge.last_error)
+        elif snapshot.rviz_error and not snapshot.rviz_running:
+            self._labels["error"].setText(snapshot.rviz_error)
         elif env.errors:
             self._labels["error"].setText(env.format_report())
         else:
             self._labels["error"].setText("—")
 
         bridge_running = snapshot.bridge_running
+        rviz_running = snapshot.rviz_running
         self._bridge_start_btn.setEnabled(not bridge_running)
         self._bridge_stop_btn.setEnabled(bridge_running)
+        self._rviz_start_btn.setEnabled(not rviz_running)
+        self._rviz_stop_btn.setEnabled(rviz_running)

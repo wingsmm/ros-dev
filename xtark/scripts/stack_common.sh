@@ -78,7 +78,7 @@ stack_qt_sidecars_present() {
 stack_qt_processes_alive() {
   local pid_dir name
   pid_dir="$(stack_pid_dir qt_stack)"
-  for name in roscore bringup json camera rf2o rosbag; do
+  for name in roscore bringup json camera web_video rgb_relay depth_camera depth_preview rf2o rosbag; do
     if stack_pid_alive "$pid_dir/$name.pid"; then
       return 0
     fi

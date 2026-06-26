@@ -25,6 +25,7 @@ if /I "%CMD%"=="start" goto :stack
 if /I "%CMD%"=="stop" goto :stack
 if /I "%CMD%"=="restart" goto :stack
 if /I "%CMD%"=="status" goto :status
+if /I "%CMD%"=="check" goto :stack
 if /I "%CMD%"=="logs" goto :stack
 if /I "%CMD%"=="record" goto :stack
 if /I "%CMD%"=="pull" goto :pull
@@ -32,7 +33,7 @@ echo [ERR] unknown command: %CMD%
 goto :help
 
 :help
-echo Usage: qt_remote.bat [deploy^|build^|start^|stop^|restart^|status^|logs^|record^|pull ^<bag_basename^>^|help]
+echo Usage: qt_remote.bat [deploy^|build^|start^|stop^|restart^|status^|check^|logs^|record^|pull ^<bag_basename^>^|help]
 echo.
 echo   deploy   Sync qt_stack + packages, catkin_make
 echo   build    catkin_make only
@@ -40,6 +41,7 @@ echo   start    qt_stack.sh start on robot (no upload)
 echo   stop     qt_stack.sh stop
 echo   restart  qt_stack.sh restart
 echo   status   qt_stack.sh status + topics
+echo   check    qt_stack.sh check (slow frame/rate/MJPEG checks)
 echo   logs     qt_stack.sh logs
 echo   record   qt_stack.sh record
 echo   pull     Download qt_stack bag + analysis to xtark/record/
@@ -49,33 +51,37 @@ echo Default with no arguments: deploy
 exit /b 0
 
 :deploy
-echo [1/6] sync qt_stack.sh stack_common.sh wrappers ...
+echo [1/7] sync qt_stack.sh stack_common.sh wrappers ...
 "%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "mkdir -p %XTARK_REMOTE_TOOLS%"
 if errorlevel 1 exit /b 1
-for %%F in (qt_stack.sh stack_common.sh robot_stack.sh laser_odom_compare_stack.sh robot_control_stack.sh) do (
+for %%F in (qt_stack.sh qt_camera_modules.sh stack_common.sh robot_stack.sh laser_odom_compare_stack.sh robot_control_stack.sh) do (
     "%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% "%REPO_ROOT%xtark\scripts\%%F" "%XTARK_REMOTE%:%XTARK_REMOTE_SCRIPTS%/%%F"
     if errorlevel 1 exit /b 1
 )
 
-echo [2/6] sync analyze_laser_odom_bag.py ...
+echo [2/7] sync analyze_laser_odom_bag.py ...
 "%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% "%REPO_ROOT%xtark\tools\analyze_laser_odom_bag.py" "%XTARK_REMOTE%:%XTARK_REMOTE_TOOLS%/analyze_laser_odom_bag.py"
 if errorlevel 1 exit /b 1
 
-echo [3/6] sync xtark_laser_odometry ...
+echo [3/7] sync xtark_laser_odometry ...
 "%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% -r "%REPO_ROOT%xtark\xtark_laser_odometry" %XTARK_REMOTE%:%XTARK_REMOTE_WS%/src/
 if errorlevel 1 exit /b 1
 
-echo [4/6] sync xtark_json_bridge ...
+echo [4/7] sync xtark_json_bridge ...
 "%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% -r "%REPO_ROOT%xtark\xtark_json_bridge" %XTARK_REMOTE%:%XTARK_REMOTE_WS%/src/
 if errorlevel 1 exit /b 1
 
-:build_only
-echo [5/6] chmod + strip CRLF + catkin_make ...
-"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "for f in %XTARK_REMOTE_SCRIPTS%/qt_stack.sh %XTARK_REMOTE_SCRIPTS%/stack_common.sh %XTARK_REMOTE_SCRIPTS%/robot_stack.sh %XTARK_REMOTE_SCRIPTS%/laser_odom_compare_stack.sh %XTARK_REMOTE_SCRIPTS%/robot_control_stack.sh %XTARK_REMOTE_TOOLS%/analyze_laser_odom_bag.py; do sed -i 's/\r$//' \"$f\"; chmod +x \"$f\"; done && cd %XTARK_REMOTE_WS% && source /opt/ros/melodic/setup.bash && catkin_make"
+echo [5/7] sync xtark_depth_preview ...
+"%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% -r "%REPO_ROOT%xtark\xtark_depth_preview" %XTARK_REMOTE%:%XTARK_REMOTE_WS%/src/
 if errorlevel 1 exit /b 1
 
-echo [6/6] verify packages ...
-"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "source /opt/ros/melodic/setup.bash && source %XTARK_REMOTE_WS%/devel/setup.bash && rospack find rf2o_laser_odometry && rospack find xtark_laser_odometry && rospack find xtark_json_bridge"
+:build_only
+echo [6/7] chmod + strip CRLF + catkin_make ...
+"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "for f in %XTARK_REMOTE_SCRIPTS%/qt_stack.sh %XTARK_REMOTE_SCRIPTS%/qt_camera_modules.sh %XTARK_REMOTE_SCRIPTS%/stack_common.sh %XTARK_REMOTE_SCRIPTS%/robot_stack.sh %XTARK_REMOTE_SCRIPTS%/laser_odom_compare_stack.sh %XTARK_REMOTE_SCRIPTS%/robot_control_stack.sh %XTARK_REMOTE_TOOLS%/analyze_laser_odom_bag.py; do sed -i 's/\r$//' \"$f\"; chmod +x \"$f\"; done && sed -i 's/\r$//' %XTARK_REMOTE_WS%/src/xtark_depth_preview/scripts/depth_preview_node.py && chmod +x %XTARK_REMOTE_WS%/src/xtark_depth_preview/scripts/depth_preview_node.py && cd %XTARK_REMOTE_WS% && source /opt/ros/melodic/setup.bash && catkin_make --cmake-args -DCATKIN_WHITELIST_PACKAGES=\"xtark_json_bridge;xtark_nav;xtark_depth_preview\""
+if errorlevel 1 exit /b 1
+
+echo [7/7] verify packages ...
+"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "source /opt/ros/melodic/setup.bash && source %XTARK_REMOTE_WS%/devel/setup.bash && rospack find rf2o_laser_odometry && rospack find xtark_laser_odometry && rospack find xtark_json_bridge && rospack find xtark_depth_preview"
 exit /b %ERRORLEVEL%
 
 :stack

@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- Astra Pro color UVC only (2bc5:0502) — no web_video_server, no depth -->
+<launch>
+  <arg name="device" default="/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Astra_Pro_FHD_Camera_SN0001-video-index0"/>
+  <arg name="pixel_width" default="640"/>
+  <arg name="pixel_height" default="480"/>
+  <arg name="camera_info_url" default="file://$(find xtark_driver)/config/camera_calib/cam_480p.yaml"/>
+  <arg name="output_topic" default="/camera/image_raw"/>
+
+  <include file="$(find uvc_camera)/launch/xtark_camera_driver.launch">
+    <arg name="device" value="$(arg device)"/>
+    <arg name="pixel_width" value="$(arg pixel_width)"/>
+    <arg name="pixel_height" value="$(arg pixel_height)"/>
+    <arg name="camera_info_url" value="$(arg camera_info_url)"/>
+  </include>
+
+  <node name="astra_uvc_rgb_republish" pkg="image_transport" type="republish" output="screen"
+        args="compressed in:=/image_raw raw out:=$(arg output_topic)"/>
+</launch>

@@ -377,17 +377,40 @@ def shutdown_logging() -> None:
 
 
 def install_excepthook() -> None:
+    def _report(exc_type, exc_value, exc_tb) -> None:
+        try:
+            import traceback
+
+            text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+            logging.getLogger("app").critical("uncaught exception\n%s", text)
+        except Exception:
+            try:
+                logging.getLogger("app").critical(
+                    "uncaught exception: %s: %s",
+                    getattr(exc_type, "__name__", exc_type),
+                    exc_value,
+                )
+            except Exception:
+                pass
+
     def _hook(exc_type, exc_value, exc_tb) -> None:
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_tb)
             return
-        logging.getLogger("app").critical(
-            "uncaught exception",
-            exc_info=(exc_type, exc_value, exc_tb),
-        )
-        sys.__excepthook__(exc_type, exc_value, exc_tb)
+        _report(exc_type, exc_value, exc_tb)
+        try:
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+        except Exception:
+            pass
 
     sys.excepthook = _hook
+
+    if hasattr(threading, "excepthook"):
+
+        def _thread_hook(args) -> None:  # type: ignore[no-untyped-def]
+            _hook(args.exc_type, args.exc_value, args.exc_traceback)
+
+        threading.excepthook = _thread_hook
 
 
 def daily_log_path(for_date: Optional[date] = None) -> Path:

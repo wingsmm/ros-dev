@@ -178,8 +178,9 @@ class MjpegStreamController(QObject):
     fps_changed = pyqtSignal(float)
     log_line = pyqtSignal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, *, timeout_s: float = 2.0):
         super().__init__(parent)
+        self._timeout_s = timeout_s
         self._thread: Optional[QThread] = None
         self._worker: Optional[MjpegWorker] = None
         self._stopping = False
@@ -243,7 +244,7 @@ class MjpegStreamController(QObject):
         self.log_line.emit(f"CAMERA connect {url}")
 
         thread = QThread(self)
-        worker = MjpegWorker(session_id=session_id, url=url)
+        worker = MjpegWorker(session_id=session_id, url=url, timeout_s=self._timeout_s)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(thread.quit)

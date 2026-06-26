@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from PyQt5.QtCore import pyqtSignal
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
+from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 
 class CameraToolbar(QWidget):
-    """MJPEG URL + connect controls + status/FPS display."""
+    """MJPEG stream URLs (read-only) + connect controls + status/FPS display."""
 
     connect_requested = pyqtSignal()
     disconnect_requested = pyqtSignal()
@@ -20,20 +20,48 @@ class CameraToolbar(QWidget):
         root.setContentsMargins(0, 0, 0, 8)
         root.setSpacing(6)
 
-        row = QHBoxLayout()
-        self.url_edit = QLineEdit()
-        self.url_edit.setPlaceholderText("http://host:8080/stream?topic=/camera/image_raw")
-        row.addWidget(QLabel("URL"))
-        row.addWidget(self.url_edit, 1)
-
+        btn_row = QHBoxLayout()
         self.connect_btn = QPushButton("连接")
         self.disconnect_btn = QPushButton("断开")
         self.reconnect_btn = QPushButton("重连")
         self.disconnect_btn.setEnabled(False)
-        row.addWidget(self.connect_btn)
-        row.addWidget(self.disconnect_btn)
-        row.addWidget(self.reconnect_btn)
-        root.addLayout(row)
+        btn_row.addWidget(self.connect_btn)
+        btn_row.addWidget(self.disconnect_btn)
+        btn_row.addWidget(self.reconnect_btn)
+        btn_row.addStretch(1)
+        root.addLayout(btn_row)
+
+        url_grid = QGridLayout()
+        url_grid.setHorizontalSpacing(8)
+        url_grid.setVerticalSpacing(4)
+        readonly_style = "QLineEdit { background: #f5f5f5; color: #333; }"
+
+        rgb_caption = QLabel("RGB MJPEG")
+        rgb_caption.setStyleSheet("color: #555; font-size: 12px;")
+        self.rgb_url_edit = QLineEdit()
+        self.rgb_url_edit.setReadOnly(True)
+        self.rgb_url_edit.setFocusPolicy(Qt.StrongFocus)
+        self.rgb_url_edit.setPlaceholderText("http://host:8080/stream?topic=/camera/image_raw")
+        self.rgb_url_edit.setStyleSheet(readonly_style)
+        url_grid.addWidget(rgb_caption, 0, 0, Qt.AlignTop)
+        url_grid.addWidget(self.rgb_url_edit, 0, 1)
+
+        depth_caption = QLabel("Depth MJPEG")
+        depth_caption.setStyleSheet("color: #555; font-size: 12px;")
+        self.depth_url_edit = QLineEdit()
+        self.depth_url_edit.setReadOnly(True)
+        self.depth_url_edit.setFocusPolicy(Qt.StrongFocus)
+        self.depth_url_edit.setPlaceholderText("http://host:8080/stream?topic=/camera/depth/preview")
+        self.depth_url_edit.setStyleSheet(readonly_style)
+        url_grid.addWidget(depth_caption, 1, 0, Qt.AlignTop)
+        url_grid.addWidget(self.depth_url_edit, 1, 1)
+
+        url_grid.setColumnStretch(1, 1)
+        root.addLayout(url_grid)
+
+        hint = QLabel("由 robots.json / master_uri 自动生成，不可编辑")
+        hint.setStyleSheet("color: #888; font-size: 11px;")
+        root.addWidget(hint)
 
         info = QHBoxLayout()
         self.topic_label = QLabel("话题: --")
@@ -49,11 +77,9 @@ class CameraToolbar(QWidget):
         self.disconnect_btn.clicked.connect(self.disconnect_requested.emit)
         self.reconnect_btn.clicked.connect(self.reconnect_requested.emit)
 
-    def set_url(self, url: str) -> None:
-        self.url_edit.setText(url)
-
-    def url(self) -> str:
-        return self.url_edit.text().strip()
+    def set_stream_urls(self, rgb_url: str, depth_url: str) -> None:
+        self.rgb_url_edit.setText(rgb_url)
+        self.depth_url_edit.setText(depth_url)
 
     def set_topic_hint(self, topic: str) -> None:
         self.topic_label.setText(f"话题: {topic}")

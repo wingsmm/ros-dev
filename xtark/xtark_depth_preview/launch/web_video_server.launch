@@ -1,0 +1,4 @@
+<launch>
+  <!-- Standalone MJPEG HTTP :8080 — not tied to UVC xtark_camera.launch -->
+  <node pkg="web_video_server" type="web_video_server" name="web_video_server" output="screen"/>
+</launch>

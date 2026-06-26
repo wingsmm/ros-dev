@@ -13,6 +13,7 @@ from typing import List, Optional
 _APP_ROOT = Path(__file__).resolve().parents[1]
 _RVIZ_ROBOT_CONFIG = _APP_ROOT / "config" / "xtark_robot.rviz"
 _RVIZ_CAMERA_CONFIG = _APP_ROOT / "config" / "xtark_camera.rviz"
+_RVIZ_RGBD_CAMERA_CONFIG = _APP_ROOT / "config" / "xtark_rgbd_camera.rviz"
 _RVIZ_CONFIG = _RVIZ_ROBOT_CONFIG
 
 logger = logging.getLogger(__name__)
@@ -258,6 +259,10 @@ def rviz_camera_config_path() -> Path:
     return _RVIZ_CAMERA_CONFIG
 
 
+def rviz_rgbd_camera_config_path() -> Path:
+    return _RVIZ_RGBD_CAMERA_CONFIG
+
+
 def rviz_config_path() -> Path:
     return rviz_robot_config_path()
 
@@ -292,7 +297,14 @@ def camera_diagnostic_shell_commands() -> str:
         [
             prefix + "ros2 topic list",
             prefix + "ros2 topic hz /camera/image_raw",
+            prefix + "ros2 topic hz /camera/depth/image_raw",
+            prefix + "ros2 topic hz /camera/depth/camera_info",
+            prefix + "ros2 topic hz /camera/depth_registered/points",
+            prefix + "ros2 topic hz /camera/scan_depth",
+            prefix + "ros2 topic hz /scan",
             prefix + "ros2 run tf2_tools view_frames",
+            "# RViz2 RGB-D: rviz2 -d "
+            + rviz_rgbd_camera_config_path().as_posix(),
         ]
     )
 

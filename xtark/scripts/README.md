@@ -33,9 +33,107 @@ Windows: `xtark\scripts\android_remote.bat`
 ```bash
 ~/ros_ws/scripts/qt_stack.sh start
 ~/ros_ws/scripts/qt_stack.sh status
+~/ros_ws/scripts/qt_stack.sh check    # slow frame/rate/MJPEG acceptance
 ~/ros_ws/scripts/qt_stack.sh stop
 ~/ros_ws/scripts/qt_stack.sh record   # optional bag
 ```
+
+**Phase 1.5 — profile 启动矩阵**
+
+| `PROFILE` | 用途 | 启动内容 |
+|-----------|------|----------|
+| `full` (默认) | 日常 Qt 全栈 | bringup + JSON + camera/rf2o（按 env） |
+| **`camera_raw`** | **Qt 摄像头页主模式（RGB+Depth raw）** | bringup + JSON + Astra depth + RGB relay + `:8080`；**无** rf2o / xtark preview |
+| `camera_depth` | 深度硬件最小诊断 | 仅 roscore + `depth_camera` |
+
+**Qt 摄像头页推荐（Phase 1.5 主验收）：**
+
+```bash
+PROFILE=camera_raw ~/ros_ws/scripts/qt_stack.sh start
+~/ros_ws/scripts/qt_stack.sh status
+```
+
+`camera_raw` 默认等价于：
+
+```bash
+BRINGUP_ENABLE=1 JSON_ENABLE=1 CAMERA_ENABLE=1 \
+  DEPTH_CAMERA_ENABLE=1 DEPTH_PREVIEW_MODE=off CAMERA_MODE=rgb_depth \
+  LASER_ODOM_ENABLE=0
+```
+
+必须在线：`/camera/image_raw`（Astra relay）、`/camera/depth/image_raw`、`/camera/depth/camera_info`、`:8765`。
+默认 `SKIPPED`：`/camera/depth/preview`、`/odom_laser`。
+
+**深度硬件诊断（非摄像头页主模式）：**
+
+```bash
+PROFILE=camera_depth ~/ros_ws/scripts/qt_stack.sh start
+```
+
+| Profile | 用途 |
+|---------|------|
+| `full` | 原 Qt 日常完整栈 |
+| `camera_raw` | 省资源：RGB + depth raw，无 preview |
+| `camera_preview` | 验收/兜底：camera_raw + `/camera/depth/preview` MJPEG |
+| `camera_depth` | 仅深度硬件诊断 |
+
+| Env | `full` | `camera_raw` | `camera_preview` | `camera_depth` |
+|-----|--------|--------------|------------------|----------------|
+| `BRINGUP_ENABLE` | `1` | `1` | `1` | `0` |
+| `JSON_ENABLE` | `1` | `1` | `1` | `0` |
+| `LASER_ODOM_ENABLE` | `1` | `0` | `0` | `0` |
+| `CAMERA_ENABLE` | `1` | `1` | `1` | `0` |
+| `DEPTH_CAMERA_ENABLE` | `0` | `1` | `1` | `1` |
+| `DEPTH_PREVIEW_MODE` | `off` | `off` | `xtark` | `off` |
+| `CAMERA_MODE` | auto | `rgb_depth` | `rgb_depth` | `depth_only` |
+
+`camera_raw` / `camera_preview` 默认 `RGB_SOURCE=auto`（OpenNI RGB 有帧则 relay，否则 Astra UVC）：
+
+```text
+RGB source: Astra UVC color /dev/v4l/by-id/...Astra_Pro... -> /camera/image_raw
+Depth:      astra_depth_only.launch -> /camera/depth/image_raw
+HTTP:       standalone web_video_server :8080
+```
+
+| `RGB_SOURCE` | 行为 |
+|--------------|------|
+| `uvc_astra` | 强制 Astra UVC-only launch |
+| `openni` | 仅 OpenNI RGB 有帧时 relay |
+| `uvc` | 旧版 `xtark_camera.launch`（勿用于 camera 页 profile） |
+| `auto` (默认) | OpenNI 有帧 → relay；否则 `uvc_astra` |
+
+```bash
+PROFILE=camera_raw ~/ros_ws/scripts/qt_stack.sh restart    # 日常低负载
+PROFILE=camera_preview ~/ros_ws/scripts/qt_stack.sh restart  # Depth MJPEG 验收
+```
+
+验收用 `rostopic info` / `rostopic echo -n 1` 验 publisher 与帧，不用 `rostopic list`  alone。
+
+**Phase 1.5-fix — `web_video_server` decoupled from UVC (RGB MJPEG only when needed):**
+
+| `CAMERA_MODE` | Behavior |
+|---------------|----------|
+| `rgb_only` (default when depth off) | `xtark_camera.launch` — UVC + bundled `:8080` |
+| `depth_only` (default when `DEPTH_CAMERA_ENABLE=1`) | Astra depth only; **no** UVC; optional standalone `:8080` if `CAMERA_ENABLE=1` |
+| `rgb_depth` | depth + Astra RGB relay → `/camera/image_raw`; standalone `:8080` if `CAMERA_ENABLE=1` |
+
+| Env | Default | Meaning |
+|-----|---------|---------|
+| `DEPTH_CAMERA_ENABLE` | `0` | `1` = roslaunch `xtark_nav_depthcamera` / `xtark_depthcamera.launch` |
+| `DEPTH_PREVIEW_ENABLE` | `0` | `1` + `DEPTH_PREVIEW_MODE=xtark` = xtark fallback `/camera/depth/preview` only |
+| `DEPTH_PREVIEW_MODE` | `off` | `off` \| `xtark` — Qt main path uses raw depth on PC |
+| `CAMERA_MODE` | auto | `rgb_only` \| `depth_only` \| `rgb_depth` |
+| `DEPTH_PREVIEW_TOPIC` | `/camera/depth/preview` | MJPEG fallback topic (not Qt main path) |
+
+Emergency xtark MJPEG fallback:
+
+```bash
+DEPTH_CAMERA_ENABLE=1 DEPTH_PREVIEW_ENABLE=1 DEPTH_PREVIEW_MODE=xtark CAMERA_MODE=depth_only $0 start
+```
+
+`qt_stack.sh` is now a thin entrypoint; module logic lives in `qt_camera_modules.sh`. `start` runs modules in order and rolls back immediately if one module fails. `status` is a quick state view. `check` runs slow frame/rate/MJPEG acceptance checks.
+
+Requires on robot: `xtark_nav_depthcamera` (not in this git). `xtark_depth_preview` only needed for `DEPTH_PREVIEW_MODE=xtark`. Does **not** start `/camera/scan_depth` (Phase 2).
 
 Lightweight (no camera, no laser odom):
 

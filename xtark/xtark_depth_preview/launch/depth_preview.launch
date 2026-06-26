@@ -1,0 +1,13 @@
+<launch>
+  <arg name="input_topic" default="/camera/depth/image_raw"/>
+  <arg name="output_topic" default="/camera/depth/preview"/>
+  <arg name="max_range_mm" default="4000"/>
+  <arg name="frame_skip" default="2"/>
+
+  <node pkg="xtark_depth_preview" type="depth_preview_node.py" name="depth_preview" output="screen">
+    <param name="input_topic" value="$(arg input_topic)"/>
+    <param name="output_topic" value="$(arg output_topic)"/>
+    <param name="max_range_mm" value="$(arg max_range_mm)"/>
+    <param name="frame_skip" value="$(arg frame_skip)"/>
+  </node>
+</launch>
