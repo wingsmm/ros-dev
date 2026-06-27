@@ -6,6 +6,139 @@
 
 本文同时记录当前 Qt 摄像头页状态、机器人侧采集边界、WSL2/ROS2 演进路线、可迁移 demo 清单和历史 Android 对齐背景。
 
+## 0.0 当前连接架构统一口径
+
+当前不要再把“Android ROS1”“ros1_bridge”“xtark Qt 混合连接”“ROS2-native 新平台”混成一条线。四条线的定位如下：
+
+| 线 | 定位 | 当前结论 |
+|---|---|---|
+| Android ROS1 | 冻结的历史可用栈 | 保持 ROS1 直连，不参与 Qt/ROS2 重构 |
+| `ros1_bridge dynamic_bridge` | ROS1<->ROS2 实验桥 | 非当前主线，保留为试验/历史方案 |
+| xtark Qt 混合连接 | 当前 xtark <-> Qt 主方案 | JSON + HTTP/MJPEG + HTTP raw depth + PC 侧 ROS2 bridge 分工协作 |
+| ROS2-native | RK3568 / Jetson 等新平台方向 | 新硬件优先直接输出 ROS2 topic |
+
+### Android ROS1：冻结线
+
+```text
+Android App
+  -> ROS Master :11311
+  -> ROS1 topics/actions
+  -> xtark_driver / gmapping / move_base
+```
+
+- Android 直接连接机器人端 ROS1 Master。
+- 控制走 `/cmd_vel`。
+- 相机沿用 ROS1 历史话题契约，例如 `/image_raw/compressed`。
+- 地图、导航走 ROS1 原有 topic/action。
+- 不走 JSON `:8765`。
+- 不走 Qt 的 ROS2 bridge。
+- 当前只维护，不再作为新功能主线。
+
+### `ros1_bridge dynamic_bridge`：历史/实验线
+
+```text
+xtark ROS1 topics
+  -> ros1_bridge dynamic_bridge
+  -> ROS2 topics
+  -> Qt / RViz2 / ROS2 nodes
+```
+
+- 它才是真正意义上的 ROS1 topic <-> ROS2 topic 桥。
+- 之前 Docker ROS1/ROS2 桥接路线没有成为稳定主线，具体原因不是单点 bug，而是网络与运行时边界叠加：
+  - ROS1 不是只连 `11311`。`dynamic_bridge` 订阅 ROS1 topic 后，机器人端还需要反向连接 bridge 暴露的 XMLRPC / TCPROS 临时端口；Docker Desktop / WSL2 场景下这些临时端口和回连地址不稳定，容易出现“ROS Master 看得到订阅者，但真实图像数据进不来”。
+  - ROS2 DDS 侧也有独立的数据面。容器内 ROS2 与 WSL/Qt 进程之间可能出现 topic list 能发现、`echo/hz` 或 Qt 订阅收不到持续数据的情况；这类问题更像 DDS discovery/data path 与 Docker/WSL 网络边界组合问题，不适合作为日常主链路。
+  - 原生在 WSL 安装 ROS1 依赖可以绕开一部分 Docker 网络问题，但会污染/复杂化当前 ROS2 Humble 工作站环境，后续 Python、消息包、setup.bash 顺序和维护成本都偏高。
+  - 图像/深度属于大带宽数据，拿 `dynamic_bridge` 做日常 RGB/Depth 主通道，会把诊断、带宽、QoS、DDS、ROS1 TCPROS 问题混在一起，排障成本高。
+- 因此当前不把 `ros1_bridge dynamic_bridge` 作为 Qt 主线；它只保留为历史/实验选项，必要时用于单独验证 ROS1<->ROS2 语义桥接。
+- 当前不建议作为日常方案，只保留为历史/实验选项。
+
+### xtark Qt 混合连接：当前主方案
+
+这条线不是单一 bridge，而是按数据类型分流：
+
+```text
+PC Qt
+  -> 控制/遥测：JSON TCP :8765
+  -> RGB 预览：HTTP/MJPEG :8080
+  -> Depth raw：HTTP raw depth :8082
+  -> ROS2 展示/算法：PC 侧 Ros2BridgeManager / xtark_ros2_bridge
+```
+
+控制、遥测、激光摘要：
+
+```text
+Qt RobotSession
+  -> JsonGatewayBackend
+  -> JSON TCP :8765
+  -> xtark_json_bridge
+  -> ROS1 /cmd_vel, /odom, /voltage, /scan
+  -> JSON odom_base / base_status / laser_scan / scan_warning
+```
+
+RGB 看图：
+
+```text
+Qt CameraPage
+  -> HTTP/MJPEG :8080
+  -> web_video_server
+  -> ROS1 /camera/image_raw
+  -> Qt CameraViewport
+```
+
+Depth raw 看图 / 基础深度指标：
+
+```text
+Qt Depth worker
+  -> HTTP raw depth :8082
+  -> /v1/depth/latest
+  -> /v1/depth/camera_info
+  -> 16UC1 / 32FC1 raw frame
+  -> PC/Qt 本地伪彩、中心距离、最近距离、有效像素比例、FPS
+```
+
+ROS2 展示 / 诊断 / 后续算法：
+
+```text
+Qt / PC sidecar
+  -> Ros2BridgeManager / xtark_ros2_bridge
+  -> 发布 ROS2 /scan、/odom、/tf、/camera/image_raw、/camera/depth/image_raw
+  -> RViz2 / ROS2 算法节点消费
+```
+
+核心原则：
+
+- `:8765` 只管控制、遥测、激光 JSON，不传图像/点云。
+- `:8080` 管 RGB MJPEG 预览。
+- `:8082` 管深度 raw frame，不走 MJPEG，不走 JSON。
+- ROS2 bridge 是 PC 侧展示/算法接口，不是 xtark 与 Qt 的唯一通信入口。
+- xtark 侧尽量只做硬件采集和基础安全控制。
+
+### ROS2-native：RK3568 / Jetson 等新平台方向
+
+```text
+RK3568 / Jetson
+  -> ROS2 native topics
+  -> PC / WSL2 / Qt / RViz2 / ROS2 algorithms
+```
+
+- 新平台不继承 xtark ROS1 legacy。
+- 传感器、点云、雷达、相机尽量直接发布 ROS2 topic。
+- 后续如果要控制底盘，可以做 ROS2 backend 或平台专用 gateway。
+- 不应为了兼容 xtark，把 RK3568 / Jetson 强行套进 JSON `:8765`。
+
+最终统一口径：
+
+```text
+Android ROS1 已冻结；
+ros1_bridge dynamic_bridge 是历史/实验桥；
+xtark 当前 Qt 线采用混合连接：
+  JSON :8765 管控制和遥测，
+  HTTP/MJPEG :8080 管 RGB 预览，
+  HTTP raw depth :8082 管深度 raw frame，
+  PC 侧 ROS2 bridge 管 RViz2、诊断和算法 topic；
+RK3568 / Jetson 等新平台走 ROS2-native。
+```
+
 ## 0. 当前落地状态（2026-06-25）
 
 当前判断：**Qt 摄像头页已经具备可用的相机显示能力**，现阶段不再以继续追 Android 栈为主线；Android 栈视为冻结参考，后续视觉能力主要沿 Qt 摄像头模块和 WSL2/ROS2 方向演进。
@@ -39,7 +172,7 @@ MjpegStreamController
 core/camera_*
   ├─ camera_topics.py              RGB-D topic 常量
   ├─ camera_topic_probe.py         ROS2 topic 探测（子进程，非 UI 线程）
-  ├─ camera_ros2_bridge_*          MJPEG -> /camera/image_raw Bridge
+  ├─ ros2_bridge_*                 全局 JSON/RGB/Depth -> xtark_ros2_bridge
   └─ config/xtark_rgbd_camera.rviz TF / PointCloud2 / Camera / Marker
 ```
 
@@ -86,9 +219,9 @@ Phase 1.5 **不做**：楼梯识别、墙面识别、障碍物分类、点云分
 | 项 | 期望 |
 |----|------|
 | xtark 低负载主模式 | `PROFILE=camera_raw`：`/camera/image_raw`、depth raw/info、`:8765`、`:8080` 在线 |
-| xtark 双预览验收 | `PROFILE=camera_preview`：比 `camera_raw` 多 `/camera/depth/preview` |
+| xtark 双预览验收 | `PROFILE=camera_preview`：兼容别名，行为与 `camera_raw` 一致，不再多启 `/camera/depth/preview` |
 | xtark 深度硬件诊断 | `PROFILE=camera_depth`：仅验 depth 驱动，**非**摄像头页主验收 |
-| Qt RGB+Depth | RGB 走 MJPEG `/camera/image_raw`；Depth 走 Raw→MJPEG 双渲染 |
+| Qt RGB+Depth | RGB 走 MJPEG `/camera/image_raw`；Depth 走 `:8082` raw HTTP -> PC/Qt 本地伪彩渲染 |
 | Qt 基础信息 | 中心距离、最近距离、FPS、有效像素比例、深度范围 |
 | 深度断流 | UI 离线不崩，恢复后可重连 |
 
@@ -516,6 +649,96 @@ PC/Qt 验收：
 - 不把点云/深度图塞入 JSON 8765。
 - 不在 Qt UI 线程运行算法。
 
+#### 实施任务书：Phase 2.0 统一 ROS2 发布层
+
+**背景**
+
+- 当前 Qt 进程已有 `Ros2BridgeWorker`（JSON telemetry -> `/scan`、`/odom`、`/tf`）和 `CameraRos2BridgeWorker`（再次拉取 RGB MJPEG -> `/camera/image_raw`）两套 rclpy Node/QThread/Manager。
+- RGB 已由 `MjpegStreamController` 拉取一次；Camera Bridge 再拉一次 `:8080` 是重复网络、重复 JPEG 解码。
+- Depth 已改为 `:8082` raw HTTP，Qt worker 本地伪彩；Phase 2.0 需要把同一份 raw 数据送入本机 ROS2，供点云、局部图和算法消费。
+- 当前 Phase 1.5 的 UI 性能与 robot raw HTTP 验收必须先通过；本任务不重新设计 `:8082` 协议，也不修改 xtark 采集端。
+
+**目标**
+
+在 Qt/WSL 进程内只保留一个全局 `Ros2BridgeManager`、一个 `Ros2BridgeWorker`、一个 rclpy Node（`xtark_ros2_bridge`）。它只负责把已经获取的数据发布到本机 ROS2，不再主动拉取 HTTP/MJPEG。
+
+```text
+JSON RobotSession -------------------+-> /scan /odom /tf
+RGB MjpegStreamController (one pull)-+-> /camera/image_raw
+Depth HTTP worker (one pull) --------+-> /camera/depth/image_raw + camera_info
+                                      |
+                                      v
+                    Ros2BridgeWorker / xtark_ros2_bridge
+```
+
+**修改范围**
+
+```text
+修改  pc/qt_client/core/ros2_bridge_worker.py
+修改  pc/qt_client/core/ros2_bridge_manager.py
+修改  pc/qt_client/core/camera_depth_http_worker.py
+修改  pc/qt_client/ui/pages/camera_page.py
+修改  pc/qt_client/ui/pages/robot_page.py
+修改  pc/qt_client/ui/widgets/camera_ros2_panel.py
+修改  pc/qt_client/ui/widgets/ros2_rviz_panel.py
+删除  pc/qt_client/core/camera_ros2_bridge_worker.py
+删除  pc/qt_client/core/camera_ros2_bridge_manager.py
+更新  pc/docs/PC端摄像头模块与ROS2视觉演进方案.md
+```
+
+`CameraTopicProbeWorker`、RViz process manager、摄像头 UI 面板可以保留；只移除它们对第二套 Camera ROS2 bridge 的依赖。
+
+**具体实现**
+
+1. `Ros2BridgeManager` 改为应用/`RobotSession` 同寿命的单例服务，由主窗口创建并注入机器人页和摄像头页；`start_bridge()` 必须幂等。
+2. 在 `_BridgeNode` 中新增 publisher：
+
+   ```text
+   /camera/image_raw               sensor_msgs/Image rgb8
+   /camera/depth/image_raw         sensor_msgs.Image 16UC1/32FC1
+   /camera/depth/camera_info       sensor_msgs.CameraInfo
+   ```
+
+3. `Ros2BridgeWorker` 增加纯发布 slot：`on_rgb_jpeg()`、`on_depth_raw_frame()`、`on_depth_camera_info()`。这些 slot 不得打开 URL、不得创建 reader、不得执行 HTTP。
+4. RGB ingress 仍只由 `MjpegStreamController` 拉一次。解码后的 RGB 以低帧率 tee 给统一 bridge；Depth ingress 仍只由 `CameraDepthHttpWorker` 拉一次，拿到 raw header/data 后 tee 给统一 bridge。
+5. 所有 tee 使用后台线程内的**容量 1 latest-frame mailbox**：新帧覆盖旧帧；向 bridge 投递时若上一次尚未消费，不得继续累积 Qt queued signal。RGB 默认最多 5 FPS 发布到 ROS2，Depth 默认最多 5 FPS。
+6. Qt 主线程只接收用于显示的限帧 preview。禁止将 raw depth bytes、JPEG bytes 或大数组经无界 Qt signal 排队到 UI 线程。
+7. Camera 页面不再实例化 `CameraRos2BridgeManager`。相机诊断面板改接全局 manager snapshot；Camera 页面启用/停用只控制 ingress capability，不创建或销毁 ROS2 Node。
+8. `Ros2BridgeWorker` 发布相机 TF 时复用明确的 `base_link -> camera_link` 静态外参；若外参未确认，只发布 image/CameraInfo，不伪造 TF。
+9. 删除 `CameraRos2BridgeWorker` 内部的 `MjpegReaderThread` 和所有 `resolve_mjpeg_url_for_robot()` 取流逻辑；删除旧 manager 后做全仓引用检查。
+
+**性能与线程约束**
+
+- rclpy 只在统一 bridge QThread 中触碰。
+- HTTP/MJPEG 读取、JPEG 解码、raw depth 解码在各自 ingress worker 中完成。
+- Qt UI 线程不得调用 `QThread.wait()`、`BlockingQueuedConnection`、网络 IO、JPEG/深度全图转换或 QPixmap 平滑缩放。
+- 隐藏画面不渲染；RGB 页暂停 depth HTTP ingress，Depth 页不解码隐藏 RGB preview。
+- 不允许为了“保证每帧”而排队；实时预览必须优先最新帧。
+
+**验收标准**
+
+1. `ros2 node list` 仅有一个 Qt 数据发布节点：`/xtark_ros2_bridge`。
+2. 机器人页和摄像头页均可打开、关闭、来回切换，不会创建第二个 rclpy Node 或第二条 HTTP/MJPEG 网络连接。
+3. RGB 网络请求只有一条；Depth `:8082` 网络请求只有一条；用日志/计数可证明无重复拉流。
+4. 本机 ROS2 有 `/scan`、`/odom`、`/tf`、`/camera/image_raw`、`/camera/depth/image_raw`、`/camera/depth/camera_info`。
+5. RGB/Depth ROS2 publisher 各不超过 5 FPS，bridge mailbox 不积压；切页后 UI 按钮、急停、手动控制在 200ms 内响应。
+6. 退出 Qt 后 bridge thread、reader 和 rclpy context 全部停止，无残留 Python 进程。
+7. Android、xtark 控制 JSON `:8765`、`/scan` 导航语义、`/odom_laser`、move_base 均不改。
+
+**不要做什么**
+
+- 不把 HTTP/MJPEG reader 放进统一 bridge。
+- 不把 Camera diagnostics/RViz UI 生硬并入 RobotPage。
+- 不改 `:8082` wire protocol，不在 xtark 上增加算法、点云、RTAB-Map 或额外 bridge。
+- 不用无界 Qt signal、队列或“每帧必达”语义。
+- 不在本阶段做墙、障碍、楼梯、局部地图；它们依赖本任务稳定后的 ROS2 raw topic。
+
+**Phase 2.0 发布层（2026-06-25 已落地）**
+
+- 全局唯一 `Ros2BridgeManager` / `Ros2BridgeWorker` / `xtark_ros2_bridge` Node。
+- RGB `MjpegStreamController.bridge_jpeg`、Depth `CameraDepthHttpWorker` 各拉一次网，`LatestFrameMailbox` tee 到 Bridge（默认各 ≤5 FPS）。
+- 已删除 `camera_ros2_bridge_worker.py` / `camera_ros2_bridge_manager.py`。
+
 ### Phase 2.5：摄像头页“地图式”局部空间视图
 
 目标：在摄像头页做一个视觉上类似“机器人”页面地图的视图，但它展示的是**深度相机前向局部空间**，不是激光雷达地图，也不是全局 SLAM 地图。
@@ -773,8 +996,9 @@ pc/qt_client/ui/widgets/camera_viewport.py
 pc/qt_client/ui/widgets/camera_ros2_panel.py
 pc/qt_client/ui/widgets/mjpeg_stream.py
 pc/qt_client/core/camera_mjpeg_url.py
-pc/qt_client/core/camera_ros2_bridge_manager.py
-pc/qt_client/core/camera_ros2_bridge_worker.py
+pc/qt_client/core/ros2_bridge_manager.py
+pc/qt_client/core/ros2_bridge_worker.py
+pc/qt_client/core/latest_frame_mailbox.py
 pc/qt_client/core/ros2_runtime.py
 pc/qt_client/config/xtark_camera.rviz
 ```
@@ -835,9 +1059,11 @@ pc/qt_client/config/xtark_rgbd_camera.rviz
 
 ---
 
-## 2. 总体架构（推荐）
+## 2. 历史设想：ROS1 图像经 `ros1_bridge` 对齐 Android
 
-推荐：在 PC 侧引入桥接层，把 xtark ROS1 的 `CompressedImage` 桥接到 ROS2，然后 qt_client 只订阅 ROS2 侧话题。
+本节保留早期“对齐 Android 话题契约”的设计背景。它不再是当前主线；当前主线以 0.0 节的 xtark Qt 混合连接为准：JSON `:8765` 管控制/遥测，HTTP/MJPEG `:8080` 管 RGB 预览，HTTP raw depth `:8082` 管深度 raw frame，PC 侧 `xtark_ros2_bridge` 只负责发布 ROS2 展示/算法 topic。
+
+历史设想是在 PC 侧引入桥接层，把 xtark ROS1 的 `CompressedImage` 桥接到 ROS2，然后 qt_client 只订阅 ROS2 侧话题。
 
 ```mermaid
 flowchart LR
@@ -954,9 +1180,11 @@ curl -I "http://192.168.1.169:8080/snapshot?topic=/camera/image_raw"
 
 结论：**先用它走起来**。短期作为 PC 端相机显示 MVP 和链路验证方案；后续不强制回到 Android 契约，而是优先建立 ROS2 统一视觉接口，让 Qt 摄像头模块消费 ROS2 topic、RViz 配置和算法结果。
 
-### 3.3 路线判断：先会走，再会跑
+### 3.3 路线判断：历史桥接不作为当前主线
 
-当前环境下，WSL2 安装和维护 `ros1_bridge` 成本较高，因此第一阶段不追求完整 ROS 语义对齐，而是优先完成“PC 端稳定看图”的用户闭环。后续路线从“对齐 Android”调整为“ROS2 统一视觉接口”：
+当前环境下，WSL2 安装和维护 `ros1_bridge` 成本较高；Docker ROS1/ROS2 桥接也暴露出 DDS、ROS1 Master、ROS1 TCPROS 回连端口、容器网络边界和维护复杂度问题。典型现象是：ROS1 Master / topic list 层面看似连上，但图像帧无法稳定持续进入 PC/Qt 或 WSL ROS2；ROS2 DDS 侧也可能出现发现层和数据层表现不一致。因此当前不追求完整 ROS1<->ROS2 语义桥接，而是采用 0.0 节定义的 xtark Qt 混合连接，优先保证“PC 端稳定看 RGB/Depth、控制链路不被图像拖垮、ROS2 topic 由 PC 侧 bridge 统一发布”。
+
+历史路线曾经是：
 
 ```text
 Phase 0：HTTP/MJPEG 看图

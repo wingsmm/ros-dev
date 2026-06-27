@@ -32,8 +32,9 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from gateway.json_client import JsonClientBridge, JsonTcpClient, SEND_RATE_HZ
+from gateway.json_client import JsonClientSignals, JsonTcpClient, SEND_RATE_HZ
 from core.logging_config import is_json_gateway_line, log_json_gateway_line, log_ui_line
+from legacy.ros2_pub import ros2_unavailable_reason, try_create
 from mapping.ros_stack import RosStackManager
 from ui.widgets import CameraPanel, ControlPanel, LogPanel, NavPanel, StackPanel, StatusPanel
 
@@ -50,8 +51,6 @@ class LegacyWindow(QMainWindow):
 
         self._ros2 = None
         if enable_ros2:
-            from gateway.ros2_pub import ros2_unavailable_reason, try_create
-
             self._ros2 = try_create()
             if self._ros2 is None:
                 reason = ros2_unavailable_reason()
@@ -64,11 +63,11 @@ class LegacyWindow(QMainWindow):
             self._ros2_fail_reason = "已禁用 (--no-ros)"
 
         self.settings = QSettings("xtark", "json_debug_client")
-        self.bridge = JsonClientBridge(self)
-        self.client = JsonTcpClient(self.bridge)
-        self.bridge.log_line.connect(self._on_log)
-        self.bridge.message.connect(self._on_message)
-        self.bridge.connection_changed.connect(self._on_connection)
+        self.json_signals = JsonClientSignals(self)
+        self.client = JsonTcpClient(self.json_signals)
+        self.json_signals.log_line.connect(self._on_log)
+        self.json_signals.message.connect(self._on_message)
+        self.json_signals.connection_changed.connect(self._on_connection)
         self._stack = RosStackManager(log=self._on_log) if enable_ros2 else None
 
         self._pressed_keys: Set[int] = set()

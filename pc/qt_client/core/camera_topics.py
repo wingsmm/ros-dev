@@ -16,11 +16,6 @@ CAMERA_SCAN_DEPTH_TOPIC = "/camera/scan_depth"
 # Main navigation laser — must stay independent from depth scan
 MAIN_SCAN_TOPIC = "/scan"
 
-# xtark fallback MJPEG candidates. Prefer pseudo-color preview when available;
-# raw depth is a second fallback for PROFILE=camera_raw where preview is skipped.
-QT_MJPEG_DEPTH_TOPIC = "/camera/depth/preview"
-QT_MJPEG_DEPTH_RAW_TOPIC = CAMERA_DEPTH_IMAGE_TOPIC
-
 # Topics shown in ROS2 diagnostic panel (Phase 1: status only, no nav coupling)
 CAMERA_DIAGNOSTIC_TOPICS: tuple[str, ...] = (
     CAMERA_RGB_TOPIC,

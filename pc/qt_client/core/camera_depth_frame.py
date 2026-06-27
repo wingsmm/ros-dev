@@ -8,8 +8,6 @@ from enum import Enum
 
 class DepthSourceKind(str, Enum):
     RAW_HTTP = "raw_http"
-    RAW_ROS2 = "raw"
-    MJPEG_FALLBACK = "mjpeg_fallback"
     OFFLINE = "offline"
 
 

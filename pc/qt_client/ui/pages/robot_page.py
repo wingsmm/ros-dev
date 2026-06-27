@@ -20,6 +20,7 @@ class RobotPage(QWidget):
         self,
         robot: RobotInfo,
         telemetry_binder: Optional[RobotTelemetryBinder] = None,
+        ros2_bridge: Optional[Ros2BridgeManager] = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -30,8 +31,9 @@ class RobotPage(QWidget):
         self._ros2_panel = Ros2RvizPanel()
         self._manual = ManualControlStrip()
         session = self._binder.session if self._binder is not None else None
-        self._ros2_bridge = Ros2BridgeManager(session=session, parent=self)
-        self._ros2_panel.set_manager(self._ros2_bridge)
+        self._ros2_bridge = ros2_bridge
+        if self._ros2_bridge is not None:
+            self._ros2_panel.set_manager(self._ros2_bridge)
         self._build_ui()
         self._wire_signals()
         self._apply_manual_speed_defaults()
@@ -89,7 +91,7 @@ class RobotPage(QWidget):
             self._maybe_auto_start_bridge()
 
     def _maybe_auto_start_bridge(self) -> None:
-        if not auto_bridge_enabled():
+        if self._ros2_bridge is None or not auto_bridge_enabled():
             return
         session = self._binder.session if self._binder is not None else None
         if session is None or not session.is_connected():
@@ -113,7 +115,6 @@ class RobotPage(QWidget):
 
     def shutdown(self) -> None:
         self._manual.set_keyboard_enabled(False)
-        self._ros2_bridge.shutdown()
         session = self._binder.session if self._binder is not None else None
         if session is not None:
             try:

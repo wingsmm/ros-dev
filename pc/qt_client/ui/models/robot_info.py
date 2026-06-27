@@ -31,7 +31,7 @@ class RobotInfo:
     invert_y: bool = False
     invert_angular_velocity: bool = False
     backend_type: str = "mock"
-    gateway_uri: str = ""  # json_gateway: host:port; ros1_gateway: HTTP gateway URL
+    gateway_uri: str = ""  # json_gateway: host:port, usually xtark :8765
     camera_mode: str = "mjpeg"
     camera_url: str = ""
     ros_domain_id: int = 0

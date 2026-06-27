@@ -1,4 +1,4 @@
-"""Raw depth -> RGB preview (PC/Qt, no xtark /camera/depth/preview)."""
+"""Raw depth -> RGB preview (PC/Qt, source is :8082 raw HTTP)."""
 
 from __future__ import annotations
 

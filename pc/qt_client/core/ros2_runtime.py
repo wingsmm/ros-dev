@@ -296,10 +296,10 @@ def camera_diagnostic_shell_commands() -> str:
     return "\n".join(
         [
             prefix + "ros2 topic list",
-            prefix + "ros2 topic hz /camera/image_raw",
-            prefix + "ros2 topic hz /camera/depth/image_raw",
-            prefix + "ros2 topic hz /camera/depth/camera_info",
-            prefix + "ros2 topic hz /camera/depth_registered/points",
+            prefix + "ros2 topic info /camera/image_raw",
+            prefix + "ros2 topic info /camera/depth/image_raw",
+            prefix + "ros2 topic info /camera/depth/camera_info",
+            prefix + "ros2 topic info /camera/depth_registered/points",
             prefix + "ros2 topic hz /camera/scan_depth",
             prefix + "ros2 topic hz /scan",
             prefix + "ros2 run tf2_tools view_frames",

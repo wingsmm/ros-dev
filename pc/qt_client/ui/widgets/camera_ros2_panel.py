@@ -14,16 +14,13 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from core.camera_ros2_bridge_manager import (
-    CameraRos2BridgeManager,
-    CameraRos2PanelSnapshot,
-)
 from core.camera_topics import CAMERA_DIAGNOSTIC_TOPICS
 from core.robot_frames import (
     BASE_FRAME,
     CAMERA_FRAME,
     camera_frames_summary,
 )
+from core.ros2_bridge_manager import CameraRos2PanelSnapshot, Ros2BridgeManager
 from core.ros2_runtime import rviz_rgbd_camera_config_path
 
 
@@ -44,15 +41,20 @@ def _topic_status_text(snapshot: CameraRos2PanelSnapshot, topic: str) -> str:
             return entry.detail if entry.online else "离线"
     if topic == "/camera/image_raw" and snapshot.bridge_running:
         return _format_hz(snapshot.bridge_status.publish_hz, topic)
+    if topic.startswith("/camera/depth") and snapshot.bridge_running:
+        key = "depth_image" if "image_raw" in topic else "depth_camera_info"
+        age = snapshot.bridge_status.last_source_ms.get(key, 0)
+        if age > 0:
+            return _format_hz(snapshot.bridge_status.publish_hz, topic)
     return "—"
 
 
 class CameraRos2Panel(QWidget):
-    """Camera module: MJPEG bridge, RGB-D topic status, RViz2 entry."""
+    """Camera module: unified ROS2 bridge status, RGB-D topic probe, RViz2."""
 
     def __init__(
         self,
-        manager: Optional[CameraRos2BridgeManager] = None,
+        manager: Optional[Ros2BridgeManager] = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -64,7 +66,7 @@ class CameraRos2Panel(QWidget):
         self._wire_manager_signals()
         self.refresh_display()
 
-    def set_manager(self, manager: Optional[CameraRos2BridgeManager]) -> None:
+    def set_manager(self, manager: Optional[Ros2BridgeManager]) -> None:
         if self._manager is manager:
             return
         if self._manager is not None:
@@ -81,7 +83,7 @@ class CameraRos2Panel(QWidget):
         if self._manager is None:
             self._apply_snapshot(None)
             return
-        self._apply_snapshot(self._manager.snapshot())
+        self._apply_snapshot(self._manager.camera_snapshot())
 
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -108,7 +110,7 @@ class CameraRos2Panel(QWidget):
         layout.setSpacing(6)
 
         row1 = QHBoxLayout()
-        self._bridge_start_btn = QPushButton("启动 Camera Bridge")
+        self._bridge_start_btn = QPushButton("启动 ROS2 Bridge")
         self._bridge_stop_btn = QPushButton("停止 Bridge")
         self._rviz_start_btn = QPushButton("启动 RViz2")
         self._rviz_stop_btn = QPushButton("停止 RViz2")
@@ -167,11 +169,10 @@ class CameraRos2Panel(QWidget):
 
         rviz_cfg = rviz_rgbd_camera_config_path()
         hint = QLabel(
-            "Phase 1 仅展示与诊断：RGB 预览仍走上方 MJPEG；"
-            "Camera Bridge 手动启动后发布 /camera/image_raw 与 TF。"
-            f"RViz2 使用 {rviz_cfg.name}（TF / PointCloud2 / LaserScan / Camera）。"
-            "WSL2 下 RViz OpenGL 可能不稳定；原生 Linux 优先验收。"
-            "/scan 仍来自主雷达，不把 /camera/scan_depth 接入导航。"
+            "Phase 2.0：RGB/Depth 各只拉一次网络流，经全局 xtark_ros2_bridge 发布 ROS2。"
+            "预览走上方 MJPEG / :8082 raw；Bridge 不主动拉 HTTP。"
+            f" RViz2 使用 {rviz_cfg.name}。"
+            "/scan 仍来自 JSON 雷达，不把深度接入导航。"
         )
         hint.setStyleSheet("color: #666; font-size: 11px;")
         hint.setWordWrap(True)
@@ -184,9 +185,9 @@ class CameraRos2Panel(QWidget):
             Qt.DownArrow if expanded else Qt.RightArrow
         )
         if self._manager is not None:
-            self._manager.set_diagnostics_expanded(expanded)
+            self._manager.set_camera_diagnostics_expanded(expanded)
             if expanded:
-                self._manager.refresh_topic_status()
+                self._manager.refresh_camera_topic_status()
 
     def _wire_button_signals(self) -> None:
         self._bridge_start_btn.clicked.connect(self._on_start_bridge)
@@ -212,7 +213,7 @@ class CameraRos2Panel(QWidget):
 
     def _on_start_rviz(self) -> None:
         if self._manager is not None:
-            self._manager.start_rviz()
+            self._manager.start_camera_rviz()
 
     def _on_stop_rviz(self) -> None:
         if self._manager is not None:
@@ -220,18 +221,18 @@ class CameraRos2Panel(QWidget):
 
     def _on_refresh_topics(self) -> None:
         if self._manager is not None:
-            self._manager.refresh_topic_status()
+            self._manager.refresh_camera_topic_status()
 
     def _on_copy_diagnostics(self) -> None:
         if self._manager is not None:
             QGuiApplication.clipboard().setText(
-                self._manager.diagnostic_commands()
+                self._manager.camera_diagnostic_commands()
             )
         self._labels["error"].setText("诊断命令已复制到剪贴板")
 
     def _on_snapshot(self, snapshot: object) -> None:
-        if isinstance(snapshot, CameraRos2PanelSnapshot):
-            self._apply_snapshot(snapshot)
+        del snapshot
+        self.refresh_display()
 
     def _on_action_message(self, text: str) -> None:
         self._labels["error"].setText(text)
@@ -242,7 +243,7 @@ class CameraRos2Panel(QWidget):
                 lbl.setText("—")
             for lbl in self._topic_labels.values():
                 lbl.setText("—")
-            self._labels["error"].setText("未绑定 Camera Bridge")
+            self._labels["error"].setText("未绑定 ROS2 Bridge")
             return
 
         env = snapshot.env
@@ -258,14 +259,14 @@ class CameraRos2Panel(QWidget):
         self._labels["mjpeg_url"].setText(snapshot.mjpeg_url or "—")
 
         bridge = snapshot.bridge_status
-        bridge_text = "运行中" if snapshot.bridge_running else "未运行"
+        bridge_text = "运行中 (xtark_ros2_bridge)" if snapshot.bridge_running else "未运行"
         if bridge.last_error:
             bridge_text += f" ({bridge.last_error})"
         self._labels["bridge"].setText(bridge_text)
 
         tf_text = (
             f"{BASE_FRAME}→{CAMERA_FRAME} OK"
-            if bridge.tf_static_ok
+            if bridge.camera_tf_static_ok
             else f"{BASE_FRAME}→{CAMERA_FRAME} 未发"
         )
         self._labels["tf"].setText(tf_text)

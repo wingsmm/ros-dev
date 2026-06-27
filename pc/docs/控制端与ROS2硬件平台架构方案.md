@@ -44,6 +44,45 @@ xtark / RK3568 / Jetson：尽量只作为硬件采集平台和基础安全控制
 
 因此，“Qt 不在 GUI 主线程里跑 SLAM”和“算法放在 qt-client 所在 WSL / ROS2 平台上”并不矛盾。前者是进程/线程边界，后者是机器/平台边界。
 
+### 1.2 当前连接架构四条线
+
+当前架构按平台和用途分成四条线，不再把 Android、`ros1_bridge`、xtark Qt 连接和 ROS2-native 新平台混为一个方案：
+
+| 线 | 定位 | 当前结论 |
+|---|---|---|
+| Android ROS1 | 冻结的历史可用栈 | 保持 ROS1 直连，不参与 Qt/ROS2 重构 |
+| `ros1_bridge dynamic_bridge` | ROS1<->ROS2 实验桥 | 非当前主线，保留为试验/历史方案 |
+| xtark Qt 混合连接 | 当前 xtark <-> Qt 主方案 | JSON + HTTP/MJPEG + HTTP raw depth + PC 侧 ROS2 bridge 分工协作 |
+| ROS2-native | RK3568 / Jetson 等新平台方向 | 新硬件优先直接输出 ROS2 topic |
+
+xtark 当前 Qt 主方案不是单一 bridge，而是按数据类型分流：
+
+```text
+控制 / 遥测 / 激光摘要：JSON TCP :8765
+RGB 预览：HTTP/MJPEG :8080
+Depth raw：HTTP raw depth :8082
+ROS2 展示 / 诊断 / 后续算法：PC 侧 xtark_ros2_bridge
+```
+
+统一边界：
+
+- Android ROS1 已冻结，只维护既有行为。
+- `ros1_bridge dynamic_bridge` 是历史/实验桥，不作为日常 Qt 主线。
+- `:8765` 不传图像/点云，只管控制、遥测和轻量激光 JSON。
+- `:8080` 只管 RGB MJPEG 预览。
+- `:8082` 只管深度 raw frame。
+- PC 侧 ROS2 bridge 面向 RViz2、诊断和算法 topic，不是 xtark 与 Qt 的唯一通信入口。
+- RK3568 / Jetson 等新平台优先走 ROS2-native，不应强行继承 xtark JSON 细节。
+
+`ros1_bridge dynamic_bridge` 降级为历史/实验线的原因：
+
+- ROS1 连接不止 `ROS_MASTER_URI :11311`。bridge 订阅 ROS1 topic 后，机器人端还要回连 bridge 暴露的 XMLRPC / TCPROS 临时端口；Docker Desktop / WSL2 下这些端口和回连地址不稳定，容易出现“Master 看得到，数据进不来”。
+- ROS2 DDS 也有独立的数据面。容器内 ROS2 与 WSL/Qt 进程之间可能出现 topic list 能发现，但 `echo/hz` 或 Qt 订阅收不到持续数据的现象；这属于 DDS discovery/data path 与 Docker/WSL 网络边界叠加问题。
+- 在 WSL 原生安装 ROS1 依赖虽可绕开一部分 Docker 网络问题，但会污染当前 ROS2 Humble 工作站环境，增加 Python、消息包、setup.bash 顺序和维护成本。
+- RGB/Depth 图像是大带宽数据，若把 `dynamic_bridge` 作为日常主通道，会把 TCPROS、DDS、QoS、Docker/WSL 网络和图像吞吐问题混在一起，排障成本过高。
+
+因此，`dynamic_bridge` 只用于独立实验或临时验证 ROS1<->ROS2 语义桥接；日常 xtark Qt 线固定采用 JSON `:8765` + RGB MJPEG `:8080` + depth raw HTTP `:8082` + PC 侧 ROS2 bridge。
+
 ## 2. 角色边界
 
 ### 2.1 Android 控制端

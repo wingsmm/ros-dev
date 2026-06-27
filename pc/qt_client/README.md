@@ -98,7 +98,7 @@ CameraPage
   ├─ RobotHudBar
   ├─ CameraToolbar
   ├─ CameraViewport
-  ├─ CameraRos2Panel（独立 Camera Bridge，无 RViz2）
+  ├─ CameraRos2Panel（全局 ROS2 Bridge 诊断 + 可选 RViz2）
   └─ ManualControlStrip
 
 MjpegStreamController
@@ -114,22 +114,20 @@ http://192.168.1.169:8080/stream?topic=/camera/image_raw
 
 说明：
 
-- **主功能**：HTTP/MJPEG → `CameraViewport` 低延迟预览（不依赖 ROS2）。
-- **Camera Bridge**（本页独立，默认**手动**启动）：从 MJPEG 解码发布
-  `sensor_msgs/Image` 到 `/camera/image_raw`（约 5fps）及 `base_link→camera_link`
-  静态 TF，用于 `ros2 topic hz` 等数据链验收。
-- **本页不提供 RViz2**：WSL2 下摄像头相关 RViz/OpenGL 不稳定（`failed to create drawable` /
-  segfault），不作为验收项；看图用 Qt 预览。机器人页 RViz2 仍用于激光/TF。
-- `config/xtark_camera.rviz` 仅保留给**原生 Linux** 手工调试，不在 WSL 默认流程使用。
-- 进入摄像头页**只自动连 MJPEG**；`XTARK_AUTO_CAMERA_BRIDGE=1` 才在进入页时自动启 Bridge。
+- **主功能**：HTTP/MJPEG → `CameraViewport` 低延迟预览；Depth 走 `:8082` raw HTTP。
+- **全局 ROS2 Bridge**（`Ros2BridgeManager`，与机器人页共用）：预览 ingress **各只拉一次网**，
+  经 `LatestFrameMailbox` tee 到 `xtark_ros2_bridge`，发布 `/camera/image_raw`、
+  `/camera/depth/image_raw`、`/camera/depth/camera_info` 及相机 TF（默认各 ≤5 FPS）。
+  Bridge **不**再单独拉 MJPEG/HTTP。
+- 进入摄像头页只自动连 MJPEG；`XTARK_AUTO_CAMERA_BRIDGE=1` 才自动启 Bridge。
 
 ### 摄像头页验收
 
 | 项目 | 验收 |
 |------|------|
 | Qt MJPEG 预览 | 是 |
-| 手动启 Camera Bridge 后 `ros2 topic hz /camera/image_raw` | 是 |
-| 摄像头页 RViz2 / Image display | **否**（不支持作验收） |
+| 手动启 Bridge 后 `ros2 node list` 仅 `/xtark_ros2_bridge` | 是 |
+| `ros2 topic hz /camera/image_raw` 与 depth topic | 是 |
 
 机器人端 Qt 全功能栈（摄像头 + 机器人 + 里程计对照）：
 
@@ -273,8 +271,8 @@ ManualControlStrip
 
 长期再接：
 
-- `Ros1GatewayBackend`：连接机器人端应用层 ROS1 gateway。
-- `Ros2NativeBackend`：WSL2/ROS2 成熟后原生发布/订阅。
+- ROS2-native 新硬件不在当前 `RobotBackend` 里伪实现；等平台确定后新增独立 backend。
+- 历史/实验 ROS1 bridge 不作为 Qt 日常入口，不在默认配置中暴露。
 
 页面层不要直接发 ROS，也不要直接打开 TCP socket。
 
@@ -304,7 +302,8 @@ XTARK_ALLOW_LEGACY=1 ./run.sh --legacy
 - `RosStackManager`：RViz2、slam_toolbox、Nav2 定位/导航、map save
 - legacy `CameraPanel`（HTTP/MJPEG，新版已用 `MjpegStreamController` 替代）
 
-相关代码仍保留在 `legacy/`、`mapping/`、`gateway/ros2_pub.py`，**默认启动路径不 import 它们**。
+相关代码仍保留在 `legacy/`、`mapping/`，旧进程内 ROS2 publisher 已迁到
+`legacy/ros2_pub.py`，**默认启动路径不 import 它们**。
 
 ## 目录结构
 
@@ -313,10 +312,10 @@ qt_client/
 ├── app.py                    # 轻量入口：参数、QApplication、单实例锁
 ├── main_window.py            # 默认 Shell；legacy 仅 lazy import
 ├── run.sh
-├── backends/                 # RobotBackend 抽象和 mock / ros1 / ros2 backend 骨架
+├── backends/                 # RobotBackend 抽象和 mock / JSON gateway backend
 ├── core/                     # RobotSession / logging_config / 状态与几何
 ├── data/                     # robots.json
-├── gateway/                  # JSON / ROS2 网关旧调试能力
+├── gateway/                  # 外部机器人网关客户端；当前仅 JSON TCP :8765
 ├── legacy/                   # DEPRECATED LegacyWindow（冻结，勿扩写）
 ├── mapping/                  # RViz2 / SLAM / Nav2 process manager
 ├── ui/

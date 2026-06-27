@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 from backends.base import RobotBackend
 from core.logging_config import log_json_gateway_line
-from gateway.json_client import JsonClientBridge, JsonTcpClient
+from gateway.json_client import JsonClientSignals, JsonTcpClient
 
 if TYPE_CHECKING:
     from ui.models.robot_info import RobotInfo
@@ -37,18 +37,18 @@ def _parse_json_gateway(profile: RobotInfo) -> Tuple[str, int]:
 
 
 class JsonGatewayBackend(RobotBackend):
-    """xtark JSON TCP bridge: cmd_vel out, odom_base / base_status in."""
+    """xtark JSON TCP gateway: cmd_vel out, odom / status / scan in."""
 
     def __init__(self) -> None:
-        self._bridge = JsonClientBridge()
-        self._client = JsonTcpClient(self._bridge)
+        self._signals = JsonClientSignals()
+        self._client = JsonTcpClient(self._signals)
         self._host = ""
         self._port = 8765
         self._message_handlers: list[MessageHandler] = []
         self._connection_handlers: list[ConnectionHandler] = []
-        self._bridge.log_line.connect(log_json_gateway_line)
-        self._bridge.message.connect(self._dispatch_message)
-        self._bridge.connection_changed.connect(self._dispatch_connection)
+        self._signals.log_line.connect(log_json_gateway_line)
+        self._signals.message.connect(self._dispatch_message)
+        self._signals.connection_changed.connect(self._dispatch_connection)
 
     def bind_feedback(
         self,

@@ -25,7 +25,7 @@ class _PreviewDeliveryGate:
 
 
 class CameraDepthPreviewManager(QObject):
-    """Starts/stops CameraDepthWorker on a background thread."""
+    """Starts/stops the raw-depth HTTP preview worker on a background thread."""
 
     preview_ready = pyqtSignal(object)
     stats_updated = pyqtSignal(object)
@@ -50,6 +50,7 @@ class CameraDepthPreviewManager(QObject):
         # Synchronous gate: drop worker frames before they reach the UI thread.
         self._deliver_to_ui = False
         self._delivery_gate.enabled = False
+        self._bridge_sink: Optional[object] = None
         register_shutdown(self.shutdown, name="camera_depth_preview_manager", priority=24)
 
     def is_running(self) -> bool:
@@ -61,6 +62,11 @@ class CameraDepthPreviewManager(QObject):
     def source_kind(self) -> DepthSourceKind:
         return self._source_kind
 
+    def set_bridge_sink(self, sink: Optional[object]) -> None:
+        self._bridge_sink = sink
+        if self._worker is not None:
+            self._worker.set_bridge_sink(sink)
+
     def start(self) -> bool:
         if self._thread is not None:
             if self._thread.isRunning():
@@ -71,7 +77,11 @@ class CameraDepthPreviewManager(QObject):
         self._deliver_to_ui = True
         self._delivery_gate.enabled = True
         thread = QThread()
-        worker = CameraDepthHttpWorker(self._config, delivery_gate=self._delivery_gate)
+        worker = CameraDepthHttpWorker(
+            self._config,
+            delivery_gate=self._delivery_gate,
+            bridge_sink=self._bridge_sink,
+        )
         worker.moveToThread(thread)
         worker.preview_ready.connect(self._on_preview)
         worker.status_changed.connect(self._on_status)
@@ -89,10 +99,6 @@ class CameraDepthPreviewManager(QObject):
     def stop_async(self) -> None:
         """Stop without blocking the UI thread (e.g. before MJPEG fallback)."""
         self._request_stop(block=False, fast=False)
-
-    def stop_for_handoff(self) -> None:
-        """Stop raw worker when handing off to MJPEG; do not mark source offline."""
-        self._request_stop(block=False, reset_source_kind=False, fast=False)
 
     def _request_stop(
         self,
@@ -148,14 +154,6 @@ class CameraDepthPreviewManager(QObject):
             self._worker, "resume_worker", Qt.QueuedConnection
         )
         return True
-
-    def set_mjpeg_fallback_active(self, active: bool) -> None:
-        if active:
-            self._set_source_kind(DepthSourceKind.MJPEG_FALLBACK)
-        elif self.is_running():
-            self._set_source_kind(DepthSourceKind.RAW_HTTP)
-        else:
-            self._set_source_kind(DepthSourceKind.OFFLINE)
 
     def shutdown(self) -> None:
         self._request_stop(block=False, fast=True)

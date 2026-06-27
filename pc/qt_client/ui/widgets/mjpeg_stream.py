@@ -22,6 +22,7 @@ class CameraStats:
 
 class MjpegWorker(QObject):
     frame = pyqtSignal(int, bytes, float)
+    bridge_jpeg = pyqtSignal(int, bytes)
     status = pyqtSignal(int, str)
     connected = pyqtSignal(int, bool)
     finished = pyqtSignal(int)
@@ -162,6 +163,7 @@ class MjpegWorker(QObject):
                             continue
                         last_emit = now
                         self.frame.emit(self._session_id, jpeg, now)
+                        self.bridge_jpeg.emit(self._session_id, jpeg)
             finally:
                 try:
                     sock.close()
@@ -191,6 +193,7 @@ class MjpegStreamController(QObject):
     """MJPEG connect/disconnect state machine; UI binds to signals."""
 
     frame = pyqtSignal(bytes)
+    bridge_jpeg = pyqtSignal(bytes)
     status_changed = pyqtSignal(str)
     connected_changed = pyqtSignal(bool)
     fps_changed = pyqtSignal(float)
@@ -316,6 +319,7 @@ class MjpegStreamController(QObject):
         thread.finished.connect(thread.deleteLater)
         worker.finished.connect(self._on_worker_finished)
         worker.frame.connect(self._on_frame)
+        worker.bridge_jpeg.connect(self._on_bridge_jpeg)
         worker.status.connect(self._on_worker_status)
         worker.connected.connect(self._on_worker_connected)
 
@@ -387,6 +391,11 @@ class MjpegStreamController(QObject):
             return
         self._stats.connected = ok
         self.connected_changed.emit(ok)
+
+    def _on_bridge_jpeg(self, session_id: int, jpeg: bytes) -> None:
+        if not self._is_current_session(session_id) or self._stopping:
+            return
+        self.bridge_jpeg.emit(jpeg)
 
     def _on_frame(self, session_id: int, jpeg: bytes, ts: float) -> None:
         if not self._is_current_session(session_id) or self._stopping:

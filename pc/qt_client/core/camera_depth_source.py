@@ -9,8 +9,6 @@ from dataclasses import dataclass
 from core.camera_topics import (
     CAMERA_DEPTH_IMAGE_TOPIC,
     CAMERA_DEPTH_INFO_TOPIC,
-    QT_MJPEG_DEPTH_TOPIC,
-    QT_MJPEG_DEPTH_RAW_TOPIC,
 )
 
 DEPTH_HTTP_PORT = int(os.environ.get("XTARK_DEPTH_HTTP_PORT", "8082") or "8082")
@@ -31,15 +29,7 @@ class DepthSourceConfig:
     image_topic: str = CAMERA_DEPTH_IMAGE_TOPIC
     camera_info_topic: str = CAMERA_DEPTH_INFO_TOPIC
     http_base_url: str = ""
-    # Legacy fields keep the existing UI state machine inert. The HTTP raw
-    # transport is the only enabled path; MJPEG depth fallback stays off.
-    allow_mjpeg_fallback: bool = False
     raw_wait_s: float = 3.0
-    mjpeg_wait_s: float = 3.0
-    mjpeg_fallback_topics: tuple[str, ...] = (
-        QT_MJPEG_DEPTH_TOPIC,
-        QT_MJPEG_DEPTH_RAW_TOPIC,
-    )
     min_depth_m: float = 0.2
     max_depth_m: float = 5.0
     http_poll_ms: int = DEPTH_HTTP_POLL_MS

@@ -8,7 +8,7 @@ import struct
 import time
 from dataclasses import dataclass
 from http.client import HTTPConnection, HTTPException
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import urlopen
@@ -63,11 +63,13 @@ class CameraDepthHttpWorker(QObject):
         self,
         config: Optional[DepthSourceConfig] = None,
         delivery_gate: Optional[object] = None,
+        bridge_sink: Optional[Callable[[dict, bytes, Optional[dict]], None]] = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._config = config or DepthSourceConfig.from_env()
         self._delivery_gate = delivery_gate
+        self._bridge_sink = bridge_sink
         self._timer = QTimer(self)
         self._timer.setInterval(self._config.http_poll_ms)
         self._timer.timeout.connect(self._poll_once)
@@ -80,6 +82,7 @@ class CameraDepthHttpWorker(QObject):
         self._frame_count = 0
         self._last_fps = 0.0
         self._camera_info_online = False
+        self._camera_info_payload: Optional[dict] = None
         self._last_info_try = 0.0
         self._last_error = ""
         self._connected_announced = False
@@ -202,6 +205,11 @@ class CameraDepthHttpWorker(QObject):
         self.status_changed.emit("Raw Depth HTTP 连接中…")
         self._poll_once()
 
+    def set_bridge_sink(
+        self, sink: Optional[Callable[[dict, bytes, Optional[dict]], None]]
+    ) -> None:
+        self._bridge_sink = sink
+
     def _fetch_camera_info(self) -> None:
         now = time.monotonic()
         if self._camera_info_online or now - self._last_info_try < 5.0:
@@ -210,9 +218,11 @@ class CameraDepthHttpWorker(QObject):
         try:
             with urlopen(self._config.http_info_url, timeout=self._config.http_timeout_s) as response:
                 info = json.loads(response.read(_MAX_HEADER_BYTES).decode("utf-8"))
+            self._camera_info_payload = info
             self._camera_info_online = bool(info.get("k"))
         except (HTTPError, URLError, OSError, ValueError):
             self._camera_info_online = False
+            self._camera_info_payload = None
 
     def _poll_once(self) -> None:
         if not self._running or self._paused or not self._delivery_enabled():
@@ -238,6 +248,14 @@ class CameraDepthHttpWorker(QObject):
         if stamp_ns <= self._last_stamp_ns:
             return
         self._last_stamp_ns = stamp_ns
+
+        bridge_sink = self._bridge_sink
+        if bridge_sink is not None:
+            try:
+                bridge_sink(header, data, self._camera_info_payload)
+            except Exception:
+                logger.exception("depth bridge tee failed")
+
         self._frame_count += 1
         elapsed = max(now_mono - self._window_start, 0.001)
         if elapsed >= 1.0:

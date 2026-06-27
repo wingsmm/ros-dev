@@ -57,7 +57,8 @@ class Ros2RvizPanel(QWidget):
         self._manager = manager
         self._labels: dict[str, QLabel] = {}
         self._build_ui()
-        self._wire_signals()
+        self._wire_button_signals()
+        self._wire_manager_signals()
         self.refresh_display()
 
     def set_manager(self, manager: Optional[Ros2BridgeManager]) -> None:
@@ -70,7 +71,7 @@ class Ros2RvizPanel(QWidget):
             except TypeError:
                 pass
         self._manager = manager
-        self._wire_signals()
+        self._wire_manager_signals()
         self.refresh_display()
 
     def refresh_display(self) -> None:
@@ -169,13 +170,15 @@ class Ros2RvizPanel(QWidget):
             Qt.DownArrow if expanded else Qt.RightArrow
         )
 
-    def _wire_signals(self) -> None:
+    def _wire_button_signals(self) -> None:
         self._bridge_start_btn.clicked.connect(self._on_start_bridge)
         self._bridge_stop_btn.clicked.connect(self._on_stop_bridge)
         self._rviz_start_btn.clicked.connect(self._on_start_rviz)
         self._rviz_stop_btn.clicked.connect(self._on_stop_rviz)
         self._refresh_btn.clicked.connect(self._on_refresh_topics)
         self._copy_btn.clicked.connect(self._on_copy_diagnostics)
+
+    def _wire_manager_signals(self) -> None:
         if self._manager is None:
             return
         self._manager.snapshot_updated.connect(self._on_snapshot)
@@ -191,7 +194,7 @@ class Ros2RvizPanel(QWidget):
 
     def _on_start_rviz(self) -> None:
         if self._manager is not None:
-            self._manager.start_rviz()
+            self._manager.start_robot_rviz()
 
     def _on_stop_rviz(self) -> None:
         if self._manager is not None:

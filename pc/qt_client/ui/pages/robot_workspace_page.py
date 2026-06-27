@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
 from core import RobotSession
 from core.robot_telemetry_binder import RobotTelemetryBinder
+from core.ros2_bridge_manager import Ros2BridgeManager
 from ui.models.robot_info import RobotInfo
 from ui.models.robot_store import RobotStore
 from ui.pages.camera_page import CameraPage
@@ -61,10 +62,13 @@ class RobotWorkspacePage(QWidget):
         self._page_index: Dict[str, int] = {}
         self._active_page_id = ""
         self._telemetry_binder: Optional[RobotTelemetryBinder] = None
+        self._ros2_bridge: Optional[Ros2BridgeManager] = None
         if session is not None:
             self._telemetry_binder = RobotTelemetryBinder(session, robot.name, self)
-            self._telemetry_binder.bind_hud(self._hud)
             self._hud.stop_motion_requested.connect(self._on_hud_stop_motion)
+            self._ros2_bridge = Ros2BridgeManager(
+                session=session, robot=robot, parent=self
+            )
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -81,11 +85,21 @@ class RobotWorkspacePage(QWidget):
         main_col.setSpacing(0)
         main_col.addWidget(self._hud)
 
+        if self._telemetry_binder is not None:
+            self._telemetry_binder.bind_hud(self._hud)
         for page_id in CONTENT_PAGE_IDS:
             if page_id == "camera":
-                page = CameraPage(self.robot, telemetry_binder=self._telemetry_binder)
+                page = CameraPage(
+                    self.robot,
+                    telemetry_binder=self._telemetry_binder,
+                    ros2_bridge=self._ros2_bridge,
+                )
             elif page_id == "robot":
-                page = RobotPage(self.robot, telemetry_binder=self._telemetry_binder)
+                page = RobotPage(
+                    self.robot,
+                    telemetry_binder=self._telemetry_binder,
+                    ros2_bridge=self._ros2_bridge,
+                )
             elif page_id == "odom_compare":
                 page = OdomComparePage(
                     self.robot, telemetry_binder=self._telemetry_binder
@@ -235,6 +249,9 @@ class RobotWorkspacePage(QWidget):
             widget = self._stack.widget(i)
             if hasattr(widget, "shutdown"):
                 widget.shutdown()
+        if self._ros2_bridge is not None:
+            self._ros2_bridge.shutdown()
+            self._ros2_bridge = None
 
     def _show_content_page(self, page_id: str) -> None:
         if page_id == self._active_page_id:

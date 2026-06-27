@@ -36,7 +36,7 @@ class ControlPanel(QWidget):
         self.angular_spin.setSingleStep(0.01)
         self.angular_spin.setDecimals(2)
         self.angular_spin.setValue(0.20)
-        self.timeout_hint = QLabel("bridge cmd_timeout ≈ 0.5 s，按住按钮/键盘才持续运动")
+        self.timeout_hint = QLabel("JSON gateway cmd_timeout ≈ 0.5 s，按住按钮/键盘才持续运动")
         self.timeout_hint.setWordWrap(True)
         param_form.addRow("线速度 m/s", self.linear_spin)
         param_form.addRow("角速度 rad/s", self.angular_spin)
