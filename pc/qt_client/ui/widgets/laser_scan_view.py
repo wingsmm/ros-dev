@@ -85,12 +85,40 @@ class LaserScanView(QWidget):
         self._drag_last = QPointF()
         self._repaint_enabled = False
         self._last_stale_state = False
+        self._warning_enabled = False
+        self._warning_half_angle_rad = math.radians(40.0)
+        self._warning_min_distance_m = 3.0
+        self._warning_front_min_m = float("inf")
+        self._warning_warn_amount = 0.0
+        self._warning_hit_angle_rad = float("nan")
         self._stale_timer = QTimer(self)
         self._stale_timer.setInterval(250)
         self._stale_timer.timeout.connect(self._refresh_stale_state)
         self.setMinimumHeight(240)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
+
+    def is_scan_stale(self) -> bool:
+        return self._is_stale()
+
+    def set_warning_sector(
+        self,
+        enabled: bool,
+        *,
+        half_angle_rad: float = 0.0,
+        min_distance_m: float = 3.0,
+        front_min_m: float = float("inf"),
+        warn_amount: float = 0.0,
+        hit_angle_rad: float = float("nan"),
+    ) -> None:
+        self._warning_enabled = bool(enabled)
+        self._warning_half_angle_rad = float(half_angle_rad)
+        self._warning_min_distance_m = max(0.1, float(min_distance_m))
+        self._warning_front_min_m = float(front_min_m)
+        self._warning_warn_amount = max(0.0, min(1.0, float(warn_amount)))
+        self._warning_hit_angle_rad = float(hit_angle_rad)
+        if self._repaint_enabled:
+            self.update()
 
     def set_repaint_enabled(self, enabled: bool) -> None:
         self._repaint_enabled = bool(enabled)
@@ -231,6 +259,7 @@ class LaserScanView(QWidget):
             painter.drawText(rect, Qt.AlignCenter, "激光数据超时")
             return
 
+        self._draw_warning_sector(painter)
         self._draw_scan(painter)
         self._draw_origin(painter)
         self._draw_robot(painter)
@@ -454,3 +483,57 @@ class LaserScanView(QWidget):
         painter.setPen(QPen(QColor(0x08, 0x20, 0xCC), 1.5))
         painter.setBrush(QBrush(_ANDROID_ROBOT_BLUE))
         painter.drawPolygon(triangle)
+
+    def _draw_warning_sector(self, painter: QPainter) -> None:
+        if not self._warning_enabled:
+            return
+
+        cx, cy = self._center_point()
+        center = QPointF(cx, cy)
+        half = self._warning_half_angle_rad
+        radius_m = self._warning_min_distance_m
+        steps = 32
+        path = QPainterPath()
+        path.moveTo(center)
+        for index in range(steps + 1):
+            bearing = -half + (2.0 * half) * (index / steps)
+            base_x = radius_m * math.cos(bearing)
+            base_y = radius_m * math.sin(bearing)
+            path.lineTo(self._map_scan_point(base_x, base_y))
+        path.closeSubpath()
+
+        danger = self._warning_warn_amount >= 0.15
+        if danger:
+            fill = QColor(220, 40, 40, 72)
+            border = QColor(220, 40, 40, 210)
+        else:
+            fill = QColor(55, 125, 250, 42)
+            border = QColor(255, 200, 60, 110)
+
+        painter.setPen(QPen(border, 1.6))
+        painter.setBrush(QBrush(fill))
+        painter.drawPath(path)
+
+        front_min = self._warning_front_min_m
+        if not math.isfinite(front_min) or front_min >= float("inf"):
+            return
+        if front_min > self._warning_min_distance_m:
+            return
+
+        if math.isfinite(self._warning_hit_angle_rad):
+            local_x, local_y = scan_point_to_local(
+                self._warning_hit_angle_rad,
+                front_min,
+                LASER_YAW,
+            )
+            local_x += LASER_X
+            local_y += LASER_Y
+        else:
+            local_x, local_y = front_min, 0.0
+        hit_pt = self._map_scan_point(local_x, local_y)
+        painter.setPen(QPen(QColor(255, 40, 40), 2.0))
+        painter.setBrush(QBrush(QColor(255, 60, 60, 220)))
+        painter.drawEllipse(hit_pt, 7.0, 7.0)
+        painter.setPen(QPen(QColor(255, 120, 120, 180), 1.2))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(hit_pt, 11.0, 11.0)

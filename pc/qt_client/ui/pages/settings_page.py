@@ -443,12 +443,24 @@ class SettingsPage(QWidget):
                 20.0,
             )
         )
+        angle = screen.add_row(
+            PreferenceRow(S.WARNING_FRONT_ANGLE_PREF_TITLE, navigable=True)
+        )
+        angle.activated.connect(
+            lambda: self._edit_float(
+                "warning_front_half_angle",
+                S.WARNING_FRONT_ANGLE_PREF_TITLE,
+                5.0,
+                120.0,
+            )
+        )
         self._rows.update(
             {
                 "warning_enabled": enabled,
                 "warning_safemode": safe,
                 "warning_beep": beep,
                 "warning_min_distance": distance,
+                "warning_front_half_angle": angle,
             }
         )
         return screen
@@ -569,6 +581,10 @@ class SettingsPage(QWidget):
         self._rows["warning_min_distance"].set_summary(
             S.WARNING_MINDIST_PREF_SUMMARY % f"{robot.warning_min_distance:g}"
         )
+        self._rows["warning_front_half_angle"].set_summary(
+            S.WARNING_FRONT_ANGLE_PREF_SUMMARY
+            % f"{robot.warning_front_half_angle:g}"
+        )
 
         self._rows["laser_scan_detail"].set_summary(
             S.LASER_SCAN_DETAIL_PREF_SUMMARY % str(robot.laser_scan_detail)
@@ -606,7 +622,12 @@ class SettingsPage(QWidget):
 
     def _sync_warning_dependencies(self) -> None:
         active = self._robot.warning_enabled
-        for key in ("warning_safemode", "warning_beep", "warning_min_distance"):
+        for key in (
+            "warning_safemode",
+            "warning_beep",
+            "warning_min_distance",
+            "warning_front_half_angle",
+        ):
             self._rows[key].set_interactive(active, unavailable=False)
 
     def _on_warning_enabled_toggled(self, checked: bool) -> None:

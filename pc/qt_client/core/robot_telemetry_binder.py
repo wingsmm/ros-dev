@@ -91,9 +91,16 @@ class RobotTelemetryBinder(QObject):
     def _on_warning(self, msg: object) -> None:
         if not isinstance(msg, dict):
             return
-        amount = float(msg.get("warn_amount", 0.0))
-        if self._hud is not None:
-            self._hud.set_warning_amount(amount)
+        if self._hud is None:
+            return
+        self._hud.set_warning_state(
+            enabled=bool(msg.get("enabled", False)),
+            warn_amount=float(msg.get("warn_amount", 0.0)),
+            front_min_m=float(msg.get("front_min_m", float("inf"))),
+            safemode=bool(msg.get("safemode", True)),
+            scale=float(msg.get("forward_scale", 1.0)),
+            scan_stale=bool(msg.get("scan_stale", False)),
+        )
 
     def _on_gateway_connection(self, ok: bool, detail: str) -> None:
         if ok:

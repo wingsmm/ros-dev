@@ -26,6 +26,8 @@ ANDROID_DEFAULTS: Dict[str, object] = {
     "warning_safemode": True,
     "warning_beep": True,
     "warning_min_distance": 3.0,
+    "warning_front_half_angle": 40.0,
+    "warning_min_valid_range": 0.25,
     "laser_scan_detail": 1,
     "random_walk_range_proximity": 2.0,
     "reverse_laser_scan": False,

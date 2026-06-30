@@ -14,10 +14,12 @@
     "slam_xmax": 2.0,
     "slam_ymin": -2.0,
     "slam_ymax": 2.0,
-    "warning_enabled": false,
-    "warning_safemode": false,
+    "warning_enabled": true,
+    "warning_safemode": true,
     "warning_beep": false,
-    "warning_min_distance": 3.0,
+    "warning_min_distance": 0.5,
+    "warning_front_half_angle": 40.0,
+    "warning_min_valid_range": 0.25,
     "laser_scan_detail": 1,
     "random_walk_range_proximity": 2.0,
     "reverse_laser_scan": false,
@@ -30,6 +32,6 @@
     "camera_url": "http://192.168.1.169:8080/stream?topic=/camera/image_raw",
     "ros_domain_id": 0,
     "manual_linear_speed": 0.3,
-    "manual_angular_speed": 0.2
+    "manual_angular_speed": 0.5
   }
 ]

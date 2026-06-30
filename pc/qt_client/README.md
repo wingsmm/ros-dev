@@ -62,6 +62,20 @@ CAMERA_Z=0.20                          # 离地高度，单位 m
 CAMERA_PITCH=0.35                      # 向下俯仰为正，单位 rad
 ```
 
+2D 雷达页「前向碰撞预警 / SafeMode 限速」（Qt 人工避障，非完整自主避障）：
+
+```dotenv
+# ==================== 2D 雷达页 · 人工避障 / SafeMode ====================
+QT_WARNING_ENABLE=1
+QT_WARNING_SAFEMODE=1
+QT_WARNING_MIN_DISTANCE_M=3.0           # 触发距离，室内建议 0.5~1.0m
+QT_WARNING_FRONT_HALF_ANGLE_DEG=40      # 车体前方左右半角，单位度
+QT_WARNING_MIN_VALID_RANGE_M=0.25       # 近距离噪点过滤阈值，单位 m
+# ========================================================================
+```
+
+`QT_WARNING_*` 写入 `pc/qt_client/.env` 后作用于默认机器人 profile；设置页「预警系统」里的开关、SafeMode、距离、角度可覆盖持久化偏好，保存后会调用 `reload_warning_settings()` 并刷新 2D 雷达页上一帧 scan。
+
 若只想临时看黄线形状，使用 `trapezoid`；若要验证真实贴地投影，切到 `geometric` 并先校准 `CAMERA_X/Y/Z/PITCH` 与深度内参。
 
 WSL 下也可使用绝对路径，例如 `XTARK_LOG_DIR=/home/<user>/xtark-logs`。
@@ -102,7 +116,7 @@ legacy 调试台的 UI 日志面板仍正常显示；文件落盘由统一 loggi
   ├─ 左侧飞入式导航
   ├─ 总览（占位）
   ├─ 摄像头（HTTP/MJPEG 已实现）
-  ├─ 机器人（实时激光扫描 + 手动控制已实现）
+  ├─ 2D 雷达（实时激光扫描 + 手动控制已实现）
   ├─ 里程计对照（三路 odom 轨迹对比 + 手动控制已实现）
   ├─ SLAM 地图（占位）
   ├─ GPS 地图（占位）
@@ -174,9 +188,9 @@ CAMERA_ENABLE=0 LASER_ODOM_ENABLE=0 qt_stack.sh start
 
 相机/JSON 单模块调试见 `xtark/scripts/dev/`（非日常入口）。
 
-## 机器人页
+## 2D 雷达页
 
-新版工作区的“机器人”页复用全局 `RobotHudBar` 和摄像头页已有的
+新版工作区的“2D 雷达”页复用全局 `RobotHudBar` 和摄像头页已有的
 `ManualControlStrip`，通过 JSON gateway 显示真实 `/scan`，不提供模拟激光：
 
 ```text
@@ -191,6 +205,25 @@ CAMERA_ENABLE=0 LASER_ODOM_ENABLE=0 qt_stack.sh start
 - 红/紫/蓝方块：激光回波端点，距离由近到远从红色过渡到蓝色。
 - 半透明放射扇区：相邻激光束形成的距离渐变，不是导航路径。
 - 蓝色连续轮廓：Qt 对相邻有效回波的辅助连线，便于观察墙体边缘。
+- 前方预警扇区（默认 ±40°，黄/蓝提示，危险时变红）：仅 Qt 显示，不发布 ROS topic。
+
+### 前向碰撞预警 / SafeMode 限速
+
+2D 雷达页从 `/scan` 本地计算车体前方扇区内的最近障碍：
+
+- HUD 危险时变红，显示 `前方障碍 Xm | SafeMode scale Y`；雷达超时时显示 `雷达超时`。
+- SafeMode 开启时，**仅 2D 雷达页**手动前进会在发布 `/cmd_vel` 前按障碍距离比例裁剪 `linear.x`；进入 `QT_WARNING_MIN_DISTANCE_M` 内越近越慢，后退与转向不限制。
+- `warn_amount` 由距离目标值低通平滑得到，避免静止时 HUD 和限速强度忽高忽低。
+- 摄像头页、里程计对照页的手动控制不受 SafeMode 影响。
+
+配置：`.env` 中 `QT_WARNING_*`（见上文）或设置页「预警系统」已有项。启动日志会打印 `warning config: ...`；scan 采样会打印 `warning scan sample: ...`；预警状态会打印 `warning state: ... target=... warn=... scale=...`；限速时打印 `SafeMode clipped vx ...`。
+
+```text
+/scan -> RobotPage -> compute_front_min_range -> WarningController
+                    -> LaserScanView 预警扇区
+                    -> RobotHudBar 红色预警
+手动前进 -> RobotPage.forward_scale -> send_velocity
+```
 
 当前 MEC + XAS 的 `/scan` 位于 `laser` 坐标系，真车静态外参约为
 `base_footprint -> laser: x=0.05m, y=0, yaw=pi`。Qt 在绘制前把激光点变换到
@@ -206,7 +239,7 @@ CAMERA_ENABLE=0 LASER_ODOM_ENABLE=0 qt_stack.sh start
 | 真实激光、起点、机器人、点/射线/扇面 | 已对齐 | Qt 额外保留深色背景和亮蓝墙体轮廓；无数据/超时有明确提示 |
 | 居中、拖动、缩放、朝向锁定 | 已对齐 | 桌面端使用鼠标拖动和滚轮缩放 |
 | 六向按钮、松手停车 | 已对齐 | Qt 直接使用 ROS `Twist` 符号；最终 `/cmd_vel` 方向与 Android 一致 |
-| SafeMode 告警衰减与 HUD 变红 | 代码基本对齐 | 默认关闭；前方扫描角与 XAS 外参的关系尚未真车确认 |
+| SafeMode 告警衰减与 HUD 变红 | Qt 人工避障语义 | 2D 雷达页本地算前方扇区；进入设置距离即触发，SafeMode 仅限制本页前进速度 |
 | 顶部停止 | 基本范围对齐 | 只发零速度；不是硬件急停，不提供 Android 导航计划暂停/恢复 |
 | 摇杆、航点、GPS、Wi-Fi | 明确不实现 | 不属于当前 Qt 机器人页基本范围 |
 

@@ -29,7 +29,7 @@ _WORKSPACE_PLACEHOLDERS: Dict[str, str] = {
 _NAV_TITLES: Dict[str, str] = {
     "overview": "总览",
     "camera": "摄像头",
-    "robot": "机器人",
+    "robot": "2D 雷达",
     "odom_compare": "里程计对照",
     "slam_map": "SLAM 地图",
     "gps_map": "GPS 地图",

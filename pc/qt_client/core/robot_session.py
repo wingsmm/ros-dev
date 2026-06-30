@@ -57,10 +57,39 @@ class RobotSession(QObject):
             safemode=bool(getattr(profile, "warning_safemode", True)),
             beep=bool(getattr(profile, "warning_beep", True)),
             min_distance_m=float(getattr(profile, "warning_min_distance", 3.0)),
+            front_half_angle_deg=float(
+                getattr(profile, "warning_front_half_angle", 40.0)
+            ),
+            min_valid_range_m=float(
+                getattr(profile, "warning_min_valid_range", 0.25)
+            ),
         )
+
+    @property
+    def warning_controller(self) -> WarningController:
+        return self._warning
 
     def reload_warning_settings(self) -> None:
         self._warning.apply_settings(self._warning_settings_from_profile())
+        settings = self._warning.settings
+        logger.info(
+            "warning config: enabled=%s safemode=%s min_distance=%.1f "
+            "front_half=%.0f min_valid=%.2f",
+            settings.enabled,
+            settings.safemode,
+            settings.min_distance_m,
+            settings.front_half_angle_deg,
+            settings.min_valid_range_m,
+        )
+        self._emit_warning_state()
+
+    def report_front_scan_warning(
+        self, front_min_m: float, *, stale: bool = False
+    ) -> None:
+        """Robot page feeds local /scan front-sector warning into shared state."""
+        self._warning.on_scan_warning(front_min_m=front_min_m, stale=stale)
+        if self._warning.should_beep():
+            QApplication.beep()
         self._emit_warning_state()
 
     def _bind_backend_feedback(self) -> None:
@@ -90,22 +119,6 @@ class RobotSession(QObject):
         elif msg_type == "base_status":
             self.last_base_status = msg
             self.base_status_updated.emit(msg)
-        elif msg_type == "scan_warning":
-            front_min = msg.get("front_min_m")
-            stale = bool(msg.get("stale", False))
-            if front_min is None:
-                stale = True
-                front_value = float("inf")
-            else:
-                front_value = float(front_min)
-            self._warning.on_scan_warning(
-                front_min_m=front_value,
-                stale=stale,
-                stamp_ms=msg.get("stamp_ms"),
-            )
-            if self._warning.should_beep():
-                QApplication.beep()
-            self._emit_warning_state()
         elif msg_type == "laser_scan":
             frame = LaserScanFrame.from_message(
                 msg,
@@ -118,18 +131,22 @@ class RobotSession(QObject):
 
     def _on_warning_timer(self) -> None:
         before = self._warning.warn_amount
-        self._warning.touch_scan_timeout()
+        became_stale = self._warning.touch_scan_timeout()
         if self.last_odom is not None:
             self._warning.on_odom(float(self.last_odom.get("linear_x", 0.0)))
-        if before != self._warning.warn_amount:
+        if became_stale or before != self._warning.warn_amount:
             self._emit_warning_state()
 
     def _emit_warning_state(self) -> None:
+        scale = self._warning.forward_scale(1.0)
         payload = {
             "warn_amount": self._warning.warn_amount,
             "scan_stale": self._warning.scan_stale,
             "enabled": self._warning.settings.enabled,
             "safemode": self._warning.settings.safemode,
+            "front_min_m": self._warning.front_min_m,
+            "forward_scale": scale,
+            "threshold_m": self._warning.warning_threshold_m,
         }
         self.last_warning = payload
         self.warning_updated.emit(payload)
@@ -214,16 +231,12 @@ class RobotSession(QObject):
         if getattr(profile, "invert_angular_velocity", False):
             az = -az
 
-        scale = self._warning.forward_scale(lx)
-        lx *= scale
-
         try:
             logger.debug(
-                "velocity: lx=%.3f ly=%.3f az=%.3f warn_scale=%.3f",
+                "velocity: lx=%.3f ly=%.3f az=%.3f",
                 lx,
                 ly,
                 az,
-                scale,
             )
             self.backend.send_velocity(lx, ly, az)
             self.last_error = ""

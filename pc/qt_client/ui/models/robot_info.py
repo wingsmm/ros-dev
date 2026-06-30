@@ -24,6 +24,8 @@ class RobotInfo:
     warning_safemode: bool = True
     warning_beep: bool = True
     warning_min_distance: float = 3.0
+    warning_front_half_angle: float = 40.0
+    warning_min_valid_range: float = 0.25
     laser_scan_detail: int = 1
     random_walk_range_proximity: float = 2.0
     reverse_laser_scan: bool = False

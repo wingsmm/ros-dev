@@ -85,6 +85,39 @@ def apply_env_overrides(robot: RobotInfo, env_path: Optional[Path] = None) -> Ro
         except ValueError:
             pass
 
+    def _env_bool(key: str) -> Optional[bool]:
+        raw = env.get(key, "").strip().lower()
+        if raw in ("1", "true", "yes", "on"):
+            return True
+        if raw in ("0", "false", "no", "off"):
+            return False
+        return None
+
+    warning_enable = _env_bool("QT_WARNING_ENABLE")
+    if warning_enable is not None:
+        updates["warning_enabled"] = warning_enable
+    warning_safemode = _env_bool("QT_WARNING_SAFEMODE")
+    if warning_safemode is not None:
+        updates["warning_safemode"] = warning_safemode
+    warning_min = env.get("QT_WARNING_MIN_DISTANCE_M", "").strip()
+    if warning_min:
+        try:
+            updates["warning_min_distance"] = float(warning_min)
+        except ValueError:
+            pass
+    warning_half = env.get("QT_WARNING_FRONT_HALF_ANGLE_DEG", "").strip()
+    if warning_half:
+        try:
+            updates["warning_front_half_angle"] = float(warning_half)
+        except ValueError:
+            pass
+    warning_valid = env.get("QT_WARNING_MIN_VALID_RANGE_M", "").strip()
+    if warning_valid:
+        try:
+            updates["warning_min_valid_range"] = float(warning_valid)
+        except ValueError:
+            pass
+
     if not updates:
         return robot
     return replace(robot, **updates)
