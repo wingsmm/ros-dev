@@ -100,7 +100,8 @@ rm ~/ros-humble-desktop-full.tar   # 可选
 ```bash
 mkdir -p ~/Desktop/depth_camera_demo
 cd ~/Desktop/depth_camera_demo
-cp .env.example .env
+# 历史归档命令：旧 demo 曾从 .env.example 复制 .env；当前 pc/qt_client 不再维护 .env.example。
+# cp .env.example .env
 # 确认 ROS2_WS=/home/wingsmm/ros2_ws
 ```
 

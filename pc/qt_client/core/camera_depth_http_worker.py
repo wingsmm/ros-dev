@@ -30,8 +30,13 @@ _MAX_FRAME_BYTES = 32 * 1024 * 1024
 class DepthPreviewPacket:
     width: int
     height: int
+    raw_width: int
+    raw_height: int
     rgb_bytes: bytes
     stats: DepthFrameStats
+    depth_meters: object = None
+    timestamp_ns: int = 0
+    camera_info: Optional[dict] = None
     source_kind: DepthSourceKind = DepthSourceKind.RAW_HTTP
 
 
@@ -297,8 +302,13 @@ class CameraDepthHttpWorker(QObject):
             DepthPreviewPacket(
                 width=int(rgb.shape[1]),
                 height=int(rgb.shape[0]),
+                raw_width=int(header["width"]),
+                raw_height=int(header["height"]),
                 rgb_bytes=rgb.tobytes(),
                 stats=stats,
+                depth_meters=frame.depth_meters,
+                timestamp_ns=stamp_ns,
+                camera_info=self._camera_info_payload,
             )
         )
         self._last_error = ""

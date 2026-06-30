@@ -4,7 +4,7 @@ from typing import Optional
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 _VIEW_RGB = "rgb"
 _VIEW_DEPTH = "depth"
@@ -30,6 +30,7 @@ class CameraViewport(QWidget):
         self._single_label = QLabel("暂无摄像头画面")
         self._single_label.setAlignment(Qt.AlignCenter)
         self._single_label.setMinimumHeight(280)
+        self._single_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
         self._single_label.setStyleSheet(self._label_style())
         self._single_label.setScaledContents(False)
 
@@ -40,6 +41,7 @@ class CameraViewport(QWidget):
         for lbl in (self._rgb_label, self._depth_label):
             lbl.setAlignment(Qt.AlignCenter)
             lbl.setMinimumHeight(240)
+            lbl.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Expanding)
             lbl.setStyleSheet(self._label_style())
             lbl.setScaledContents(False)
         split.addWidget(self._rgb_label, 1)
@@ -60,6 +62,9 @@ class CameraViewport(QWidget):
         )
 
     def set_view_mode(self, mode: str) -> None:
+        # 感知模式使用单视图显示（与 RGB 模式相同的 UI）
+        if mode == "perception":
+            mode = _VIEW_RGB
         mode = mode if mode in (_VIEW_RGB, _VIEW_DEPTH, _VIEW_SPLIT) else _VIEW_RGB
         if self._mode == mode:
             return
@@ -158,6 +163,14 @@ class CameraViewport(QWidget):
         if self._mode == _VIEW_DEPTH:
             return
         self._show_jpeg(jpeg, kind="rgb")
+
+    def set_frame_rgb(self, image: QImage) -> None:
+        """直接设置 RGB QImage（用于感知模式的 Overlay）"""
+        if self._mode == _VIEW_DEPTH:
+            return
+        if image.isNull():
+            return
+        self._show_pixmap(QPixmap.fromImage(image), kind="rgb")
 
     def set_depth_frame_jpeg(self, jpeg: bytes) -> None:
         if self._mode == _VIEW_RGB:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from PyQt5.QtCore import QEvent, Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication,
@@ -39,8 +41,9 @@ _TEXT_INPUT_TYPES = (
     QPlainTextEdit,
     QSpinBox,
     QDoubleSpinBox,
-    QComboBox,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ManualControlStrip(QWidget):
@@ -56,6 +59,7 @@ class ManualControlStrip(QWidget):
         self._active_velocity = (0.0, 0.0, 0.0)
         self._pressed_keys: set[int] = set()
         self._keyboard_enabled = False
+        self._last_keyboard_velocity = (0.0, 0.0, 0.0)
         self._repeat_timer = QTimer(self)
         self._repeat_timer.setInterval(100)
         self._repeat_timer.timeout.connect(self._repeat_active_velocity)
@@ -145,6 +149,7 @@ class ManualControlStrip(QWidget):
     def _on_stop_button(self) -> None:
         self._repeat_timer.stop()
         self._active_velocity = (0.0, 0.0, 0.0)
+        self._last_keyboard_velocity = (0.0, 0.0, 0.0)
         self._pressed_keys.clear()
         self.stop_requested.emit()
 
@@ -194,6 +199,16 @@ class ManualControlStrip(QWidget):
             if self._motion_active():
                 self._on_stop_button()
             return
+        velocity = (lx, ly, az)
+        if velocity != self._last_keyboard_velocity:
+            logger.info(
+                "manual keyboard motion: lx=%.3f ly=%.3f az=%.3f keys=%s",
+                lx,
+                ly,
+                az,
+                sorted(self._pressed_keys),
+            )
+            self._last_keyboard_velocity = velocity
         self._emit_vel(lx, ly, az)
 
     @staticmethod
@@ -201,6 +216,8 @@ class ManualControlStrip(QWidget):
         widget = QApplication.focusWidget()
         if widget is None:
             return False
+        if isinstance(widget, QComboBox):
+            return widget.isEditable()
         return isinstance(widget, _TEXT_INPUT_TYPES)
 
     def _should_handle_keyboard(self) -> bool:

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
 
 class CameraViewModeBar(QWidget):
-    """RGB / Depth / split view selector for camera module."""
+    """RGB / Depth / 感知 视图选择器 for camera module."""
 
     mode_changed = pyqtSignal(str)
 
@@ -24,7 +22,7 @@ class CameraViewModeBar(QWidget):
         for mode, label in (
             ("rgb", "RGB"),
             ("depth", "Depth"),
-            ("split", "分屏"),
+            ("perception", "感知"),
         ):
             btn = QPushButton(label)
             btn.setCheckable(True)
@@ -36,10 +34,6 @@ class CameraViewModeBar(QWidget):
         self._style_active("rgb")
 
     def _on_mode(self, mode: str) -> None:
-        if mode == "split":
-            # Split view disabled: dual-stream preview overloads the UI thread.
-            self._style_active(self._mode)
-            return
         if self._mode == mode:
             self._buttons[mode].setChecked(True)
             return

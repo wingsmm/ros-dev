@@ -29,13 +29,40 @@ cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 logs/xtark-console-YYYY-MM-DD.log
 ```
 
-`.env` 可覆盖（示例见 `.env.example`）：
+`.env` 为个人开发配置文件；本仓库不再维护 `.env.example`。常用项示例：
 
 ```dotenv
 XTARK_LOG_DIR=logs
 XTARK_LOG_LEVEL=INFO
 XTARK_LOG_RETENTION_DAYS=30
 ```
+
+摄像头页“感知”模式当前只做走廊黄线 overlay。`.env` 里只放当前会生效的摄像头配置；障碍物高度、楼梯台阶高度等后续识别阈值暂不放预留项，避免误以为已经接入。
+
+```dotenv
+GROUND_OVERLAY_ENABLE=1
+GROUND_OVERLAY_METHOD=trapezoid        # trapezoid 临时显示；geometric 依赖相机标定
+GROUND_TRAPEZOID_BOTTOM_Y_RATIO=0.02   # 仅 trapezoid 生效
+GROUND_TRAPEZOID_TOP_Y_RATIO=0.4       # 仅 trapezoid 生效
+GROUND_TRAPEZOID_TOP_WIDTH_RATIO=0.4   # 仅 trapezoid 生效
+GROUND_CORRIDOR_WIDTH_M=0.24           # 黄线真实走廊宽度 a
+GROUND_OBSTACLE_RANGE_M=2.0            # 后续障碍距离 b；当前用于显示/ROI
+GROUND_STAIR_RANGE_M=2.5               # 后续楼梯距离 c；当前用于显示/ROI
+GROUND_OVERLAY_MAX_RANGE_M=5.0
+GROUND_PERCEPTION_MAX_FPS=5
+
+DEPTH_FX=578.579084625938              # 深度相机内参，geometric/depth 反投影使用
+DEPTH_FY=579.3575953496057
+DEPTH_CX=679.1573216382707
+DEPTH_CY=323.1467217747702
+
+CAMERA_X=0.10                          # base_link -> camera_link，向前为正，单位 m
+CAMERA_Y=0.0                           # 向左为正，单位 m
+CAMERA_Z=0.20                          # 离地高度，单位 m
+CAMERA_PITCH=0.35                      # 向下俯仰为正，单位 rad
+```
+
+若只想临时看黄线形状，使用 `trapezoid`；若要验证真实贴地投影，切到 `geometric` 并先校准 `CAMERA_X/Y/Z/PITCH` 与深度内参。
 
 WSL 下也可使用绝对路径，例如 `XTARK_LOG_DIR=/home/<user>/xtark-logs`。
 
