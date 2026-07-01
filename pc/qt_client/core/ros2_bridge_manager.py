@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional
@@ -11,7 +12,7 @@ from core.app_shutdown import register_shutdown
 from core.camera_mjpeg_url import resolve_mjpeg_url_for_robot
 from core.camera_topic_probe import CameraTopicProbeResult, format_probe_summary
 from core.camera_topic_probe_worker import CameraTopicProbeWorker
-from core.camera_topics import CAMERA_DIAGNOSTIC_TOPICS
+from core.camera_topics import CAMERA_PROBE_TOPICS
 from core.latest_frame_mailbox import DepthBridgeFrame, LatestFrameMailbox
 from core.odom_session_origin import ORIGIN_POLICY_LABEL
 from core.ros2_bridge_worker import BridgeRuntimeStatus, Ros2BridgeWorker
@@ -19,11 +20,12 @@ from core.ros2_runtime import (
     Ros2RuntimeError,
     Ros2RuntimeStatus,
     camera_diagnostic_shell_commands,
+    depth_camera_diagnostic_shell_commands,
     diagnostic_shell_commands,
     require_ros2_bridge,
     require_ros2_rviz,
     ros2_status,
-    rviz_rgbd_camera_config_path,
+    rviz_camera_pointcloud_config_path,
     rviz_robot_config_path,
 )
 from core.rviz_process_manager import RvizProcessManager
@@ -87,11 +89,13 @@ class Ros2BridgeManager(QObject):
         self._probe_worker: Optional[CameraTopicProbeWorker] = None
         self._topic_probe_result: Optional[CameraTopicProbeResult] = None
         self._camera_topic_probe = ""
+        self._camera_probe_topics = CAMERA_PROBE_TOPICS
         self._diagnostics_expanded = False
         self._rgb_mailbox: LatestFrameMailbox[bytes] = LatestFrameMailbox()
         self._depth_mailbox: LatestFrameMailbox[DepthBridgeFrame] = LatestFrameMailbox()
         self._rgb_tee_enabled = False
         self._depth_tee_enabled = False
+        self._pointcloud_stream_enabled = True
         self._rgb_stream: Optional["MjpegStreamController"] = None
         self._shutdown_done = False
         register_shutdown(self.shutdown, name="ros2_bridge_manager", priority=20)
@@ -120,16 +124,57 @@ class Ros2BridgeManager(QObject):
             stream.bridge_jpeg.connect(self._tee_rgb_jpeg, Qt.QueuedConnection)
 
     def set_rgb_bridge_enabled(self, enabled: bool) -> None:
+        if self._rgb_tee_enabled != enabled:
+            logger.info(
+                "CAMERA_FLOW bridge_capability rgb=%s depth=%s -> rgb=%s depth=%s",
+                self._rgb_tee_enabled,
+                self._depth_tee_enabled,
+                enabled,
+                self._depth_tee_enabled,
+            )
         self._rgb_tee_enabled = enabled
 
     def set_depth_bridge_enabled(self, enabled: bool) -> None:
+        if self._depth_tee_enabled != enabled:
+            logger.info(
+                "CAMERA_FLOW bridge_capability rgb=%s depth=%s -> rgb=%s depth=%s",
+                self._rgb_tee_enabled,
+                self._depth_tee_enabled,
+                self._rgb_tee_enabled,
+                enabled,
+            )
         self._depth_tee_enabled = enabled
 
-    def set_camera_diagnostics_expanded(self, expanded: bool) -> None:
+    def set_pointcloud_stream_enabled(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if self._pointcloud_stream_enabled == enabled:
+            return
+        self._pointcloud_stream_enabled = enabled
+        logger.info("CAMERA_FLOW pointcloud_stream request enabled=%s", enabled)
+        if self._worker is not None:
+            QMetaObject.invokeMethod(
+                self._worker,
+                "set_pointcloud_stream_enabled",
+                Qt.QueuedConnection,
+                Q_ARG(bool, enabled),
+            )
+
+    def set_camera_diagnostics_expanded(
+        self,
+        expanded: bool,
+        topics: tuple[str, ...] = CAMERA_PROBE_TOPICS,
+    ) -> None:
         self._diagnostics_expanded = expanded
+        self._camera_probe_topics = topics
         if expanded:
             self._ensure_probe_worker()
             if self._probe_worker is not None:
+                QMetaObject.invokeMethod(
+                    self._probe_worker,
+                    "set_topics",
+                    Qt.QueuedConnection,
+                    Q_ARG(object, topics),
+                )
                 QMetaObject.invokeMethod(
                     self._probe_worker,
                     "start_polling",
@@ -143,23 +188,44 @@ class Ros2BridgeManager(QObject):
             )
 
     def start_bridge(self) -> bool:
+        logger.info("CAMERA_FLOW bridge_start requested")
         return self._ensure_bridge_started()
 
     def _ensure_bridge_started(self) -> bool:
+        t0 = time.perf_counter()
+        logger.info(
+            "CAMERA_FLOW bridge_start start thread_exists=%s worker_exists=%s "
+            "running=%s rgb_tee=%s depth_tee=%s",
+            self._thread is not None,
+            self._worker is not None,
+            self._bridge_status.running,
+            self._rgb_tee_enabled,
+            self._depth_tee_enabled,
+        )
         try:
             require_ros2_bridge()
         except Ros2RuntimeError as exc:
             self._emit_action_message(str(exc))
             self._emit_snapshot()
+            logger.warning(
+                "CAMERA_FLOW bridge_start failed require elapsed=%.1fms detail=%s",
+                (time.perf_counter() - t0) * 1000.0,
+                exc,
+            )
             return False
         if self._thread is not None:
             if self._bridge_status.running:
+                logger.info(
+                    "CAMERA_FLOW bridge_start reuse elapsed=%.1fms",
+                    (time.perf_counter() - t0) * 1000.0,
+                )
                 return True
             self.stop_bridge()
         self._disconnect_session()
         self._thread = QThread(self)
         self._worker = Ros2BridgeWorker()
         self._worker.bind_mailboxes(self._rgb_mailbox, self._depth_mailbox)
+        self._worker.set_pointcloud_stream_enabled(self._pointcloud_stream_enabled)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.start_bridge)
         self._worker.status_updated.connect(self._on_bridge_status)
@@ -169,51 +235,111 @@ class Ros2BridgeManager(QObject):
             self._connect_session(self._session)
             self._replay_session_cache(self._session)
         self._emit_action_message("正在启动 ROS2 Bridge…")
+        logger.info(
+            "CAMERA_FLOW bridge_start end elapsed=%.1fms thread_running=%s",
+            (time.perf_counter() - t0) * 1000.0,
+            self._thread.isRunning() if self._thread is not None else False,
+        )
         return True
 
     def stop_bridge(self) -> None:
+        t0 = time.perf_counter()
+        logger.info(
+            "CAMERA_FLOW bridge_stop start thread_exists=%s worker_exists=%s "
+            "running=%s rgb_tee=%s depth_tee=%s",
+            self._thread is not None,
+            self._worker is not None,
+            self._bridge_status.running,
+            self._rgb_tee_enabled,
+            self._depth_tee_enabled,
+        )
         self._disconnect_session()
         if self._worker is not None:
+            worker_t0 = time.perf_counter()
             QMetaObject.invokeMethod(
                 self._worker,
                 "stop_bridge",
                 Qt.BlockingQueuedConnection,
             )
+            logger.info(
+                "CAMERA_FLOW bridge_stop worker_stop elapsed=%.1fms",
+                (time.perf_counter() - worker_t0) * 1000.0,
+            )
         if self._thread is not None:
+            wait_t0 = time.perf_counter()
             self._thread.quit()
-            self._thread.wait(4000)
+            stopped = self._thread.wait(4000)
+            logger.info(
+                "CAMERA_FLOW bridge_stop thread_wait elapsed=%.1fms stopped=%s",
+                (time.perf_counter() - wait_t0) * 1000.0,
+                stopped,
+            )
         self._worker = None
         self._thread = None
         self._bridge_status = BridgeRuntimeStatus()
         self._emit_action_message("ROS2 Bridge 已停止")
         self._emit_snapshot()
+        logger.info(
+            "CAMERA_FLOW bridge_stop end elapsed=%.1fms",
+            (time.perf_counter() - t0) * 1000.0,
+        )
 
     def start_rviz(self, config: Optional[Path] = None) -> bool:
+        t0 = time.perf_counter()
+        logger.info(
+            "RVIZ_FLOW manager_start begin config=%s running=%s",
+            str(config) if config is not None else "",
+            self._rviz.is_running(),
+        )
         try:
             require_ros2_rviz()
         except Ros2RuntimeError as exc:
             self._emit_action_message(str(exc))
             self._emit_snapshot()
+            logger.warning(
+                "RVIZ_FLOW manager_start require_failed elapsed=%.1fms detail=%s",
+                (time.perf_counter() - t0) * 1000.0,
+                exc,
+            )
             return False
         rviz_config = config or rviz_robot_config_path()
         if not self._rviz.start(rviz_config):
             self._emit_action_message(self._rviz.last_error or "RViz2 启动失败")
             self._emit_snapshot()
+            logger.warning(
+                "RVIZ_FLOW manager_start failed elapsed=%.1fms error=%s",
+                (time.perf_counter() - t0) * 1000.0,
+                self._rviz.last_error,
+            )
             return False
         self._emit_action_message(f"RViz2 已启动（{rviz_config.name}）")
         self._emit_snapshot()
+        logger.info(
+            "RVIZ_FLOW manager_start end elapsed=%.1fms config=%s",
+            (time.perf_counter() - t0) * 1000.0,
+            rviz_config,
+        )
         return True
 
     def start_robot_rviz(self) -> bool:
         return self.start_rviz(rviz_robot_config_path())
 
     def start_camera_rviz(self) -> bool:
-        return self.start_rviz(rviz_rgbd_camera_config_path())
+        return self.start_rviz(rviz_camera_pointcloud_config_path())
 
     def stop_rviz(self) -> None:
+        t0 = time.perf_counter()
+        logger.info(
+            "RVIZ_FLOW manager_stop begin running=%s",
+            self._rviz.is_running(),
+        )
         self._rviz.stop()
         self._emit_action_message("RViz2 已停止")
         self._emit_snapshot()
+        logger.info(
+            "RVIZ_FLOW manager_stop end elapsed=%.1fms",
+            (time.perf_counter() - t0) * 1000.0,
+        )
 
     def refresh_topic_status(self) -> None:
         if self._worker is not None:
@@ -225,7 +351,11 @@ class Ros2BridgeManager(QObject):
         self._topic_probe = "内部计数已刷新；可用「复制诊断命令」在终端核对 ros2 topic"
         self._emit_snapshot()
 
-    def refresh_camera_topic_status(self) -> None:
+    def refresh_camera_topic_status(
+        self,
+        topics: tuple[str, ...] = CAMERA_PROBE_TOPICS,
+    ) -> None:
+        self._camera_probe_topics = topics
         if self._worker is not None:
             QMetaObject.invokeMethod(
                 self._worker,
@@ -234,6 +364,12 @@ class Ros2BridgeManager(QObject):
             )
         self._ensure_probe_worker()
         if self._probe_worker is not None:
+            QMetaObject.invokeMethod(
+                self._probe_worker,
+                "set_topics",
+                Qt.QueuedConnection,
+                Q_ARG(object, topics),
+            )
             QMetaObject.invokeMethod(
                 self._probe_worker,
                 "probe_now",
@@ -248,6 +384,9 @@ class Ros2BridgeManager(QObject):
 
     def camera_diagnostic_commands(self) -> str:
         return camera_diagnostic_shell_commands()
+
+    def depth_camera_diagnostic_commands(self) -> str:
+        return depth_camera_diagnostic_shell_commands()
 
     def shutdown(self) -> None:
         if self._shutdown_done:
@@ -419,7 +558,7 @@ class Ros2BridgeManager(QObject):
             return
         self._topic_probe_result = result
         self._camera_topic_probe = format_probe_summary(
-            result, topics=CAMERA_DIAGNOSTIC_TOPICS
+            result, topics=self._camera_probe_topics
         )
         self._emit_snapshot()
 
@@ -430,9 +569,18 @@ class Ros2BridgeManager(QObject):
 
     def _on_bridge_failed(self, detail: str) -> None:
         logger.error("ROS2 bridge failed: %s", detail)
+        self._disconnect_session()
+        if self._thread is not None:
+            self._thread.quit()
+            if not self._thread.wait(1500):
+                logger.warning("ROS2 bridge thread did not stop after failure")
+        self._worker = None
+        self._thread = None
         self._bridge_status = BridgeRuntimeStatus(
             running=False, last_error=detail
         )
+        if self._shutdown_done:
+            return
         self._emit_action_message(detail)
         self._emit_snapshot()
 

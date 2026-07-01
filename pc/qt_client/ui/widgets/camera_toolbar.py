@@ -11,6 +11,8 @@ class CameraToolbar(QWidget):
     disconnect_requested = pyqtSignal()
     reconnect_requested = pyqtSignal()
     snapshot_requested = pyqtSignal()
+    open_rgb_web_requested = pyqtSignal()
+    open_depth_api_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -26,11 +28,15 @@ class CameraToolbar(QWidget):
         self.disconnect_btn = QPushButton("断开")
         self.reconnect_btn = QPushButton("重连")
         self.snapshot_btn = QPushButton("截图")
+        self.open_rgb_web_btn = QPushButton("打开 RGB Web")
+        self.open_depth_api_btn = QPushButton("打开 Depth API")
         self.disconnect_btn.setEnabled(False)
         btn_row.addWidget(self.connect_btn)
         btn_row.addWidget(self.disconnect_btn)
         btn_row.addWidget(self.reconnect_btn)
         btn_row.addWidget(self.snapshot_btn)
+        btn_row.addWidget(self.open_rgb_web_btn)
+        btn_row.addWidget(self.open_depth_api_btn)
         btn_row.addStretch(1)
         root.addLayout(btn_row)
 
@@ -41,6 +47,7 @@ class CameraToolbar(QWidget):
 
         rgb_caption = QLabel("RGB MJPEG")
         rgb_caption.setStyleSheet("color: #555; font-size: 12px;")
+        self._rgb_caption = rgb_caption
         self.rgb_url_edit = QLineEdit()
         self.rgb_url_edit.setReadOnly(True)
         self.rgb_url_edit.setFocusPolicy(Qt.StrongFocus)
@@ -51,6 +58,7 @@ class CameraToolbar(QWidget):
 
         depth_caption = QLabel("Depth raw HTTP")
         depth_caption.setStyleSheet("color: #555; font-size: 12px;")
+        self._depth_caption = depth_caption
         self.depth_url_edit = QLineEdit()
         self.depth_url_edit.setReadOnly(True)
         self.depth_url_edit.setFocusPolicy(Qt.StrongFocus)
@@ -80,10 +88,48 @@ class CameraToolbar(QWidget):
         self.disconnect_btn.clicked.connect(self.disconnect_requested.emit)
         self.reconnect_btn.clicked.connect(self.reconnect_requested.emit)
         self.snapshot_btn.clicked.connect(self.snapshot_requested.emit)
+        self.open_rgb_web_btn.clicked.connect(self.open_rgb_web_requested.emit)
+        self.open_depth_api_btn.clicked.connect(self.open_depth_api_requested.emit)
 
     def set_stream_urls(self, rgb_url: str, depth_url: str) -> None:
         self.rgb_url_edit.setText(rgb_url)
         self.depth_url_edit.setText(depth_url)
+
+    def configure_for_rgb(self) -> None:
+        self._rgb_row_visible(True)
+        self._depth_row_visible(False)
+        self.connect_btn.show()
+        self.disconnect_btn.show()
+        self.reconnect_btn.show()
+        self.snapshot_btn.show()
+        self.open_rgb_web_btn.show()
+        self.open_depth_api_btn.hide()
+        self.snapshot_btn.setVisible(True)
+        self.snapshot_btn.setEnabled(True)
+
+    def configure_for_depth(self) -> None:
+        self._rgb_row_visible(False)
+        self._depth_row_visible(True)
+        self.connect_btn.hide()
+        self.disconnect_btn.hide()
+        self.reconnect_btn.hide()
+        self.snapshot_btn.hide()
+        self.open_rgb_web_btn.hide()
+        self.open_depth_api_btn.show()
+
+    def _rgb_row_visible(self, visible: bool) -> None:
+        self._rgb_caption.setVisible(visible)
+        self.rgb_url_edit.setVisible(visible)
+
+    def _depth_row_visible(self, visible: bool) -> None:
+        self._depth_caption.setVisible(visible)
+        self.depth_url_edit.setVisible(visible)
+
+    def set_rgb_url(self, url: str) -> None:
+        self.rgb_url_edit.setText(url)
+
+    def set_depth_url(self, url: str) -> None:
+        self.depth_url_edit.setText(url)
 
     def set_topic_hint(self, topic: str) -> None:
         self.topic_label.setText(f"话题: {topic}")

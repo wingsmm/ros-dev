@@ -14,6 +14,7 @@ _APP_ROOT = Path(__file__).resolve().parents[1]
 _RVIZ_ROBOT_CONFIG = _APP_ROOT / "config" / "xtark_robot.rviz"
 _RVIZ_CAMERA_CONFIG = _APP_ROOT / "config" / "xtark_camera.rviz"
 _RVIZ_RGBD_CAMERA_CONFIG = _APP_ROOT / "config" / "xtark_rgbd_camera.rviz"
+_RVIZ_POINTCLOUD_CAMERA_CONFIG = _APP_ROOT / "config" / "xtark_camera_pointcloud.rviz"
 _RVIZ_CONFIG = _RVIZ_ROBOT_CONFIG
 
 logger = logging.getLogger(__name__)
@@ -240,12 +241,17 @@ def _is_wsl() -> bool:
 
 
 def rviz_subprocess_env() -> dict[str, str]:
-    """RViz2 subprocess env; WSL defaults to software GL to avoid libGL SIGSEGV."""
+    """RViz2 subprocess env.
+
+    Hardware/WSLg OpenGL keeps the Qt UI responsive while RViz renders point
+    clouds.  Software GL is still available as an explicit fallback for machines
+    where RViz crashes during startup.
+    """
     env = ros2_subprocess_env()
     raw = os.environ.get("XTARK_RVIZ_SOFTWARE_GL", "").strip().lower()
-    if raw in {"0", "false", "no", "off"}:
+    if raw in {"", "0", "false", "no", "off"}:
         return env
-    if raw in {"1", "true", "yes", "on"} or (raw == "" and _is_wsl()):
+    if raw in {"1", "true", "yes", "on"}:
         # WSL2 最保守配置：只强制软件渲染，不做其他覆盖
         env["LIBGL_ALWAYS_SOFTWARE"] = "1"
     return env
@@ -261,6 +267,10 @@ def rviz_camera_config_path() -> Path:
 
 def rviz_rgbd_camera_config_path() -> Path:
     return _RVIZ_RGBD_CAMERA_CONFIG
+
+
+def rviz_camera_pointcloud_config_path() -> Path:
+    return _RVIZ_POINTCLOUD_CAMERA_CONFIG
 
 
 def rviz_config_path() -> Path:
@@ -300,11 +310,30 @@ def camera_diagnostic_shell_commands() -> str:
             prefix + "ros2 topic info /camera/depth/image_raw",
             prefix + "ros2 topic info /camera/depth/camera_info",
             prefix + "ros2 topic info /camera/depth_registered/points",
+            prefix + "ros2 topic hz /camera/depth_registered/points",
+            prefix + "ros2 topic echo /camera/depth_registered/points --once",
             prefix + "ros2 topic hz /camera/scan_depth",
             prefix + "ros2 topic hz /scan",
             prefix + "ros2 run tf2_tools view_frames",
-            "# RViz2 RGB-D: rviz2 -d "
-            + rviz_rgbd_camera_config_path().as_posix(),
+            "# RViz2 点云诊断: rviz2 -d "
+            + rviz_camera_pointcloud_config_path().as_posix(),
+        ]
+    )
+
+
+def depth_camera_diagnostic_shell_commands() -> str:
+    prefix = ros2_shell_prefix()
+    return "\n".join(
+        [
+            prefix + "ros2 topic list",
+            prefix + "ros2 topic info /camera/depth/image_raw",
+            prefix + "ros2 topic info /camera/depth/camera_info",
+            prefix + "ros2 topic info /camera/depth_registered/points",
+            prefix + "ros2 topic hz /camera/depth_registered/points",
+            prefix + "ros2 topic echo /camera/depth_registered/points --once",
+            prefix + "ros2 run tf2_tools view_frames",
+            "# RViz2 点云诊断: rviz2 -d "
+            + rviz_camera_pointcloud_config_path().as_posix(),
         ]
     )
 

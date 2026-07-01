@@ -35,6 +35,20 @@ _MOTION_KEYS = (
     | _TURN_RIGHT_KEYS
 )
 
+_KEY_NAMES = {
+    Qt.Key_W: "W",
+    Qt.Key_I: "I",
+    Qt.Key_S: "S",
+    Qt.Key_A: "A",
+    Qt.Key_D: "D",
+    Qt.Key_Q: "Q",
+    Qt.Key_J: "J",
+    Qt.Key_E: "E",
+    Qt.Key_L: "L",
+    Qt.Key_K: "K",
+    Qt.Key_Space: "Space",
+}
+
 _TEXT_INPUT_TYPES = (
     QLineEdit,
     QTextEdit,
@@ -44,6 +58,10 @@ _TEXT_INPUT_TYPES = (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _key_name(key: int) -> str:
+    return _KEY_NAMES.get(key, f"Key_{int(key)}")
 
 
 class ManualControlStrip(QWidget):
@@ -60,6 +78,7 @@ class ManualControlStrip(QWidget):
         self._pressed_keys: set[int] = set()
         self._keyboard_enabled = False
         self._last_keyboard_velocity = (0.0, 0.0, 0.0)
+        self._velocity_source = "idle"
         self._repeat_timer = QTimer(self)
         self._repeat_timer.setInterval(100)
         self._repeat_timer.timeout.connect(self._repeat_active_velocity)
@@ -74,6 +93,9 @@ class ManualControlStrip(QWidget):
         self._linear = float(linear)
         self._angular = float(angular)
 
+    def set_focus_hint(self, text: str) -> None:
+        self._hint_label.setText(text)
+
     def set_keyboard_enabled(self, enabled: bool) -> None:
         if enabled == self._keyboard_enabled:
             return
@@ -81,9 +103,14 @@ class ManualControlStrip(QWidget):
         if self._keyboard_enabled and window is not None:
             window.removeEventFilter(self)
         self._keyboard_enabled = enabled
+        logger.info(
+            "MANUAL_FLOW keyboard_enabled=%s visible=%s",
+            enabled,
+            self.isVisible(),
+        )
         if not enabled:
             self._pressed_keys.clear()
-            self.stop()
+            self._stop_motion("keyboard_disabled")
             return
         if window is not None:
             window.installEventFilter(self)
@@ -102,13 +129,13 @@ class ManualControlStrip(QWidget):
         grid.setSpacing(6)
 
         actions = [
-            (0, 1, "前进", lambda: self._emit_vel(self._linear, 0.0, 0.0), False),
-            (2, 1, "后退", lambda: self._emit_vel(-self._linear, 0.0, 0.0), False),
-            (1, 0, "左移", lambda: self._emit_vel(0.0, self._linear, 0.0), False),
-            (1, 2, "右移", lambda: self._emit_vel(0.0, -self._linear, 0.0), False),
+            (0, 1, "前进", lambda: self._emit_vel(self._linear, 0.0, 0.0, "button"), False),
+            (2, 1, "后退", lambda: self._emit_vel(-self._linear, 0.0, 0.0, "button"), False),
+            (1, 0, "左移", lambda: self._emit_vel(0.0, self._linear, 0.0, "button"), False),
+            (1, 2, "右移", lambda: self._emit_vel(0.0, -self._linear, 0.0, "button"), False),
             (1, 1, "停止", self._on_stop_button, True),
-            (0, 0, "左转", lambda: self._emit_vel(0.0, 0.0, self._angular), False),
-            (0, 2, "右转", lambda: self._emit_vel(0.0, 0.0, -self._angular), False),
+            (0, 0, "左转", lambda: self._emit_vel(0.0, 0.0, self._angular, "button"), False),
+            (0, 2, "右转", lambda: self._emit_vel(0.0, 0.0, -self._angular, "button"), False),
         ]
         for row, col, text, handler, is_stop in actions:
             btn = QPushButton(text)
@@ -124,20 +151,30 @@ class ManualControlStrip(QWidget):
                 btn.released.connect(self._on_button_released)
             grid.addWidget(btn, row, col)
 
-        hint = QLabel(
+        self._hint_label = QLabel(
             "键盘：W/I 前进，S 后退，A/D 左右平移，Q/J 左转，E/L 右转，K/Space 停止"
         )
-        hint.setStyleSheet("color: #666; font-size: 11px;")
-        hint.setWordWrap(True)
+        self._hint_label.setStyleSheet("color: #666; font-size: 11px;")
+        self._hint_label.setWordWrap(True)
 
         group_layout = QVBoxLayout()
         group_layout.addLayout(grid)
-        group_layout.addWidget(hint)
+        group_layout.addWidget(self._hint_label)
         group.setLayout(group_layout)
         root.addWidget(group)
 
-    def _emit_vel(self, lx: float, ly: float, az: float) -> None:
+    def _emit_vel(
+        self, lx: float, ly: float, az: float, source: str = "unknown"
+    ) -> None:
         self._active_velocity = (lx, ly, az)
+        self._velocity_source = source
+        logger.info(
+            "MANUAL_FLOW velocity_emit lx=%.3f ly=%.3f az=%.3f source=%s",
+            lx,
+            ly,
+            az,
+            source,
+        )
         self.velocity_requested.emit(lx, ly, az)
         if not self._repeat_timer.isActive():
             self._repeat_timer.start()
@@ -147,11 +184,17 @@ class ManualControlStrip(QWidget):
         self.velocity_requested.emit(lx, ly, az)
 
     def _on_stop_button(self) -> None:
+        self._stop_motion("button")
+
+    def _stop_motion(self, reason: str) -> None:
+        had_motion = self._motion_active() or bool(self._pressed_keys)
         self._repeat_timer.stop()
         self._active_velocity = (0.0, 0.0, 0.0)
         self._last_keyboard_velocity = (0.0, 0.0, 0.0)
         self._pressed_keys.clear()
-        self.stop_requested.emit()
+        if had_motion:
+            logger.info("MANUAL_FLOW stop reason=%s", reason)
+            self.stop_requested.emit()
 
     def _on_button_released(self) -> None:
         if self._pressed_keys and self._keyboard_enabled:
@@ -159,11 +202,11 @@ class ManualControlStrip(QWidget):
             return
         if not self._motion_active():
             return
-        self._on_stop_button()
+        self._stop_motion("button_release")
 
     def stop(self) -> None:
         if self._motion_active() or self._pressed_keys:
-            self._on_stop_button()
+            self._stop_motion("stop_call")
 
     def _keyboard_velocity(self) -> tuple[float, float, float]:
         lx = ly = az = 0.0
@@ -192,24 +235,17 @@ class ManualControlStrip(QWidget):
     def _apply_keyboard_motion(self) -> None:
         if not self._pressed_keys:
             if self._motion_active():
-                self._on_stop_button()
+                self._stop_motion("key_release")
             return
         lx, ly, az = self._keyboard_velocity()
         if lx == 0.0 and ly == 0.0 and az == 0.0:
             if self._motion_active():
-                self._on_stop_button()
+                self._stop_motion("key_release")
             return
         velocity = (lx, ly, az)
         if velocity != self._last_keyboard_velocity:
-            logger.info(
-                "manual keyboard motion: lx=%.3f ly=%.3f az=%.3f keys=%s",
-                lx,
-                ly,
-                az,
-                sorted(self._pressed_keys),
-            )
             self._last_keyboard_velocity = velocity
-        self._emit_vel(lx, ly, az)
+        self._emit_vel(lx, ly, az, "keyboard")
 
     @staticmethod
     def _focus_in_text_input() -> bool:
@@ -229,15 +265,25 @@ class ManualControlStrip(QWidget):
 
     def _handle_key_press(self, event) -> bool:
         if not self._should_handle_keyboard():
+            if self._keyboard_enabled:
+                logger.info(
+                    "MANUAL_FLOW key_press key=%s accepted=False visible=%s "
+                    "focus_in_input=%s",
+                    _key_name(event.key()),
+                    self.isVisible(),
+                    self._focus_in_text_input(),
+                )
             return False
         if event.isAutoRepeat():
             return True
         key = event.key()
         if key in _STOP_KEYS:
-            self._on_stop_button()
+            logger.info("MANUAL_FLOW key_press key=%s accepted=True", _key_name(key))
+            self._stop_motion("key_stop")
             return True
         if key not in _MOTION_KEYS:
             return False
+        logger.info("MANUAL_FLOW key_press key=%s accepted=True", _key_name(key))
         if key not in self._pressed_keys:
             self._pressed_keys.add(key)
             self._apply_keyboard_motion()
@@ -253,6 +299,7 @@ class ManualControlStrip(QWidget):
             return False
         if key in self._pressed_keys:
             self._pressed_keys.discard(key)
+            logger.info("MANUAL_FLOW key_release key=%s", _key_name(key))
             self._apply_keyboard_motion()
         return True
 
@@ -263,6 +310,18 @@ class ManualControlStrip(QWidget):
         elif event.type() == QEvent.KeyRelease:
             if self._handle_key_release(event):
                 return True
+        elif event.type() == QEvent.WindowActivate:
+            logger.info(
+                "MANUAL_FLOW window_activate keyboard_enabled=%s visible=%s",
+                self._keyboard_enabled,
+                self.isVisible(),
+            )
+        elif event.type() == QEvent.WindowDeactivate:
+            if self._motion_active() or self._pressed_keys:
+                logger.info(
+                    "MANUAL_FLOW window_deactivate stop reason=rviz_focus_or_window_switch"
+                )
+                self._stop_motion("window_deactivate")
         return super().eventFilter(obj, event)
 
     def keyPressEvent(self, event) -> None:
@@ -279,23 +338,46 @@ class ManualControlStrip(QWidget):
 
     def hideEvent(self, event) -> None:
         if self._motion_active() or self._pressed_keys:
-            self.stop()
+            self._stop_motion("hide")
         super().hideEvent(event)
 
     def closeEvent(self, event) -> None:
         if self._motion_active() or self._pressed_keys:
-            self.stop()
+            self._stop_motion("close")
         super().closeEvent(event)
 
     def _on_app_state_changed(self, state: Qt.ApplicationState) -> None:
-        if state != Qt.ApplicationActive and (
-            self._motion_active() or self._pressed_keys
+        if (
+            not self._keyboard_enabled
+            and not self._motion_active()
+            and not self._pressed_keys
         ):
-            self.stop()
+            return
+        if state == Qt.ApplicationActive:
+            logger.info(
+                "MANUAL_FLOW application_activate keyboard_enabled=%s visible=%s",
+                self._keyboard_enabled,
+                self.isVisible(),
+            )
+            return
+        if self._motion_active() or self._pressed_keys:
+            logger.info(
+                "MANUAL_FLOW application_inactive stop reason=application_inactive"
+            )
+            self._stop_motion("application_inactive")
 
     def changeEvent(self, event) -> None:
         if event.type() == QEvent.WindowDeactivate and (
             self._motion_active() or self._pressed_keys
         ):
-            self.stop()
+            logger.info(
+                "MANUAL_FLOW window_deactivate stop reason=rviz_focus_or_window_switch"
+            )
+            self._stop_motion("window_deactivate")
+        elif event.type() == QEvent.WindowActivate:
+            logger.info(
+                "MANUAL_FLOW window_activate keyboard_enabled=%s visible=%s",
+                self._keyboard_enabled,
+                self.isVisible(),
+            )
         super().changeEvent(event)

@@ -5,11 +5,14 @@ from __future__ import annotations
 import socket
 import time
 import urllib.error
+import logging
 from dataclasses import dataclass
 from typing import List, Optional
 from urllib.parse import urlsplit
 
 from PyQt5.QtCore import QObject, QThread, QTimer, pyqtSignal, pyqtSlot, QMetaObject, Qt
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -278,22 +281,34 @@ class MjpegStreamController(QObject):
         """Stop emitting frames to the UI (socket keeps draining)."""
         self._deliver_frames = False
         if self._worker is not None:
-            QMetaObject.invokeMethod(
-                self._worker, "pause_worker", Qt.QueuedConnection
-            )
+            try:
+                QMetaObject.invokeMethod(
+                    self._worker, "pause_worker", Qt.QueuedConnection
+                )
+            except RuntimeError:
+                logger.info("MJPEG pause ignored: worker already deleted")
+                self._worker = None
 
     def resume(self) -> None:
         self._deliver_frames = True
         if self._worker is not None:
-            QMetaObject.invokeMethod(
-                self._worker, "resume_worker", Qt.QueuedConnection
-            )
+            try:
+                QMetaObject.invokeMethod(
+                    self._worker, "resume_worker", Qt.QueuedConnection
+                )
+            except RuntimeError:
+                logger.info("MJPEG resume ignored: worker already deleted")
+                self._worker = None
 
     def set_max_fps(self, max_fps: float) -> None:
         self._max_fps = max(max_fps, 0.5)
         worker = self._worker
         if worker is not None:
-            worker._min_emit_interval_s = 1.0 / self._max_fps
+            try:
+                worker._min_emit_interval_s = 1.0 / self._max_fps
+            except RuntimeError:
+                logger.info("MJPEG set_max_fps ignored: worker already deleted")
+                self._worker = None
 
     def _start_stream(self, url: str) -> None:
         self._session_id += 1
@@ -339,8 +354,11 @@ class MjpegStreamController(QObject):
         if self._worker is not None:
             try:
                 self._worker.stop()
+            except RuntimeError:
+                logger.info("MJPEG stop ignored: worker already deleted")
+                self._worker = None
             except Exception:
-                pass
+                logger.debug("MJPEG stop failed", exc_info=True)
         if self._thread is not None:
             self._thread.quit()
             if block:

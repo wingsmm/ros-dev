@@ -21,6 +21,8 @@ ROBOT_WORKSPACE_NAV: List[RobotNavItem] = [
     RobotNavItem("back", "选择机器人", "ic_android_black_24dp.png"),
     RobotNavItem("overview", "总览", "ic_view_quilt_black_24dp.png"),
     RobotNavItem("camera", "摄像头", "ic_linked_camera_black_24dp.png"),
+    RobotNavItem("depth_camera", "深度相机", "ic_linked_camera_black_24dp.png"),
+    RobotNavItem("ground_perception", "地面感知", "ic_terrain_black_24dp.png"),
     RobotNavItem("robot", "2D 雷达", "ic_navigation_black_24dp.png"),
     RobotNavItem("odom_compare", "里程计对照", "ic_action_topics.png"),
     RobotNavItem("slam_map", "SLAM 地图", "ic_terrain_black_24dp.png"),

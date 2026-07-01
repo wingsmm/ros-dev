@@ -27,3 +27,11 @@ CAMERA_DIAGNOSTIC_TOPICS: tuple[str, ...] = (
 
 # Topics probed by ROS2 diagnostic worker (includes main /scan for comparison)
 CAMERA_PROBE_TOPICS: tuple[str, ...] = CAMERA_DIAGNOSTIC_TOPICS + (MAIN_SCAN_TOPIC,)
+
+# Depth camera page: depth topics + tf only (no RGB / scan)
+DEPTH_PAGE_PROBE_TOPICS: tuple[str, ...] = (
+    CAMERA_DEPTH_IMAGE_TOPIC,
+    CAMERA_DEPTH_INFO_TOPIC,
+    CAMERA_DEPTH_POINTS_TOPIC,
+    "/tf_static",
+)

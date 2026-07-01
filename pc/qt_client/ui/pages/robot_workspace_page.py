@@ -6,13 +6,16 @@ from PyQt5.QtCore import QEasingCurve, QPropertyAnimation, QRect, pyqtSignal
 from PyQt5.QtWidgets import QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
 from core import RobotSession
+from core.camera_controllers import CameraServices
 from core.robot_telemetry_binder import RobotTelemetryBinder
 from core.ros2_bridge_manager import Ros2BridgeManager
 from ui.models.robot_info import RobotInfo
 from ui.models.robot_store import RobotStore
-from ui.pages.camera_page import CameraPage
+from ui.pages.depth_camera_page import DepthCameraPage
+from ui.pages.ground_perception_page import GroundPerceptionPage
 from ui.pages.odom_compare_page import OdomComparePage
 from ui.pages.placeholder_page import PlaceholderPage
+from ui.pages.rgb_camera_page import RgbCameraPage
 from ui.pages.robot_page import RobotPage
 from ui.pages.settings_page import SettingsPage
 from ui.widgets.robot_hud_bar import RobotHudBar
@@ -20,7 +23,6 @@ from ui.widgets.robot_side_nav import CONTENT_PAGE_IDS, RobotSideNav
 
 _WORKSPACE_PLACEHOLDERS: Dict[str, str] = {
     "overview": "总览功能待接入",
-    "camera": "摄像头功能待接入",
     "slam_map": "SLAM 地图功能待接入",
     "gps_map": "GPS 地图功能待接入",
     "about": "关于功能待接入",
@@ -29,6 +31,8 @@ _WORKSPACE_PLACEHOLDERS: Dict[str, str] = {
 _NAV_TITLES: Dict[str, str] = {
     "overview": "总览",
     "camera": "摄像头",
+    "depth_camera": "深度相机",
+    "ground_perception": "地面感知",
     "robot": "2D 雷达",
     "odom_compare": "里程计对照",
     "slam_map": "SLAM 地图",
@@ -63,11 +67,15 @@ class RobotWorkspacePage(QWidget):
         self._active_page_id = ""
         self._telemetry_binder: Optional[RobotTelemetryBinder] = None
         self._ros2_bridge: Optional[Ros2BridgeManager] = None
+        self._camera_services: Optional[CameraServices] = None
         if session is not None:
             self._telemetry_binder = RobotTelemetryBinder(session, robot.name, self)
             self._hud.stop_motion_requested.connect(self._on_hud_stop_motion)
             self._ros2_bridge = Ros2BridgeManager(
                 session=session, robot=robot, parent=self
+            )
+            self._camera_services = CameraServices(
+                robot=robot, ros2_bridge=self._ros2_bridge, parent=self
             )
         self._build_ui()
 
@@ -88,9 +96,24 @@ class RobotWorkspacePage(QWidget):
         if self._telemetry_binder is not None:
             self._telemetry_binder.bind_hud(self._hud)
         for page_id in CONTENT_PAGE_IDS:
-            if page_id == "camera":
-                page = CameraPage(
+            if page_id == "camera" and self._camera_services is not None:
+                page = RgbCameraPage(
                     self.robot,
+                    self._camera_services,
+                    telemetry_binder=self._telemetry_binder,
+                    ros2_bridge=self._ros2_bridge,
+                )
+            elif page_id == "depth_camera" and self._camera_services is not None:
+                page = DepthCameraPage(
+                    self.robot,
+                    self._camera_services,
+                    telemetry_binder=self._telemetry_binder,
+                    ros2_bridge=self._ros2_bridge,
+                )
+            elif page_id == "ground_perception" and self._camera_services is not None:
+                page = GroundPerceptionPage(
+                    self.robot,
+                    self._camera_services,
                     telemetry_binder=self._telemetry_binder,
                     ros2_bridge=self._ros2_bridge,
                 )
@@ -139,12 +162,12 @@ class RobotWorkspacePage(QWidget):
     def _on_settings_saved(self) -> None:
         if self.session is not None:
             self.session.reload_warning_settings()
-        camera = self._page_widget("camera")
-        if camera is not None and hasattr(camera, "refresh_robot_settings"):
-            camera.refresh_robot_settings()
-        robot = self._page_widget("robot")
-        if robot is not None and hasattr(robot, "refresh_robot_settings"):
-            robot.refresh_robot_settings()
+        if self._camera_services is not None:
+            self._camera_services.refresh_robot(self.robot)
+        for page_id in ("camera", "depth_camera", "ground_perception", "robot"):
+            page = self._page_widget(page_id)
+            if page is not None and hasattr(page, "refresh_robot_settings"):
+                page.refresh_robot_settings()
         compare = self._page_widget("odom_compare")
         if compare is not None and hasattr(compare, "refresh_robot_settings"):
             compare.refresh_robot_settings()
@@ -249,6 +272,9 @@ class RobotWorkspacePage(QWidget):
             widget = self._stack.widget(i)
             if hasattr(widget, "shutdown"):
                 widget.shutdown()
+        if self._camera_services is not None:
+            self._camera_services.shutdown()
+            self._camera_services = None
         if self._ros2_bridge is not None:
             self._ros2_bridge.shutdown()
             self._ros2_bridge = None

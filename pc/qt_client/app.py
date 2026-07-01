@@ -128,7 +128,12 @@ def main() -> int:
     else:
         window = create_main_window(enable_ros2=False, legacy_ui=False)
 
+    quitting = {"active": False}
+
     def _request_quit() -> None:
+        if quitting["active"]:
+            return
+        quitting["active"] = True
         logger.info("quit requested (signal or platform)")
         window.cleanup()
         app.quit()

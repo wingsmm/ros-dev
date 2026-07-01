@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from PyQt5.QtCore import QObject, QThread, Qt, QTimer, pyqtSignal, QMetaObject
+from PyQt5.QtCore import QObject, QThread, Qt, QTimer, pyqtSignal, QMetaObject, Q_ARG
 
 from core.app_shutdown import register_shutdown
 from core.camera_depth_frame import DepthSourceKind
@@ -50,6 +50,7 @@ class CameraDepthPreviewManager(QObject):
         # Synchronous gate: drop worker frames before they reach the UI thread.
         self._deliver_to_ui = False
         self._delivery_gate.enabled = False
+        self._preview_decode_enabled = True
         self._bridge_sink: Optional[object] = None
         register_shutdown(self.shutdown, name="camera_depth_preview_manager", priority=24)
 
@@ -67,6 +68,16 @@ class CameraDepthPreviewManager(QObject):
         if self._worker is not None:
             self._worker.set_bridge_sink(sink)
 
+    def set_preview_decode_enabled(self, enabled: bool) -> None:
+        self._preview_decode_enabled = bool(enabled)
+        if self._worker is not None:
+            QMetaObject.invokeMethod(
+                self._worker,
+                "set_preview_decode_enabled",
+                Qt.QueuedConnection,
+                Q_ARG(bool, self._preview_decode_enabled),
+            )
+
     def start(self) -> bool:
         if self._thread is not None:
             if self._thread.isRunning():
@@ -81,6 +92,7 @@ class CameraDepthPreviewManager(QObject):
             self._config,
             delivery_gate=self._delivery_gate,
             bridge_sink=self._bridge_sink,
+            preview_decode_enabled=self._preview_decode_enabled,
         )
         worker.moveToThread(thread)
         worker.preview_ready.connect(self._on_preview)

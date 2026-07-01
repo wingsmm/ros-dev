@@ -13,6 +13,8 @@ import logging
 import os
 from dataclasses import dataclass
 
+from core.robot_frames import CAMERA_PITCH, CAMERA_X, CAMERA_Y, CAMERA_Z
+
 logger = logging.getLogger(__name__)
 
 
@@ -124,10 +126,10 @@ class GroundPerceptionConfig:
             rgb_cy=_env_float("RGB_CY", 240.0),
             rgb_ref_width=_env_int("RGB_REF_WIDTH", 640),
             rgb_ref_height=_env_int("RGB_REF_HEIGHT", 480),
-            camera_x=_env_float("CAMERA_X", 0.10),
-            camera_y=_env_float("CAMERA_Y", 0.0),
-            camera_z=_env_float("CAMERA_Z", 0.20),
-            camera_pitch=_env_float("CAMERA_PITCH", 0.35),
+            camera_x=CAMERA_X,
+            camera_y=CAMERA_Y,
+            camera_z=CAMERA_Z,
+            camera_pitch=CAMERA_PITCH,
         )
 
     def log_summary(self) -> None:

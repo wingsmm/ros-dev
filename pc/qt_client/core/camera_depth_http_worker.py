@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 _MAGIC = b"XTD1"
 _MAX_HEADER_BYTES = 64 * 1024
 _MAX_FRAME_BYTES = 32 * 1024 * 1024
+_DEPTH_FLOW_LOG_INTERVAL_S = 5.0
 
 
 @dataclass(frozen=True)
@@ -69,15 +70,15 @@ class CameraDepthHttpWorker(QObject):
         config: Optional[DepthSourceConfig] = None,
         delivery_gate: Optional[object] = None,
         bridge_sink: Optional[Callable[[dict, bytes, Optional[dict]], None]] = None,
+        preview_decode_enabled: bool = True,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._config = config or DepthSourceConfig.from_env()
         self._delivery_gate = delivery_gate
         self._bridge_sink = bridge_sink
-        self._timer = QTimer(self)
-        self._timer.setInterval(self._config.http_poll_ms)
-        self._timer.timeout.connect(self._poll_once)
+        self._preview_decode_enabled = bool(preview_decode_enabled)
+        self._timer: Optional[QTimer] = None
         self._running = False
         self._paused = False
         self._last_stamp_ns = 0
@@ -93,6 +94,7 @@ class CameraDepthHttpWorker(QObject):
         self._connected_announced = False
         self._http: Optional[HTTPConnection] = None
         self._http_key = ""
+        self._last_flow_log_mono = 0.0
 
     def is_active(self) -> bool:
         return self._running
@@ -170,6 +172,13 @@ class CameraDepthHttpWorker(QObject):
         header, data = _read_depth_response(body)
         return header, data, transport_ms
 
+    def _ensure_timer(self) -> QTimer:
+        if self._timer is None:
+            self._timer = QTimer(self)
+            self._timer.setInterval(self._config.http_poll_ms)
+            self._timer.timeout.connect(self._poll_once)
+        return self._timer
+
     @pyqtSlot()
     def start_worker(self) -> None:
         if self._running:
@@ -180,14 +189,15 @@ class CameraDepthHttpWorker(QObject):
         self._running = True
         self._paused = False
         self._connected_announced = False
-        self._timer.start()
+        self._ensure_timer().start()
         self.status_changed.emit("Raw Depth HTTP 连接中…")
         self._poll_once()
 
     @pyqtSlot()
     def stop_worker(self) -> None:
         self._running = False
-        self._timer.stop()
+        if self._timer is not None:
+            self._timer.stop()
         self._paused = False
         self._close_http()
         self.status_changed.emit("已停止")
@@ -197,7 +207,8 @@ class CameraDepthHttpWorker(QObject):
         if not self._running or self._paused:
             return
         self._paused = True
-        self._timer.stop()
+        if self._timer is not None:
+            self._timer.stop()
         self._close_http()
         self.status_changed.emit("Raw Depth HTTP 已暂停")
 
@@ -206,7 +217,7 @@ class CameraDepthHttpWorker(QObject):
         if not self._running or not self._paused:
             return
         self._paused = False
-        self._timer.start()
+        self._ensure_timer().start()
         self.status_changed.emit("Raw Depth HTTP 连接中…")
         self._poll_once()
 
@@ -214,6 +225,10 @@ class CameraDepthHttpWorker(QObject):
         self, sink: Optional[Callable[[dict, bytes, Optional[dict]], None]]
     ) -> None:
         self._bridge_sink = sink
+
+    @pyqtSlot(bool)
+    def set_preview_decode_enabled(self, enabled: bool) -> None:
+        self._preview_decode_enabled = bool(enabled)
 
     def _fetch_camera_info(self) -> None:
         now = time.monotonic()
@@ -230,7 +245,7 @@ class CameraDepthHttpWorker(QObject):
             self._camera_info_payload = None
 
     def _poll_once(self) -> None:
-        if not self._running or self._paused or not self._delivery_enabled():
+        if not self._running or self._paused:
             return
         now_mono = time.monotonic()
         if self._last_emit_mono and now_mono - self._last_emit_mono < self._min_emit_interval_s:
@@ -260,6 +275,26 @@ class CameraDepthHttpWorker(QObject):
                 bridge_sink(header, data, self._camera_info_payload)
             except Exception:
                 logger.exception("depth bridge tee failed")
+        decode_preview = self._preview_decode_enabled and self._delivery_enabled()
+        if not decode_preview:
+            self._last_emit_mono = now_mono
+            self._last_error = ""
+            if now_mono - self._last_flow_log_mono >= _DEPTH_FLOW_LOG_INTERVAL_S:
+                logger.info(
+                    "DEPTH_FLOW frame transport=%.1fms raw_only=True "
+                    "bytes=%d frame=%sx%s encoding=%s bridge_sink=%s",
+                    transport_ms,
+                    len(data),
+                    header.get("width", "?"),
+                    header.get("height", "?"),
+                    header.get("encoding", ""),
+                    bridge_sink is not None,
+                )
+                self._last_flow_log_mono = now_mono
+            if not self._connected_announced:
+                self._connected_announced = True
+                self.status_changed.emit("Raw Depth HTTP 已连接（raw-only）")
+            return
 
         self._frame_count += 1
         elapsed = max(now_mono - self._window_start, 0.001)
@@ -267,6 +302,7 @@ class CameraDepthHttpWorker(QObject):
             self._last_fps = self._frame_count / elapsed
             self._frame_count = 0
             self._window_start = now_mono
+        decode_t0 = time.perf_counter()
         try:
             frame, rgb = ros_image_to_depth_preview(
                 data=data,
@@ -284,6 +320,22 @@ class CameraDepthHttpWorker(QObject):
         except Exception as exc:
             self._report_waiting("depth decode: %s" % exc)
             return
+        decode_ms = (time.perf_counter() - decode_t0) * 1000.0
+        if now_mono - self._last_flow_log_mono >= _DEPTH_FLOW_LOG_INTERVAL_S:
+            logger.info(
+                "DEPTH_FLOW frame transport=%.1fms decode=%.1fms raw_only=False "
+                "bytes=%d frame=%sx%s preview=%sx%s encoding=%s bridge_sink=%s",
+                transport_ms,
+                decode_ms,
+                len(data),
+                header.get("width", "?"),
+                header.get("height", "?"),
+                rgb.shape[1],
+                rgb.shape[0],
+                header.get("encoding", ""),
+                bridge_sink is not None,
+            )
+            self._last_flow_log_mono = now_mono
         if self._paused or not self._delivery_enabled():
             return
         self._last_emit_mono = now_mono
@@ -325,6 +377,7 @@ class CameraDepthHttpWorker(QObject):
 
     def _fail(self, detail: str) -> None:
         self._running = False
-        self._timer.stop()
+        if self._timer is not None:
+            self._timer.stop()
         self._close_http()
         self.failed.emit(detail)

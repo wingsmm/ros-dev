@@ -12,7 +12,7 @@ DEFAULT_MIN_DEPTH_M = 0.2
 DEFAULT_MAX_DEPTH_M = 5.0
 
 
-def _decode_depth_array(
+def decode_depth_array(
     raw,
     *,
     width: int,
@@ -128,7 +128,7 @@ def ros_image_to_depth_preview(
 ) -> Tuple[DepthFrame, np.ndarray]:
     """Faster preview path: decimate depth before float colormap."""
     factor = max(1, int(preview_downscale))
-    depth_m = _decode_depth_array(
+    depth_m = decode_depth_array(
         data, width=width, height=height, encoding=encoding
     )
     if factor > 1:
@@ -174,7 +174,7 @@ def ros_image_to_depth_frame(
     fps: float = 0.0,
     latency_ms: float = 0.0,
 ) -> Tuple[DepthFrame, np.ndarray]:
-    depth_m = _decode_depth_array(
+    depth_m = decode_depth_array(
         data, width=width, height=height, encoding=encoding
     )
     stats = compute_depth_stats(
