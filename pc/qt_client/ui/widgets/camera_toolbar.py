@@ -10,6 +10,7 @@ class CameraToolbar(QWidget):
     connect_requested = pyqtSignal()
     disconnect_requested = pyqtSignal()
     reconnect_requested = pyqtSignal()
+    snapshot_requested = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -24,10 +25,12 @@ class CameraToolbar(QWidget):
         self.connect_btn = QPushButton("连接")
         self.disconnect_btn = QPushButton("断开")
         self.reconnect_btn = QPushButton("重连")
+        self.snapshot_btn = QPushButton("截图")
         self.disconnect_btn.setEnabled(False)
         btn_row.addWidget(self.connect_btn)
         btn_row.addWidget(self.disconnect_btn)
         btn_row.addWidget(self.reconnect_btn)
+        btn_row.addWidget(self.snapshot_btn)
         btn_row.addStretch(1)
         root.addLayout(btn_row)
 
@@ -76,6 +79,7 @@ class CameraToolbar(QWidget):
         self.connect_btn.clicked.connect(self.connect_requested.emit)
         self.disconnect_btn.clicked.connect(self.disconnect_requested.emit)
         self.reconnect_btn.clicked.connect(self.reconnect_requested.emit)
+        self.snapshot_btn.clicked.connect(self.snapshot_requested.emit)
 
     def set_stream_urls(self, rgb_url: str, depth_url: str) -> None:
         self.rgb_url_edit.setText(rgb_url)
@@ -97,6 +101,10 @@ class CameraToolbar(QWidget):
         self.connect_btn.setEnabled(not streaming)
         self.disconnect_btn.setEnabled(streaming)
         self.reconnect_btn.setEnabled(True)
+
+    def set_snapshot_visible(self, visible: bool) -> None:
+        self.snapshot_btn.setVisible(visible)
+        self.snapshot_btn.setEnabled(visible)
 
     def set_connecting(self) -> None:
         self.connect_btn.setEnabled(False)

@@ -224,7 +224,7 @@ class GroundPerceptionOverlay:
         painter.drawText(
             width // 2 - 120,
             height // 2 - 20,
-            "点击右侧「开始感知」按钮开始地面检测",
+            "感知视图已自动开启，正在等待 RGB / Depth 数据",
         )
 
         y = height // 2 + 30

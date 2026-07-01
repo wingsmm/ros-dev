@@ -83,8 +83,23 @@ Commands:
   record    Start rosbag
   logs      Tail logs
 
+2D radar page commands:
+  radar2d-start    Start only the robot-side services needed by Qt "2D 雷达"
+  radar2d-stop     Stop the Qt stack services owned by radar2d/full/camera profiles
+  radar2d-restart  Stop then radar2d-start
+  radar2d-status   Status focused on /scan, odom, /cmd_vel and JSON :8765
+  radar2d-check    Slow 2D radar acceptance checks
+
+Camera page commands:
+  camera-start      Start robot-side services needed by Qt "摄像头"
+  camera-stop       Stop the Qt stack services owned by camera/radar/full profiles
+  camera-restart    Stop then camera-start
+  camera-status     Status focused on RGB MJPEG, depth raw HTTP, base and JSON
+  camera-check      Slow camera page acceptance checks
+
 Profiles:
   PROFILE=full            daily Qt stack
+  PROFILE=radar2d         Qt 2D radar only: bringup + JSON, no camera/rf2o
   PROFILE=camera_raw      RGB + depth raw, no depth preview
   PROFILE=camera_preview  Deprecated alias of camera_raw
   PROFILE=camera_depth    depth hardware diagnostic only
@@ -126,6 +141,18 @@ qt_source_ros() {
 
 qt_resolve_profile() {
   case "$PROFILE" in
+    radar2d)
+      BRINGUP_ENABLE=1
+      JSON_ENABLE=1
+      CAMERA_ENABLE=0
+      DEPTH_CAMERA_ENABLE=0
+      DEPTH_PREVIEW_ENABLE=0
+      DEPTH_PREVIEW_MODE=off
+      DEPTH_HTTP_ENABLE=0
+      LASER_ODOM_ENABLE=0
+      CAMERA_MODE=off
+      RGB_SOURCE=off
+      ;;
     camera_raw)
       BRINGUP_ENABLE=1
       JSON_ENABLE=1
@@ -559,6 +586,201 @@ qt_start() {
   fi
   if qt_depth_preview_enabled; then
     echo "Qt Depth: http://${HOST_IP}:8080/stream?topic=${DEPTH_PREVIEW_TOPIC}"
+  fi
+}
+
+qt_radar2d_start() {
+  PROFILE=radar2d
+  qt_start
+  echo "[DONE] 2D radar services ready"
+  echo "Required for Qt 2D 雷达: /scan /odom /odom_raw /cmd_vel JSON:${HOST_IP}:8765"
+}
+
+qt_radar2d_stop() {
+  qt_stop
+}
+
+qt_radar2d_status() {
+  qt_source_ros
+  qt_load_saved_runtime_config
+  local active_profile="$PROFILE"
+  PROFILE=radar2d
+  qt_resolve_profile
+  stack_refresh_all_owners
+  echo "stack=$STACK_NAME"
+  echo "view=2d_radar"
+  echo "desired_PROFILE=radar2d active_PROFILE=$active_profile"
+  if stack_owner_running "$STACK_NAME"; then
+    echo "owner=active"
+  else
+    echo "owner=inactive"
+  fi
+  echo "---required ports---"
+  if stack_is_listening 11311; then
+    echo "[OK] roscore port 11311"
+  else
+    echo "[MISS] roscore port 11311"
+  fi
+  if stack_is_listening 8765; then
+    echo "[OK] JSON gateway port 8765"
+  else
+    echo "[MISS] JSON gateway port 8765"
+  fi
+  echo "---required pids---"
+  for name in roscore bringup json; do
+    if qt_pid_alive "$name"; then
+      echo "[OK] $name pid=$(cat "$(qt_pid_file "$name")")"
+    else
+      echo "[MISS] $name not tracked"
+    fi
+  done
+  echo "---2D radar topics---"
+  for topic in /scan /odom /odom_raw; do
+    if qt_topic_has_publisher "$topic"; then
+      echo "[OK] $topic publisher"
+    else
+      echo "[MISS] $topic publisher"
+    fi
+  done
+  if rostopic list 2>/dev/null | grep -qx /cmd_vel; then
+    echo "[OK] /cmd_vel topic visible"
+  else
+    echo "[WARN] /cmd_vel not visible until Qt sends manual velocity"
+  fi
+  echo "---intentionally off in radar2d---"
+  for name in camera web_video depth_camera depth_http depth_preview rf2o; do
+    if qt_pid_alive "$name"; then
+      echo "[WARN] $name unexpectedly tracked pid=$(cat "$(qt_pid_file "$name")")"
+    else
+      echo "[OK] $name off"
+    fi
+  done
+}
+
+qt_radar2d_check() {
+  qt_source_ros
+  qt_load_saved_runtime_config
+  local active_profile="$PROFILE"
+  PROFILE=radar2d
+  qt_resolve_profile
+  qt_wait_rosmaster 10
+  echo "desired_PROFILE=radar2d active_PROFILE=$active_profile"
+  echo "---2D radar readiness---"
+  qt_wait_topic_publisher /scan 10
+  qt_wait_topic_publisher /odom 10
+  qt_wait_topic_publisher /odom_raw 10
+  if stack_is_listening 8765; then
+    echo "[OK] JSON gateway :8765"
+  else
+    echo "[ERR] JSON gateway :8765 closed"
+    return 1
+  fi
+  echo "---2D radar sample frames---"
+  qt_wait_topic_frame /scan 12
+  qt_wait_topic_frame /odom 12
+  echo "---2D radar rates---"
+  qt_topic_hz /scan
+  qt_topic_hz /odom
+}
+
+qt_camera_start() {
+  PROFILE=camera_raw
+  qt_start
+  echo "[DONE] camera page services ready"
+  echo "Required for Qt 摄像头: JSON:${HOST_IP}:8765 RGB:http://${HOST_IP}:8080/stream?topic=${QT_RGB_TOPIC} depth:http://${HOST_IP}:${DEPTH_HTTP_PORT}/v1/depth/latest"
+}
+
+qt_camera_stop() {
+  qt_stop
+}
+
+qt_camera_status() {
+  qt_source_ros
+  qt_load_saved_runtime_config
+  local active_profile="$PROFILE"
+  PROFILE=camera_raw
+  qt_resolve_profile
+  stack_refresh_all_owners
+  echo "stack=$STACK_NAME"
+  echo "view=camera"
+  echo "desired_PROFILE=camera_raw active_PROFILE=$active_profile CAMERA_MODE=$CAMERA_MODE RGB_SOURCE=$RGB_SOURCE"
+  if stack_owner_running "$STACK_NAME"; then
+    echo "owner=active"
+  else
+    echo "owner=inactive"
+  fi
+  echo "---required ports---"
+  for spec in "11311:roscore" "8765:json" "8080:mjpeg" "${DEPTH_HTTP_PORT}:depth_http"; do
+    local port="${spec%%:*}"
+    local name="${spec#*:}"
+    if stack_is_listening "$port"; then
+      echo "[OK] $name port $port"
+    else
+      echo "[MISS] $name port $port"
+    fi
+  done
+  echo "---required pids---"
+  for name in roscore bringup json camera rgb_relay depth_camera depth_http web_video; do
+    if qt_pid_alive "$name"; then
+      echo "[OK] $name pid=$(cat "$(qt_pid_file "$name")")"
+    else
+      echo "[MISS] $name not tracked"
+    fi
+  done
+  echo "---camera page topics---"
+  for topic in /scan /odom /odom_raw "$QT_RGB_TOPIC" "$DEPTH_INPUT_TOPIC" /camera/depth/camera_info; do
+    if qt_topic_has_publisher "$topic"; then
+      echo "[OK] $topic publisher"
+    else
+      echo "[MISS] $topic publisher"
+    fi
+  done
+  echo "---intentionally off in camera_raw---"
+  for name in depth_preview rf2o; do
+    if qt_pid_alive "$name"; then
+      echo "[WARN] $name unexpectedly tracked pid=$(cat "$(qt_pid_file "$name")")"
+    else
+      echo "[OK] $name off"
+    fi
+  done
+}
+
+qt_camera_check() {
+  qt_source_ros
+  qt_load_saved_runtime_config
+  local active_profile="$PROFILE"
+  PROFILE=camera_raw
+  qt_resolve_profile
+  qt_wait_rosmaster 10
+  echo "desired_PROFILE=camera_raw active_PROFILE=$active_profile"
+  echo "---camera page readiness---"
+  qt_wait_topic_publisher /scan 10
+  qt_wait_topic_publisher /odom 10
+  qt_wait_topic_publisher "$QT_RGB_TOPIC" 20
+  qt_wait_topic_publisher "$DEPTH_INPUT_TOPIC" 20
+  qt_wait_topic_publisher /camera/depth/camera_info 20
+  for port in 8765 8080 "$DEPTH_HTTP_PORT"; do
+    if stack_is_listening "$port"; then
+      echo "[OK] port $port"
+    else
+      echo "[ERR] port $port closed"
+      return 1
+    fi
+  done
+  echo "---camera page sample frames---"
+  qt_wait_topic_frame "$QT_RGB_TOPIC" 12
+  qt_wait_topic_frame "$DEPTH_INPUT_TOPIC" 12
+  echo "---camera page rates---"
+  qt_topic_hz "$QT_RGB_TOPIC"
+  qt_topic_hz "$DEPTH_INPUT_TOPIC"
+  echo "---camera page HTTP---"
+  qt_mjpeg_probe "$QT_RGB_TOPIC"
+  if curl -fsS --connect-timeout 2 --max-time 4 "http://127.0.0.1:${DEPTH_HTTP_PORT}/healthz" \
+    | grep -q '"depth_ready":true'; then
+    echo "[OK] depth raw HTTP ready"
+  else
+    echo "[ERR] depth raw HTTP not ready"
+    return 1
   fi
 }
 

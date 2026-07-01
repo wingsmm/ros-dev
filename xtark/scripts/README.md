@@ -38,19 +38,56 @@ Windows: `xtark\scripts\android_remote.bat`
 ~/ros_ws/scripts/qt_stack.sh record   # optional bag
 ```
 
+**Qt 2D 雷达页专用：**
+
+| Command | Purpose |
+|---------|---------|
+| `radar2d-start` | Start the single robot-side state needed by Qt "2D 雷达": roscore + bringup + JSON `:8765` |
+| `radar2d-status` | Focused status for `/scan`, `/odom`, `/odom_raw`, `/cmd_vel`, JSON `:8765` |
+| `radar2d-check` | Slow acceptance: wait for `/scan` and odom frames/rates |
+| `radar2d-stop` | Stop the Qt-owned services |
+
+```bash
+~/ros_ws/scripts/qt_stack.sh radar2d-start
+~/ros_ws/scripts/qt_stack.sh radar2d-status
+~/ros_ws/scripts/qt_stack.sh radar2d-check
+~/ros_ws/scripts/qt_stack.sh radar2d-stop
+```
+
+`radar2d-start` is equivalent to `PROFILE=radar2d qt_stack.sh start`. It supports the Qt 2D radar page features: laser view from `/scan`, odom/HUD from `/odom`, manual `/cmd_vel` through JSON `:8765`, and local SafeMode calculation in the PC client. It intentionally does not start camera, depth HTTP, or rf2o `/odom_laser`.
+
+**Qt 摄像头页专用：**
+
+| Command | Purpose |
+|---------|---------|
+| `camera-start` | Start the single robot-side state needed by Qt "摄像头": bringup + JSON + RGB MJPEG + depth raw HTTP |
+| `camera-status` | Focused status for base topics, JSON `:8765`, RGB `:8080`, depth raw `:8082` |
+| `camera-check` | Slow acceptance: wait for RGB/depth frames, topic rates, MJPEG and depth HTTP health |
+| `camera-stop` | Stop the Qt-owned services |
+
+```bash
+~/ros_ws/scripts/qt_stack.sh camera-start
+~/ros_ws/scripts/qt_stack.sh camera-status
+~/ros_ws/scripts/qt_stack.sh camera-check
+~/ros_ws/scripts/qt_stack.sh camera-stop
+```
+
+`camera-start` is equivalent to `PROFILE=camera_raw qt_stack.sh start`. It intentionally includes bringup + JSON because the Qt camera page shares HUD/manual control state with the rest of the PC client. It intentionally does not start rf2o `/odom_laser` or depth preview MJPEG.
+
 **Phase 1.5 — profile 启动矩阵**
 
 | `PROFILE` | 用途 | 启动内容 |
 |-----------|------|----------|
 | `full` (默认) | 日常 Qt 全栈 | bringup + JSON + camera/rf2o（按 env） |
+| **`radar2d`** | **Qt 2D 雷达页** | bringup + JSON；**无** camera / depth / rf2o |
 | **`camera_raw`** | **Qt 摄像头页主模式（RGB+Depth raw）** | bringup + JSON + Astra depth + RGB relay + `:8080`；**无** rf2o / xtark preview |
 | `camera_depth` | 深度硬件最小诊断 | 仅 roscore + `depth_camera` |
 
 **Qt 摄像头页推荐（Phase 1.5 主验收）：**
 
 ```bash
-PROFILE=camera_raw ~/ros_ws/scripts/qt_stack.sh start
-~/ros_ws/scripts/qt_stack.sh status
+~/ros_ws/scripts/qt_stack.sh camera-start
+~/ros_ws/scripts/qt_stack.sh camera-status
 ```
 
 `camera_raw` 默认等价于：
@@ -73,19 +110,20 @@ PROFILE=camera_depth ~/ros_ws/scripts/qt_stack.sh start
 | Profile | 用途 |
 |---------|------|
 | `full` | 原 Qt 日常完整栈 |
+| `radar2d` | 2D 雷达页最小栈：/scan + odom + JSON 手动控制 |
 | `camera_raw` | 省资源：RGB + depth raw，无 preview |
 | `camera_preview` | 验收/兜底：camera_raw + `/camera/depth/preview` MJPEG |
 | `camera_depth` | 仅深度硬件诊断 |
 
-| Env | `full` | `camera_raw` | `camera_preview` | `camera_depth` |
-|-----|--------|--------------|------------------|----------------|
-| `BRINGUP_ENABLE` | `1` | `1` | `1` | `0` |
-| `JSON_ENABLE` | `1` | `1` | `1` | `0` |
-| `LASER_ODOM_ENABLE` | `1` | `0` | `0` | `0` |
-| `CAMERA_ENABLE` | `1` | `1` | `1` | `0` |
-| `DEPTH_CAMERA_ENABLE` | `0` | `1` | `1` | `1` |
-| `DEPTH_PREVIEW_MODE` | `off` | `off` | `xtark` | `off` |
-| `CAMERA_MODE` | auto | `rgb_depth` | `rgb_depth` | `depth_only` |
+| Env | `full` | `radar2d` | `camera_raw` | `camera_preview` | `camera_depth` |
+|-----|--------|-----------|--------------|------------------|----------------|
+| `BRINGUP_ENABLE` | `1` | `1` | `1` | `1` | `0` |
+| `JSON_ENABLE` | `1` | `1` | `1` | `1` | `0` |
+| `LASER_ODOM_ENABLE` | `1` | `0` | `0` | `0` | `0` |
+| `CAMERA_ENABLE` | `1` | `0` | `1` | `1` | `0` |
+| `DEPTH_CAMERA_ENABLE` | `0` | `0` | `1` | `1` | `1` |
+| `DEPTH_PREVIEW_MODE` | `off` | `off` | `off` | `xtark` | `off` |
+| `CAMERA_MODE` | auto | `off` | `rgb_depth` | `rgb_depth` | `depth_only` |
 
 `camera_raw` / `camera_preview` 默认 `RGB_SOURCE=auto`（OpenNI RGB 有帧则 relay，否则 Astra UVC）：
 
@@ -106,6 +144,8 @@ HTTP:       standalone web_video_server :8080
 PROFILE=camera_raw ~/ros_ws/scripts/qt_stack.sh restart    # 日常低负载
 PROFILE=camera_preview ~/ros_ws/scripts/qt_stack.sh restart  # Depth MJPEG 验收
 ```
+
+日常摄像头页优先使用 `camera-start` / `camera-status` / `camera-check`，只有调试 profile 细节时才直接写 `PROFILE=camera_raw`。
 
 验收用 `rostopic info` / `rostopic echo -n 1` 验 publisher 与帧，不用 `rostopic list`  alone。
 
@@ -135,10 +175,10 @@ DEPTH_CAMERA_ENABLE=1 DEPTH_PREVIEW_ENABLE=1 DEPTH_PREVIEW_MODE=xtark CAMERA_MOD
 
 Requires on robot: `xtark_nav_depthcamera` (not in this git). `xtark_depth_preview` only needed for `DEPTH_PREVIEW_MODE=xtark`. Does **not** start `/camera/scan_depth` (Phase 2).
 
-Lightweight (no camera, no laser odom):
+Lightweight 2D radar (no camera, no laser odom):
 
 ```bash
-CAMERA_ENABLE=0 LASER_ODOM_ENABLE=0 qt_stack.sh start
+qt_stack.sh radar2d-start
 ```
 
 Windows: `xtark\scripts\qt_remote.bat`
@@ -153,7 +193,7 @@ Logs: `~/xtark_logs/qt_stack/` and `~/xtark_logs/android/` (owner markers under 
 |--------|-------------|
 | `robot_stack.sh` | `qt_stack.sh` |
 | `laser_odom_compare_stack.sh` | `qt_stack.sh` |
-| `robot_control_stack.sh` | `CAMERA_ENABLE=0 LASER_ODOM_ENABLE=0 qt_stack.sh` |
+| `robot_control_stack.sh` | `qt_stack.sh radar2d-*` |
 
 ## Development / experiment tools
 

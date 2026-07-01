@@ -29,12 +29,20 @@ if /I "%CMD%"=="status" goto :status
 if /I "%CMD%"=="check" goto :stack
 if /I "%CMD%"=="logs" goto :stack
 if /I "%CMD%"=="record" goto :stack
+if /I "%CMD%"=="radar2d-start" goto :stack
+if /I "%CMD%"=="radar2d-stop" goto :stack
+if /I "%CMD%"=="radar2d-status" goto :stack
+if /I "%CMD%"=="radar2d-check" goto :stack
+if /I "%CMD%"=="camera-start" goto :stack
+if /I "%CMD%"=="camera-stop" goto :stack
+if /I "%CMD%"=="camera-status" goto :stack
+if /I "%CMD%"=="camera-check" goto :stack
 if /I "%CMD%"=="pull" goto :pull
 echo [ERR] unknown command: %CMD%
 goto :help
 
 :help
-echo Usage: qt_remote.bat [deploy^|build^|start^|stop^|restart^|status^|check^|logs^|record^|pull ^<bag_basename^>^|help]
+echo Usage: qt_remote.bat [deploy^|build^|start^|stop^|restart^|status^|check^|logs^|record^|radar2d-start^|radar2d-stop^|radar2d-status^|radar2d-check^|camera-start^|camera-stop^|camera-status^|camera-check^|pull ^<bag_basename^>^|help]
 echo.
 echo   deploy   Sync qt_stack + packages, catkin_make
 echo   build    catkin_make only
@@ -46,6 +54,8 @@ echo   status   qt_stack.sh status + topics
 echo   check    qt_stack.sh check (slow frame/rate/MJPEG checks)
 echo   logs     qt_stack.sh logs
 echo   record   qt_stack.sh record
+echo   radar2d-start/status/check/stop  Qt 2D radar minimal stack
+echo   camera-start/status/check/stop   Qt camera page stack
 echo   pull     Download qt_stack bag + analysis to xtark/record/
 echo   help     Show this help
 echo.

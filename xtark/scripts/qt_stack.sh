@@ -20,6 +20,16 @@ main() {
     check) qt_check ;;
     record) qt_record ;;
     logs) qt_logs ;;
+    radar2d-start|2d-start) qt_radar2d_start ;;
+    radar2d-stop|2d-stop) qt_radar2d_stop ;;
+    radar2d-restart|2d-restart) qt_radar2d_stop; qt_radar2d_start ;;
+    radar2d-status|2d-status) qt_radar2d_status ;;
+    radar2d-check|2d-check) qt_radar2d_check ;;
+    camera-start|cam-start) qt_camera_start ;;
+    camera-stop|cam-stop) qt_camera_stop ;;
+    camera-restart|cam-restart) qt_camera_stop; qt_camera_start ;;
+    camera-status|cam-status) qt_camera_status ;;
+    camera-check|cam-check) qt_camera_check ;;
     -h|--help|help|"") qt_usage ;;
     *)
       echo "[ERR] unknown command: $1"

@@ -58,6 +58,8 @@ pnpm-debug.log*
 # qt_client 本地存图输出（联调产物）
 pc/qt_client/maps/*
 !pc/qt_client/maps/.gitkeep
+pc/qt_client/data/camera_snapshots/*
+!pc/qt_client/data/camera_snapshots/.gitkeep
 
 # xtark 真机测试录制（bag / 分析报告，从 Nano 拉回）
 xtark/record/**

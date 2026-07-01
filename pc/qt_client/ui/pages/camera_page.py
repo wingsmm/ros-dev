@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from PyQt5.QtCore import Qt, QTimer
@@ -44,6 +47,7 @@ logger = logging.getLogger(__name__)
 _GROUND_RENDER_LOG_INTERVAL_S = 5.0
 _GROUND_PLANE_ESTIMATE_INTERVAL_S = 1.0
 _GROUND_PLANE_LOG_INTERVAL_S = 5.0
+_DEFAULT_CAMERA_SNAPSHOT_DIR = "data/camera_snapshots"
 
 
 class CameraPage(QWidget):
@@ -178,6 +182,7 @@ class CameraPage(QWidget):
         self._toolbar.connect_requested.connect(self._on_connect)
         self._toolbar.disconnect_requested.connect(self._on_disconnect_all)
         self._toolbar.reconnect_requested.connect(self._on_reconnect)
+        self._toolbar.snapshot_requested.connect(self._on_snapshot_requested)
 
         self._view_mode_bar.mode_changed.connect(self._on_view_mode_changed)
 
@@ -200,8 +205,6 @@ class CameraPage(QWidget):
 
         # 地面感知面板信号
         if self._ground_panel is not None:
-            self._ground_panel.start_clicked.connect(self._on_ground_start)
-            self._ground_panel.stop_clicked.connect(self._on_ground_stop)
             self._ground_panel.method_changed.connect(self._on_ground_method_changed)
 
     def _apply_robot_defaults(self) -> None:
@@ -233,11 +236,13 @@ class CameraPage(QWidget):
         self._apply_manual_speed_defaults()
         self._manual.set_keyboard_enabled(True)
         self._ros2_panel.refresh_display()
-        if not self._stream.is_streaming():
+        self._toolbar.set_snapshot_visible(self._view_mode == "rgb")
+        if self._view_mode == "depth":
+            self._start_depth_preview()
+        elif not self._stream.is_streaming():
             self._on_connect()
         elif auto_camera_bridge_enabled():
             self._maybe_auto_start_camera_bridge()
-        self._start_depth_preview()
         self._sync_bridge_capabilities()
 
     def on_page_deactivated(self) -> None:
@@ -263,6 +268,7 @@ class CameraPage(QWidget):
         prev = self._view_mode
         self._view_mode = mode
         self._viewport.set_view_mode(mode)
+        self._toolbar.set_snapshot_visible(mode == "rgb")
         logger.info(
             "camera view mode: %s -> %s (ground_running=%s)",
             prev,
@@ -280,9 +286,8 @@ class CameraPage(QWidget):
             self._stream.resume()
             # 确保 depth 流在跑（供 tap），但不推送到 UI
             self._start_depth_preview_for_perception()
-            # 显示 Idle 画面
             if not self._ground_running:
-                self._show_ground_idle()
+                self._on_ground_start()
         else:
             self._depth_panel.setVisible(True)
             if self._ground_panel_scroll is not None:
@@ -293,14 +298,21 @@ class CameraPage(QWidget):
 
         if mode == "rgb":
             self._stream.set_max_fps(8.0)
-            self._stream.resume()
+            if self._stream.is_streaming():
+                self._stream.resume()
+            else:
+                self._on_connect()
             self._stop_depth_preview_for_rgb()
         elif mode == "depth":
-            self._stream.pause()
+            self._latest_rgb_frame = None
+            self._stream.disconnect()
             self._start_depth_preview()
         elif mode == "split":
             self._stream.set_max_fps(5.0)
-            self._stream.resume()
+            if self._stream.is_streaming():
+                self._stream.resume()
+            else:
+                self._on_connect()
             self._start_depth_preview()
 
         self._sync_bridge_capabilities()
@@ -356,9 +368,54 @@ class CameraPage(QWidget):
         elif self._view_mode in ("rgb", "split"):
             self._viewport.set_frame_jpeg(jpeg)
 
+    def _on_snapshot_requested(self) -> None:
+        """Save the latest raw RGB frame for later ground calibration."""
+        if self._view_mode != "rgb":
+            self._toolbar.set_status("请切到 RGB 后截图")
+            logger.info("camera snapshot skipped: view_mode=%s", self._view_mode)
+            return
+
+        if not self._stream.is_streaming():
+            self._toolbar.set_status("RGB 未连接，无法截图")
+            logger.warning("camera snapshot skipped: RGB stream is not running")
+            return
+
+        if self._latest_rgb_frame is None or self._latest_rgb_frame.isNull():
+            self._toolbar.set_status("暂无 RGB 帧，无法截图")
+            logger.warning("camera snapshot skipped: no RGB frame cached")
+            return
+
+        snapshot_dir = self._camera_snapshot_dir()
+        snapshot_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        path = snapshot_dir / f"rgb_{stamp}.png"
+
+        image = self._latest_rgb_frame.copy()
+        if not image.save(str(path), "PNG"):
+            self._toolbar.set_status("截图保存失败")
+            logger.error("camera snapshot save failed: %s", path)
+            return
+
+        self._toolbar.set_status(f"截图已保存: {path.name}")
+        logger.info("camera snapshot saved: %s", path)
+
+    @staticmethod
+    def _camera_snapshot_dir() -> Path:
+        """Resolve CAMERA_SNAPSHOT_DIR; relative paths are under pc/qt_client."""
+        qt_client_root = Path(__file__).resolve().parents[2]
+        configured = os.environ.get("CAMERA_SNAPSHOT_DIR", "").strip()
+        raw_path = Path(configured or _DEFAULT_CAMERA_SNAPSHOT_DIR).expanduser()
+        if raw_path.is_absolute():
+            return raw_path
+        return qt_client_root / raw_path
+
     def _on_ground_start(self) -> None:
         """开始感知"""
+        if self._ground_running:
+            return
         self._ground_running = True
+        if self._ground_panel is not None:
+            self._ground_panel.set_running(True)
         self._ground_rgb_logged = False
         self._ground_depth_logged = False
         self._ground_render_log_mono = 0.0
@@ -392,9 +449,13 @@ class CameraPage(QWidget):
         # 如果还没连接，自动连接
         if not self._stream.is_streaming():
             self._on_connect()
+        elif rgb_ready:
+            self._render_ground_overlay()
 
     def _on_ground_stop(self) -> None:
         """停止感知"""
+        if not self._ground_running:
+            return
         self._ground_running = False
         self._ground_plane_generation += 1
         if self._ground_plane_future is not None and not self._ground_plane_future.done():
@@ -685,19 +746,40 @@ class CameraPage(QWidget):
         return plane
 
     def _on_connect(self) -> None:
+        if self._view_mode == "depth":
+            self._start_depth_preview()
+            return
+
         url = resolve_mjpeg_url_for_robot(self._robot)
         self._toolbar.set_connecting()
         self._viewport.set_loading()
         self._stream.connect(url)
-        self._start_depth_preview()
+        if self._view_mode == "perception":
+            self._start_depth_preview_for_perception()
+            if not self._ground_running:
+                self._on_ground_start()
+        else:
+            self._start_depth_preview()
 
     def _on_reconnect(self) -> None:
+        if self._view_mode == "depth":
+            self._latest_rgb_frame = None
+            self._stream.disconnect()
+            self._depth_preview.restart()
+            self._start_depth_preview()
+            return
+
         url = resolve_mjpeg_url_for_robot(self._robot)
         self._toolbar.set_connecting()
         self._viewport.set_loading()
         self._stream.reconnect(url)
         self._depth_raw_frame_received = False
-        if self._view_mode in ("depth", "split"):
+        if self._view_mode == "perception":
+            self._depth_preview.restart()
+            self._start_depth_preview_for_perception()
+            if not self._ground_running:
+                self._on_ground_start()
+        elif self._view_mode in ("depth", "split"):
             self._depth_preview.restart()
             self._start_depth_preview()
         else:
