@@ -16,6 +16,11 @@ main() {
     camera-status) pc_status ;;
     camera-check) pc_camera_check ;;
 
+    camera-deep-start) pc_camera_deep_start ;;
+    camera-deep-stop) pc_camera_deep_stop ;;
+    camera-deep-status) pc_status ;;
+    camera-deep-check) pc_camera_deep_check ;;
+
     radar2d-start) pc_radar2d_start ;;
     radar2d-stop) pc_radar2d_stop ;;
     radar2d-status) pc_status ;;

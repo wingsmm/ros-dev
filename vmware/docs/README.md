@@ -9,6 +9,8 @@
 | [VMware开发环境.md](./VMware开发环境.md) | VM 实探测、ROS 网络、`~/ros_ws` 布局 |
 | [VMware Qt客户端整体方案.md](./VMware%20Qt客户端整体方案.md) | VMware Qt 纯客户端实施方案 |
 | [VMware Qt纯客户端实现与测试报告.md](./VMware%20Qt纯客户端实现与测试报告.md) | 2026-07-03 实现结果与真机/VM 验收记录 |
+| [VMware Qt深度相机增强方案.md](./VMware%20Qt深度相机增强方案.md) | 深度 preview、VM 本地点云、第四档增强模式专项方案 |
+| [VMware Qt基础遥控与RViz联动方案.md](./VMware%20Qt基础遥控与RViz联动方案.md) | 五键 `/cmd_vel` 手动遥控与移动时 RViz 显示验收 |
 
 ## 相关（真机 / 脚本）
 
@@ -26,7 +28,7 @@
 ```bash
 # 真机（手动）
 ~/ros_ws/scripts/pc_stack.sh camera-start
-# 或 full-start
+# 或 radar2d-start / full-start
 ```
 
 ```bat

@@ -36,6 +36,11 @@ ASTRA_UVC_RGB_PKG="${ASTRA_UVC_RGB_PKG:-xtark_depth_preview}"
 ASTRA_UVC_RGB_LAUNCH="${ASTRA_UVC_RGB_LAUNCH:-astra_uvc_rgb_only.launch}"
 ASTRA_UVC_DEVICE="${ASTRA_UVC_DEVICE:-}"
 
+DEPTH_PREVIEW_ENABLE="${DEPTH_PREVIEW_ENABLE:-0}"
+DEPTH_PREVIEW_PKG="${DEPTH_PREVIEW_PKG:-xtark_depth_preview}"
+DEPTH_PREVIEW_LAUNCH="${DEPTH_PREVIEW_LAUNCH:-depth_preview.launch}"
+DEPTH_PREVIEW_TOPIC="${DEPTH_PREVIEW_TOPIC:-/camera/depth/preview}"
+
 LOG_DIR="${LOG_DIR:-$(stack_log_dir "$STACK_NAME")}"
 PID_DIR="$(stack_pid_dir "$STACK_NAME")"
 
@@ -43,6 +48,7 @@ ROSCORE_LOG="$LOG_DIR/roscore.log"
 BRINGUP_LOG="$LOG_DIR/bringup.log"
 CAMERA_LOG="$LOG_DIR/camera.log"
 DEPTH_CAMERA_LOG="$LOG_DIR/depth_camera.log"
+DEPTH_PREVIEW_LOG="$LOG_DIR/depth_preview.log"
 
 STARTED_STOPPERS=()
 
@@ -55,6 +61,7 @@ Does NOT start JSON bridge, HTTP depth, RViz, or teleop.
 
 Commands:
   camera-start / camera-stop / camera-status / camera-check
+  camera-deep-start / camera-deep-stop / camera-deep-status / camera-deep-check
   radar2d-start / radar2d-stop / radar2d-status / radar2d-check
   full-start / full-stop / full-status / full-check
   logs        Tail pc_stack logs
@@ -110,6 +117,17 @@ pc_resolve_profile() {
       BRINGUP_WAIT_ODOM_RAW=0
       CAMERA_ENABLE=1
       DEPTH_CAMERA_ENABLE=1
+      DEPTH_PREVIEW_ENABLE=0
+      CAMERA_MODE=rgb_depth
+      RGB_SOURCE="${RGB_SOURCE:-auto}"
+      ;;
+    camera_deep)
+      BRINGUP_ENABLE=1
+      BRINGUP_WAIT_SCAN=0
+      BRINGUP_WAIT_ODOM_RAW=0
+      CAMERA_ENABLE=1
+      DEPTH_CAMERA_ENABLE=1
+      DEPTH_PREVIEW_ENABLE=1
       CAMERA_MODE=rgb_depth
       RGB_SOURCE="${RGB_SOURCE:-auto}"
       ;;
@@ -119,6 +137,7 @@ pc_resolve_profile() {
       BRINGUP_WAIT_ODOM_RAW=1
       CAMERA_ENABLE=0
       DEPTH_CAMERA_ENABLE=0
+      DEPTH_PREVIEW_ENABLE=0
       ;;
     full)
       BRINGUP_ENABLE=1
@@ -126,11 +145,12 @@ pc_resolve_profile() {
       BRINGUP_WAIT_ODOM_RAW=1
       CAMERA_ENABLE=1
       DEPTH_CAMERA_ENABLE=1
+      DEPTH_PREVIEW_ENABLE=0
       CAMERA_MODE=rgb_depth
       RGB_SOURCE="${RGB_SOURCE:-auto}"
       ;;
     *)
-      echo "[ERR] invalid PROFILE=$PROFILE (use camera|radar2d|full)"
+      echo "[ERR] invalid PROFILE=$PROFILE (use camera|camera_deep|radar2d|full)"
       return 1
       ;;
   esac
@@ -326,6 +346,30 @@ pc_stop_depth_camera() {
   pkill -f "roslaunch ${DEPTH_CAMERA_PKG} ${DEPTH_CAMERA_LAUNCH}" 2>/dev/null || true
 }
 
+pc_depth_preview_enabled() {
+  [ "$DEPTH_PREVIEW_ENABLE" = "1" ]
+}
+
+pc_start_depth_preview() {
+  if ! pc_depth_preview_enabled; then
+    echo "[SKIP] depth preview disabled"
+    return 0
+  fi
+  if ! pc_pid_alive depth_preview; then
+    nohup roslaunch "$DEPTH_PREVIEW_PKG" "$DEPTH_PREVIEW_LAUNCH" \
+      input_topic:="$DEPTH_INPUT_TOPIC" \
+      output_topic:="$DEPTH_PREVIEW_TOPIC" \
+      >"$DEPTH_PREVIEW_LOG" 2>&1 &
+    pc_write_pid depth_preview "$!"
+  fi
+  pc_wait_topic_publisher "$DEPTH_PREVIEW_TOPIC" 30
+}
+
+pc_stop_depth_preview() {
+  pc_stop_pid depth_preview
+  pkill -f "roslaunch ${DEPTH_PREVIEW_PKG} ${DEPTH_PREVIEW_LAUNCH}" 2>/dev/null || true
+}
+
 pc_start_step() {
   local name="$1"
   local start_fn="$2"
@@ -377,25 +421,34 @@ pc_start_with_profile() {
   if [ "$DEPTH_CAMERA_ENABLE" = "1" ]; then
     pc_start_step depth_camera pc_start_depth_camera pc_stop_depth_camera
   fi
+  if pc_depth_preview_enabled; then
+    pc_start_step depth_preview pc_start_depth_preview pc_stop_depth_preview
+  fi
 
   echo "[OK] pc_stack $PROFILE started on robot"
 }
 
 pc_camera_start() { pc_start_with_profile camera; }
+pc_camera_deep_start() { pc_start_with_profile camera_deep; }
 pc_radar2d_start() { pc_start_with_profile radar2d; }
 pc_full_start() { pc_start_with_profile full; }
 
 pc_camera_stop() {
   pc_load_mode
+  pc_stop_depth_preview
   pc_stop_rgb_camera
   pc_stop_depth_camera
-  if [ "$PROFILE" = "camera" ] || [ ! -f "$PID_DIR/mode" ]; then
+  if [ "$PROFILE" = "camera" ] || [ "$PROFILE" = "camera_deep" ] || [ ! -f "$PID_DIR/mode" ]; then
     pc_stop_bringup
     pc_stop_roscore
     stack_release_owner "$STACK_NAME"
     rm -f "$PID_DIR/mode" "$PID_DIR/profile"
   fi
   echo "[OK] pc_stack camera stopped"
+}
+
+pc_camera_deep_stop() {
+  pc_camera_stop
 }
 
 pc_radar2d_stop() {
@@ -411,6 +464,7 @@ pc_radar2d_stop() {
 
 pc_full_stop() {
   pc_load_mode
+  pc_stop_depth_preview
   pc_stop_depth_camera
   pc_stop_rgb_camera
   pc_stop_bringup
@@ -450,7 +504,7 @@ pc_status() {
     echo "owner: inactive"
   fi
 
-  for name in roscore bringup camera rgb_relay depth_camera; do
+  for name in roscore bringup camera rgb_relay depth_camera depth_preview; do
     if pc_pid_alive "$name"; then
       echo "$name: running pid=$(cat "$(pc_pid_file "$name")")"
     else
@@ -460,7 +514,7 @@ pc_status() {
 
   if rostopic list >/dev/null 2>&1; then
     echo "--- topics ---"
-    for t in /scan /odom /camera/image_raw /camera/depth/image_raw /camera/depth/camera_info; do
+    for t in /scan /odom /camera/image_raw /camera/depth/image_raw /camera/depth/camera_info "$DEPTH_PREVIEW_TOPIC"; do
       if pc_topic_has_publisher "$t"; then
         echo "$t: publisher OK"
       else
@@ -473,6 +527,7 @@ pc_status() {
 pc_check_topics() {
   local require_scan="$1"
   local require_depth="$2"
+  local require_depth_frame="${3:-0}"
   pc_source_ros || exit 1
   pc_wait_rosmaster 25 || exit 1
 
@@ -524,15 +579,53 @@ pc_check_topics() {
 
     if timeout 10 rostopic echo "$DEPTH_INPUT_TOPIC" -n 1 >/dev/null 2>&1; then
       echo "[OK] depth frame received"
+    elif [ "$require_depth_frame" = "1" ]; then
+      echo "[ERR] depth publisher exists but no frame within 10s"
+      exit 1
     else
       echo "[WARN] depth publisher exists but no frame within 10s"
     fi
   fi
 }
 
-pc_camera_check() { pc_check_topics 0 1; }
+pc_camera_check() {
+  pc_check_topics 0 1
+  if pc_topic_has_publisher "$DEPTH_PREVIEW_TOPIC"; then
+    echo "[ERR] $DEPTH_PREVIEW_TOPIC should not run in camera (lightweight) mode"
+    exit 1
+  fi
+  echo "[OK] $DEPTH_PREVIEW_TOPIC not published (lightweight)"
+}
+pc_camera_deep_check() {
+  PROFILE=camera_deep
+  pc_resolve_profile || exit 1
+  pc_check_topics 0 1 1
+  pc_check_depth_preview
+}
 pc_radar2d_check() { pc_check_topics 1 0; }
 pc_full_check() { pc_check_topics 1 1; }
+
+pc_check_depth_preview() {
+  if ! pc_depth_preview_enabled; then
+    return 0
+  fi
+  local i=0
+  while ! pc_topic_has_publisher "$DEPTH_PREVIEW_TOPIC"; do
+    i=$((i + 1))
+    if [ "$i" -ge 30 ]; then
+      echo "[ERR] $DEPTH_PREVIEW_TOPIC has no publisher"
+      exit 1
+    fi
+    sleep 1
+  done
+  echo "[OK] $DEPTH_PREVIEW_TOPIC publisher present"
+  if timeout 10 rostopic echo "$DEPTH_PREVIEW_TOPIC" -n 1 >/dev/null 2>&1; then
+    echo "[OK] depth preview frame received"
+  else
+    echo "[ERR] depth preview publisher exists but no frame within 10s"
+    exit 1
+  fi
+}
 
 pc_check() {
   pc_full_check
@@ -540,7 +633,7 @@ pc_check() {
 
 pc_logs() {
   mkdir -p "$LOG_DIR"
-  tail -n 40 -F "$ROSCORE_LOG" "$BRINGUP_LOG" "$CAMERA_LOG" "$DEPTH_CAMERA_LOG" 2>/dev/null \
-    || tail -n 80 "$ROSCORE_LOG" "$BRINGUP_LOG" "$CAMERA_LOG" "$DEPTH_CAMERA_LOG" 2>/dev/null \
+  tail -n 40 -F "$ROSCORE_LOG" "$BRINGUP_LOG" "$CAMERA_LOG" "$DEPTH_CAMERA_LOG" "$DEPTH_PREVIEW_LOG" 2>/dev/null \
+    || tail -n 80 "$ROSCORE_LOG" "$BRINGUP_LOG" "$CAMERA_LOG" "$DEPTH_CAMERA_LOG" "$DEPTH_PREVIEW_LOG" 2>/dev/null \
     || echo "[INFO] no logs yet under $LOG_DIR"
 }

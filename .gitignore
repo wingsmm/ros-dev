@@ -70,6 +70,7 @@ xtark/record/**
 .env
 .env.*
 !.env.example
+!vmware/qt/.env
 *.pem
 *.key
 secrets.*

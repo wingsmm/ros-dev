@@ -52,7 +52,7 @@ VMware 192.168.1.154
 - 不要把 `pc_stack` 当成 VM 侧 RViz 启停脚本。
 - 不要把 `qt_stack` 写进本方案主流程。
 - 不要复制 `pc/qt_client` 的 ROS2 / JSON / HTTP 架构。
-- 不要在第一版做 Qt 内置 `/cmd_vel` 控车。
+- v1 已经不做 Qt 内置 `/cmd_vel` 控车；下一阶段若实现基础遥控，必须按 [VMware Qt基础遥控与RViz联动方案.md](./VMware%20Qt基础遥控与RViz联动方案.md) 单独落地，不要混入深度增强或导航。
 - 不要把“界面能打开”当成“深度相机不卡顿已验证”。
 
 ## 目标
@@ -70,7 +70,7 @@ VMware 192.168.1.154
    - `/camera/depth/image_raw`
    - `/camera/depth/camera_info`
 4. 客户端能一键打开本地 RViz，并使用不同配置：
-   - 激光/地图基础视图
+   - 雷达/里程计基础视图
    - 深度轻量视图
    - RGB + Depth 诊断视图
 5. 客户端能停止自己启动的 RViz。
@@ -79,6 +79,7 @@ VMware 192.168.1.154
    - 是否能收到 1 帧
    - `rostopic hz` 短采样
 7. 优先验证：VMware + ROS1 RViz 直连深度 topic 是否能解决或显著缓解卡顿。
+8. 后续可选新增基础遥控：VM 本地发布 `/cmd_vel`，小车移动时 RViz 实时显示 `/odom`、`/scan`、TF。
 
 ## 小车侧 pc_stack 要求
 
@@ -149,6 +150,7 @@ vmware/qt/
 └── ui/
     ├── status_panel.py
     ├── rviz_panel.py
+    ├── teleop_panel.py       # 下一阶段新增：五键 /cmd_vel 基础遥控
     └── topic_panel.py
 ```
 
@@ -185,7 +187,7 @@ rostopic list
 
 单选：
 
-- `激光/地图`
+- `雷达/里程计`
 - `深度轻量`
 - `RGB+Depth 诊断`
 
@@ -235,13 +237,40 @@ UI 显示：
 - hz 采样输出
 - 明确错误文本
 
+### 4. 基础遥控区（下一阶段）
+
+新增：
+
+```text
+vmware/qt/ui/teleop_panel.py
+```
+
+最小按钮：
+
+```text
+      前进
+左转  停止  右转
+      后退
+```
+
+语义：
+
+- VM Qt 只发布 ROS1 `geometry_msgs/Twist` 到 `/cmd_vel`。
+- 前进/后退控制 `linear.x`。
+- 左转/右转控制 `angular.z`。
+- 停止发布零速度。
+- 按住才运动，松开即停止，约 10Hz 重发。
+- 窗口失焦、应用失活、关闭窗口时必须发零速度。
+
+基础遥控只做手动低速控制，不做导航、自动避障、地图、航点。完整实施细节见 [VMware Qt基础遥控与RViz联动方案.md](./VMware%20Qt基础遥控与RViz联动方案.md)。
+
 ## RViz 配置策略
 
 应提供三份 RViz 配置，不依赖厂商默认配置。
 
 ### `rviz_mapping.rviz`
 
-用途：基础激光/地图。
+用途：基础雷达/里程计。
 
 Display：
 
@@ -249,7 +278,7 @@ Display：
 - TF
 - LaserScan：`/scan`
 - Odometry：`/odom`
-- Map：`/map`，没有 publisher 时不影响启动
+- Map：如仍保留必须默认关闭；本阶段不接地图/导航
 
 ### `rviz_depth_light.rviz`
 
@@ -455,7 +484,7 @@ cd ~/ros-dev/vmware/qt
 - `ROS_IP` 必须是 VM 自己的 IP，不能误设成小车 IP。
 - 小车侧 `pc_stack` 必须先启动，否则 VM 只能显示 Master 不可达或 topic 缺失。
 - 不写密码、token、私钥。
-- 当前阶段不做真实遥控按钮，避免把显示验收和运动风险绑在一起。
+- 基础遥控属于下一阶段真实设备控制，必须低速、dead-man、失焦停车，并单独验收 `/cmd_vel` subscriber 与 RViz 移动显示。
 
 ## 需要修改的文件
 
@@ -484,6 +513,20 @@ cd ~/ros-dev/vmware/qt
 
 - `vmware/qt/ui/rviz_panel.py`
   - 文案删除“仅 viz / pc_stack”。
+
+### 下一阶段：基础遥控
+
+- `vmware/qt/ui/teleop_panel.py`
+  - 新增五键遥控 UI。
+
+- `vmware/qt/core/teleop_publisher.py`
+  - 新增 ROS1 `/cmd_vel` publisher。
+
+- `vmware/qt/main_window.py`
+  - 接入 `TeleopPanel` signal，关闭窗口时发布零速度。
+
+- `vmware/qt/core/env.py`
+  - 增加遥控速度、频率、topic 配置。
 
 ### 保留
 
@@ -547,13 +590,14 @@ VM Qt：
 
 ### 不要验收
 
-本阶段不要要求：
+v1 不要要求：
 
 - Qt 远程启动小车服务。
-- Qt 内置控车。
 - SSH 配置。
 - JSON 网关。
 - ROS2 / RViz2。
+
+基础遥控若进入下一阶段，按独立验收要求处理，不再把它算作 v1 纯显示验收的一部分。
 
 ## 给实施 agent 的执行顺序
 

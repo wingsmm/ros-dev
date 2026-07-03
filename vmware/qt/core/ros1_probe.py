@@ -2,7 +2,12 @@
 
 import subprocess
 
-from core.env import bash_ros_prefix
+from core.env import (
+    CMD_VEL_TOPIC_DEFAULT,
+    DEPTH_PREVIEW_TOPIC,
+    VMWARE_DEPTH_POINTS_TOPIC,
+    bash_ros_prefix,
+)
 
 KEY_TOPICS = [
     "/scan",
@@ -10,7 +15,11 @@ KEY_TOPICS = [
     "/camera/image_raw",
     "/camera/depth/image_raw",
     "/camera/depth/camera_info",
+    DEPTH_PREVIEW_TOPIC,
 ]
+
+# VM-local topics; only published after Qt starts 深度增强 point cloud.
+ENHANCED_LOCAL_TOPICS = [VMWARE_DEPTH_POINTS_TOPIC]
 
 
 class TopicStatus(object):
@@ -47,6 +56,52 @@ def master_reachable(cfg, timeout=8):
         return False
 
 
+def package_available(cfg, package, timeout=8):
+    try:
+        proc = _run(cfg, "rospack find %s 2>/dev/null" % package, timeout=timeout)
+        return proc.returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def tf_transform_exists(cfg, parent, child, timeout=4):
+    try:
+        proc = _run(
+            cfg,
+            "timeout %d rosrun tf tf_echo %s %s 2>&1"
+            % (timeout, parent, child),
+            timeout=timeout + 8,
+        )
+        text = (proc.stdout or "") + (proc.stderr or "")
+        if "Failure" in text or "Exception" in text or "not part of the same tree" in text:
+            return False
+        return "Translation:" in text or "At time" in text
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def topic_has_subscriber(cfg, topic):
+    try:
+        proc = _run(
+            cfg,
+            "rostopic info %s 2>/dev/null | awk '/^Subscribers:/{f=1;next} /^Publishers:/{f=0} f' | grep -q '[^[:space:]]'"
+            % topic,
+            timeout=12,
+        )
+        return proc.returncode == 0
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+
+
+def cmd_vel_subscriber_ok(cfg, topic=None):
+    topic = topic or CMD_VEL_TOPIC_DEFAULT
+    if not master_reachable(cfg):
+        return False, "Master 不可达"
+    if topic_has_subscriber(cfg, topic):
+        return True, "%s 有 subscriber" % topic
+    return False, "%s 无 subscriber（小车需 radar2d-start / full-start）" % topic
+
+
 def topic_has_publisher(cfg, topic):
     try:
         proc = _run(
@@ -65,6 +120,15 @@ def probe_topics(cfg):
     for topic in KEY_TOPICS:
         has_pub = topic_has_publisher(cfg, topic)
         detail = "publisher OK" if has_pub else "no publisher"
+        results.append(TopicStatus(topic, has_pub, detail))
+    return results
+
+
+def probe_enhanced_local_topics(cfg):
+    results = []
+    for topic in ENHANCED_LOCAL_TOPICS:
+        has_pub = topic_has_publisher(cfg, topic)
+        detail = "publisher OK" if has_pub else "no publisher (启动深度增强后才有)"
         results.append(TopicStatus(topic, has_pub, detail))
     return results
 

@@ -36,9 +36,11 @@ class RvizPanel(QWidget):
 
         note = QLabel(
             "RViz 在本 VM 运行，连真机 master。\n"
-            "激光/地图：Fixed Frame=odom，看 /scan；真机 radar2d-start 或 full-start。\n"
+            "雷达/里程计：Fixed Frame=odom，看 /scan；真机 radar2d-start 或 full-start。\n"
             "深度轻量：深度卡顿验收；RViz 小预览 + RGB/深度 image_view 大图。\n"
-            "RGB+Depth 诊断：RGB+深度+TF 同屏排错；同样自动开 image_view 大图。"
+            "RGB+Depth 诊断：RGB+深度+TF 同屏排错；同样自动开 image_view 大图。\n"
+            "深度增强：需真机 camera-deep-start；RGB/Depth/Preview image_view + "
+            "VM 本地点云 + 相机 static TF。RViz Fixed Frame=base_link。"
         )
         note.setWordWrap(True)
 

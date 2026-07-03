@@ -18,16 +18,28 @@ Two mutually exclusive daily entrypoints on the **robot** (`192.168.1.169`), plu
 
 ```bash
 # On robot after deploy:
-~/ros_ws/scripts/pc_stack.sh camera-start
+~/ros_ws/scripts/pc_stack.sh camera-start      # 深度轻量：RGB + depth raw，无 preview
+~/ros_ws/scripts/pc_stack.sh camera-deep-start # VMware Qt「深度增强」配套：+ /camera/depth/preview
 ~/ros_ws/scripts/pc_stack.sh radar2d-start
 ~/ros_ws/scripts/pc_stack.sh full-start
 ~/ros_ws/scripts/pc_stack.sh full-status
 ~/ros_ws/scripts/pc_stack.sh full-stop
 ```
 
+| Command | Profile | Topics |
+|---------|---------|--------|
+| `camera-start` | `camera` | RGB + `/camera/depth/image_raw` + `camera_info`（**不**启 preview） |
+| `camera-deep-start` | `camera_deep` | 同上 + `/camera/depth/preview`（`xtark_depth_preview`） |
+| `camera-deep-stop` | — | 停 preview、RGB、depth、bringup、roscore |
+| `camera-deep-check` | — | 验收 RGB、depth raw、preview publisher 与各自至少 1 帧 |
+
+Windows：`xtark\scripts\pc_stack_remote.bat camera-deep-start` / `camera-deep-check`（先 `deploy`）。
+
+详见 [vmware/docs/VMware Qt深度相机增强方案.md](../../vmware/docs/VMware%20Qt深度相机增强方案.md) 阶段 A。
+
 Mutually exclusive with `android_stack` / `qt_stack` on the robot.
 
-Windows: `xtark\scripts\pc_stack_remote.bat` (deploy + control on `192.168.1.169`).
+Windows: `xtark\scripts\pc_stack_remote.bat`（`deploy` + `camera-start` / `camera-deep-*` / `full-*`）。
 
 See [vmware/qt/README.md](../../vmware/qt/README.md).
 

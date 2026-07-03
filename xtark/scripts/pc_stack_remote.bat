@@ -24,6 +24,10 @@ if /I "%CMD%"=="camera-start" goto :stack
 if /I "%CMD%"=="camera-stop" goto :stack
 if /I "%CMD%"=="camera-status" goto :stack
 if /I "%CMD%"=="camera-check" goto :stack
+if /I "%CMD%"=="camera-deep-start" goto :stack
+if /I "%CMD%"=="camera-deep-stop" goto :stack
+if /I "%CMD%"=="camera-deep-status" goto :stack
+if /I "%CMD%"=="camera-deep-check" goto :stack
 if /I "%CMD%"=="radar2d-start" goto :stack
 if /I "%CMD%"=="radar2d-stop" goto :stack
 if /I "%CMD%"=="radar2d-status" goto :stack
@@ -45,7 +49,9 @@ goto :help
 echo Usage: pc_stack_remote.bat [deploy^|camera-start^|radar2d-start^|full-start^|...^|help]
 echo.
 echo   deploy        Sync pc_stack scripts to robot (%XTARK_HOST%)
-echo   camera-start  pc_stack camera-start on robot
+echo   camera-start       pc_stack camera-start (RGB + depth raw, no preview)
+echo   camera-deep-start  camera + depth_preview (/camera/depth/preview)
+echo   camera-deep-stop / camera-deep-status / camera-deep-check
 echo   radar2d-start pc_stack radar2d-start on robot
 echo   full-start    pc_stack full-start (alias: start)
 echo   *-stop / *-status / *-check / logs - same prefix on robot

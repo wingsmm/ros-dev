@@ -96,7 +96,7 @@ class LoggingSettings(object):
 
 def load_logging_settings(env_path=None):
     if env_path is None:
-        env_path = app_root() / "config" / "vmware_client.env"
+        env_path = app_root() / ".env"
     env_file = _parse_env_file(env_path)
     return LoggingSettings(
         log_dir=resolve_log_dir(_env_value("XTARK_LOG_DIR", env_file)),

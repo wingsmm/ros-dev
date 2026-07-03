@@ -16,17 +16,23 @@ from core.logging_config import log_ui_line
 from core.process_manager import ProcessManager
 from core.rviz_process import RvizProcessManager
 from core.ros1_probe import (
+    cmd_vel_subscriber_ok,
     depth_diagnostics,
     env_check_report,
     format_topic_table,
+    KEY_TOPICS,
     master_reachable,
+    probe_enhanced_local_topics,
     probe_topics,
+    tf_transform_exists,
 )
-from core.rviz_commands import RvizCommands
+from core.rviz_commands import DEPTH_ENHANCED_MODE, IMAGE_VIEW_MODES, RvizCommands
+from core.teleop_publisher import TeleopPublisher
 from core.ui_log_handler import UiLogHandler, UiLogSignaler
 from ui.log_panel import LogPanel
 from ui.rviz_panel import RvizPanel
 from ui.status_panel import StatusPanel
+from ui.teleop_panel import TeleopPanel
 from ui.topic_panel import TopicPanel
 
 logger = logging.getLogger(__name__)
@@ -81,6 +87,7 @@ class MainWindow(QMainWindow):
 
         self.cfg = load_config()
         self.rviz = RvizCommands(self.cfg)
+        self.teleop = TeleopPublisher(self.cfg)
         self.rviz_proc = RvizProcessManager(self)
         self.rviz_proc.output.connect(self._log)
         self.rviz_proc.running_changed.connect(self._on_rviz_running_changed)
@@ -88,6 +95,14 @@ class MainWindow(QMainWindow):
         self.depth_view_proc.output.connect(self._log)
         self.rgb_view_proc = RvizProcessManager(self)
         self.rgb_view_proc.output.connect(self._log)
+        self.preview_view_proc = RvizProcessManager(self)
+        self.preview_view_proc.output.connect(self._log)
+        self.depth_cloud_proc = RvizProcessManager(self)
+        self.depth_cloud_proc.output.connect(self._log)
+        self.camera_base_tf_proc = RvizProcessManager(self)
+        self.camera_base_tf_proc.output.connect(self._log)
+        self.camera_optical_tf_proc = RvizProcessManager(self)
+        self.camera_optical_tf_proc.output.connect(self._log)
         self.proc = ProcessManager()
         self.proc.output.connect(self._log)
         self.proc.busy_changed.connect(self._on_busy)
@@ -96,6 +111,11 @@ class MainWindow(QMainWindow):
 
         self.status_panel = StatusPanel()
         self.rviz_panel = RvizPanel(list(self.cfg.rviz_configs.keys()))
+        self.teleop_panel = TeleopPanel(
+            linear_speed=self.cfg.teleop_linear_speed,
+            angular_speed=self.cfg.teleop_angular_speed,
+            repeat_hz=self.cfg.teleop_repeat_hz,
+        )
         self.topic_panel = TopicPanel()
 
         self.log_panel = LogPanel()
@@ -111,6 +131,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(hint)
         layout.addWidget(self.status_panel)
         layout.addWidget(self.rviz_panel)
+        layout.addWidget(self.teleop_panel)
         layout.addWidget(self.topic_panel)
         layout.addWidget(QLabel("日志"))
         layout.addWidget(self.log_panel)
@@ -120,6 +141,7 @@ class MainWindow(QMainWindow):
         self._refresh_static()
         self._update_rviz_path_label()
         self._update_rviz_buttons()
+        self._update_teleop_state()
         self._log_prereqs()
 
     def _wire(self):
@@ -130,6 +152,15 @@ class MainWindow(QMainWindow):
         self.rviz_panel.btn_stop.clicked.connect(self._stop_rviz)
         self.topic_panel.btn_probe.clicked.connect(self._probe_topics)
         self.topic_panel.btn_depth.clicked.connect(self._probe_depth)
+        self.teleop_panel.velocity_requested.connect(self._on_teleop_velocity)
+        self.teleop_panel.stop_requested.connect(self._on_teleop_stop)
+
+    def closeEvent(self, event):
+        self.teleop_panel.stop()
+        self.teleop.shutdown()
+        if self.rviz_proc.running:
+            self._stop_rviz()
+        super(MainWindow, self).closeEvent(event)
 
     def _append_log_line(self, line):
         self.log_panel.append(line)
@@ -172,10 +203,50 @@ class MainWindow(QMainWindow):
     def _refresh_static(self):
         self.cfg = load_config()
         self.rviz = RvizCommands(self.cfg)
+        self.teleop.cfg = self.cfg
+        self.teleop_panel.set_speeds(
+            self.cfg.teleop_linear_speed,
+            self.cfg.teleop_angular_speed,
+        )
         self.status_panel.set_master_uri(self.cfg.ros_master_uri)
         self.status_panel.set_ros_ip(self.cfg.ros_ip)
         self.status_panel.set_master_ok(master_reachable(self.cfg))
         self._update_rviz_status_label()
+        self._update_teleop_state()
+
+    def _update_teleop_state(self):
+        if not self.teleop.is_available:
+            self.teleop_panel.set_controls_enabled(
+                False,
+                "rospy 不可用：请在 VM ROS Melodic 环境运行 ./run.sh",
+            )
+            return
+        if not master_reachable(self.cfg):
+            self.teleop_panel.set_controls_enabled(
+                False,
+                "Master 不可达：遥控已禁用。小车需 radar2d-start / full-start。",
+            )
+            return
+        ok, detail = cmd_vel_subscriber_ok(self.cfg, self.cfg.cmd_vel_topic)
+        if not ok:
+            self.teleop_panel.set_controls_enabled(
+                False,
+                detail,
+            )
+            return
+        self.teleop_panel.set_controls_enabled(True)
+
+    def _on_teleop_velocity(self, lx, ly, az):
+        ok, err = self.teleop.publish_velocity(lx, ly, az)
+        if not ok:
+            self._log("[ERR] 遥控发布失败: %s" % err)
+            self.teleop_panel.set_controls_enabled(
+                False,
+                "遥控发布失败: %s" % err,
+            )
+
+    def _on_teleop_stop(self):
+        self.teleop.stop(repeat=3)
 
     def _update_rviz_status_label(self):
         if self.rviz_proc.running:
@@ -200,35 +271,43 @@ class MainWindow(QMainWindow):
     def _on_env_check_done(self, text):
         self._log(text)
         self._refresh_static()
+        ok, detail = cmd_vel_subscriber_ok(self.cfg, self.cfg.cmd_vel_topic)
+        self._log(
+            "[OK] %s" % detail if ok else "[WARN] %s" % detail
+        )
 
     def _on_env_check_failed(self, message):
         self._log("[ERR] 环境检查失败: %s" % message)
 
     def _start_rviz(self):
         path = self._selected_rviz_path()
+        label = self.rviz_panel.selected_label()
         if path is None or not path.is_file():
             QMessageBox.warning(self, "RViz 配置缺失", "所选 rviz 文件不存在:\n%s" % path)
             return
         if not master_reachable(self.cfg):
-            QMessageBox.warning(
-                self,
-                "Master 不可达",
-                "请在小车手动启动 pc_stack（camera-start 或 full-start），并确认 ROS_MASTER_URI。",
+            hint = (
+                "请在小车手动启动 pc_stack camera-deep-start，并确认 ROS_MASTER_URI。"
+                if label == DEPTH_ENHANCED_MODE
+                else "请在小车手动启动 pc_stack（camera-start 或 full-start），并确认 ROS_MASTER_URI。"
             )
+            QMessageBox.warning(self, "Master 不可达", hint)
             return
         if self.rviz_proc.running:
             QMessageBox.information(self, "RViz", "本客户端 RViz 已在运行。")
             return
-        label = self.rviz_panel.selected_label()
         cmd = self.rviz.start_command(path)
-        self.rviz_proc.start(
+        if not self.rviz_proc.start(
             cmd,
             config_path=str(path),
             process_label="RViz",
             log_prefix="rviz",
-        )
-        if label in ("深度轻量", "RGB+Depth 诊断"):
+        ):
+            return
+        if label in IMAGE_VIEW_MODES:
             self._start_rgb_depth_image_views(label)
+            if label == DEPTH_ENHANCED_MODE:
+                self._start_depth_enhanced_extras()
 
     def _start_rgb_depth_image_views(self, reason):
         self._log("[INFO] %s：打开 RGB + 深度 image_view 窗口" % reason)
@@ -245,19 +324,86 @@ class MainWindow(QMainWindow):
             log_prefix="image_view_depth",
         )
 
+    def _start_depth_enhanced_extras(self):
+        self._log("[INFO] 深度增强：相机 TF + preview + VM 本地点云")
+        self._start_depth_enhanced_camera_tf()
+        self.preview_view_proc.start(
+            self.rviz.preview_image_view_command(),
+            config_path="image_view-preview",
+            process_label="image_view Preview",
+            log_prefix="image_view_preview",
+        )
+        self.depth_cloud_proc.start(
+            self.rviz.depth_point_cloud_command(),
+            config_path="depth-point-cloud",
+            process_label="depth point cloud",
+            log_prefix="depth_point_cloud",
+        )
+
+    def _start_depth_enhanced_camera_tf(self):
+        if not self.cfg.camera_tf_enable:
+            self._log("[INFO] CAMERA_TF_ENABLE=0，跳过 VM 相机 static TF")
+            return
+        base = self.cfg.robot_base_frame
+        cam = self.cfg.camera_frame
+        optical = self.cfg.camera_optical_frame
+        if tf_transform_exists(self.cfg, base, cam):
+            self._log(
+                "[INFO] TF %s -> %s 已存在，跳过 VM base 外参发布"
+                % (base, cam)
+            )
+        else:
+            self._log(
+                "[INFO] 启动 VM static TF: %s -> %s (借鉴 pc-client 外参)"
+                % (base, cam)
+            )
+            self.camera_base_tf_proc.start(
+                self.rviz.camera_base_tf_command(),
+                config_path="camera-base-tf",
+                process_label="camera base TF",
+                log_prefix="camera_base_tf",
+            )
+        if tf_transform_exists(self.cfg, cam, optical):
+            self._log(
+                "[INFO] TF %s -> %s 已存在，跳过 VM optical TF"
+                % (cam, optical)
+            )
+        else:
+            self._log("[INFO] 启动 VM static TF: %s -> %s" % (cam, optical))
+            self.camera_optical_tf_proc.start(
+                self.rviz.camera_optical_tf_command(),
+                config_path="camera-optical-tf",
+                process_label="camera optical TF",
+                log_prefix="camera_optical_tf",
+            )
+
     def _stop_rviz(self):
         if not self.rviz_proc.running:
             self._log("[INFO] 本客户端未启动 RViz")
             return
+        self.preview_view_proc.stop()
         self.rgb_view_proc.stop()
         self.depth_view_proc.stop()
+        self.depth_cloud_proc.stop()
+        self.camera_optical_tf_proc.stop()
+        self.camera_base_tf_proc.stop()
         self.rviz_proc.stop()
 
     def _probe_topics(self):
         def fn():
-            text = format_topic_table(probe_topics(self.cfg))
-            ok = text.count("publisher OK")
-            summary = "关键 topic: %s/%s 有 publisher" % (ok, 5)
+            rows = probe_topics(self.cfg)
+            text = format_topic_table(rows)
+            ok = sum(1 for row in rows if row.has_publisher)
+            summary = "关键 topic: %s/%s 有 publisher" % (ok, len(KEY_TOPICS))
+            label = self.rviz_panel.selected_label()
+            if label == DEPTH_ENHANCED_MODE:
+                local_rows = probe_enhanced_local_topics(self.cfg)
+                text += (
+                    "\n--- VM 本地点云（深度增强启动 RViz 后才有）---\n"
+                    + format_topic_table(local_rows)
+                )
+                local_ok = sum(1 for row in local_rows if row.has_publisher)
+                summary += "；本地点云 %s/%s" % (local_ok, len(local_rows))
             return text, summary
 
         self._run_probe(fn)
