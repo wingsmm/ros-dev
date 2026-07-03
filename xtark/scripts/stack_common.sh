@@ -112,10 +112,22 @@ stack_android_processes_alive() {
   return 1
 }
 
+stack_pc_processes_alive() {
+  local pid_dir name
+  pid_dir="$(stack_pid_dir pc_stack)"
+  for name in roscore bringup camera rgb_relay depth_camera; do
+    if stack_pid_alive "$pid_dir/$name.pid"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 stack_stack_processes_alive() {
   case "$1" in
     qt_stack) stack_qt_processes_alive ;;
     android_stack) stack_android_processes_alive ;;
+    pc_stack) stack_pc_processes_alive ;;
     *) return 1 ;;
   esac
 }
@@ -135,6 +147,7 @@ stack_refresh_owner() {
 stack_refresh_all_owners() {
   stack_refresh_owner android_stack
   stack_refresh_owner qt_stack
+  stack_refresh_owner pc_stack
 }
 
 stack_owner_running() {
@@ -164,7 +177,7 @@ stack_assert_android_stop_safe() {
 stack_other_owner() {
   local my_stack="$1"
   local other
-  for other in android_stack qt_stack; do
+  for other in android_stack qt_stack pc_stack; do
     [ "$other" = "$my_stack" ] && continue
     if stack_owner_running "$other"; then
       echo "$other"

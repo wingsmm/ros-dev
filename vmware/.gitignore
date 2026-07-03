@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+config/vmware_client.env
+logs/

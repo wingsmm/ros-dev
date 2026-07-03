@@ -4,7 +4,32 @@ Orchestration, deployment, and diagnostics for the robot-side xtark stack.
 
 ## Production stacks (pick one)
 
-Two mutually exclusive daily entrypoints:
+Two mutually exclusive daily entrypoints on the **robot** (`192.168.1.169`), plus a VMware-specific partner stack:
+
+### `pc_stack.sh` — Robot stack for VMware Qt client
+
+| | |
+|--|--|
+| **Purpose** | roscore + bringup + camera ROS topics for `vmware/qt` on VM |
+| **Runs on** | Robot `192.168.1.169` |
+| **Client** | VMware VM `192.168.1.154` — RViz + diagnostics inside `vmware/qt` |
+| **Starts** | roscore, bringup, RGB + depth camera topics |
+| **Does not start** | JSON :8765, HTTP depth, RViz, teleop |
+
+```bash
+# On robot after deploy:
+~/ros_ws/scripts/pc_stack.sh camera-start
+~/ros_ws/scripts/pc_stack.sh radar2d-start
+~/ros_ws/scripts/pc_stack.sh full-start
+~/ros_ws/scripts/pc_stack.sh full-status
+~/ros_ws/scripts/pc_stack.sh full-stop
+```
+
+Mutually exclusive with `android_stack` / `qt_stack` on the robot.
+
+Windows: `xtark\scripts\pc_stack_remote.bat` (deploy + control on `192.168.1.169`).
+
+See [vmware/qt/README.md](../../vmware/qt/README.md).
 
 ### `android_stack.sh` — Android full stack
 
@@ -209,8 +234,9 @@ Logs: `~/xtark_logs/qt_stack/` and `~/xtark_logs/android/` (owner markers under 
 
 | Script | Role |
 |--------|------|
-| `android_remote.bat` | Deploy + control Android stack |
-| `qt_remote.bat` | Deploy Qt packages + control `qt_stack.sh` |
+| `android_remote.bat` | Deploy + control Android stack on robot |
+| `qt_remote.bat` | Deploy Qt packages + control `qt_stack.sh` on robot |
+| `pc_stack_remote.bat` | Deploy + control `pc_stack.sh` on robot (169) |
 | `deploy_json_bridge.bat` | Deprecated → `qt_remote.bat` |
 | `deploy_laser_odom_compare.bat` | Deprecated → `qt_remote.bat` |
 
