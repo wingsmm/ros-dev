@@ -17,7 +17,7 @@ WSL2:
 建图前的软件和硬件链路已经具备条件：
 
 - RK3568 `/scan` 可在 WSL2 订阅，约 14 到 15 Hz，`frame_id=laser`
-- xtark JSON `192.168.1.169:8765` 可连接
+- xtark JSON `192.168.1.168:8765` 可连接
 - `qt_client` 已能把 `odom_base` / `base_status` 转为 ROS2 topic
 - TF `odom -> base_link -> laser` 可查
 - RViz2 和 slam_toolbox 已安装并可由 GUI 启动
@@ -42,6 +42,6 @@ cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 连接目标：
 
 ```text
-xtark: 192.168.1.169:8765
+xtark: 192.168.1.168:8765
 ROS_DOMAIN_ID: 0
 ```

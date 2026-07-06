@@ -195,7 +195,7 @@
     <string name="edit_robot">Edit Robot</string>
     <string name="add_edit_robot">Add/Edit Robot</string>
     <string name="robot_name_hint">Robot Name</string>
-    <string name="chooser_uri_hint">http://192.168.1.169:11311</string>
+    <string name="chooser_uri_hint">http://192.168.1.168:11311</string>
     <string name="no_robots">No Robots. Add a new one!</string>
 
     <!-- Robot chooser titles -->

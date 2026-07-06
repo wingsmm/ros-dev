@@ -33,7 +33,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text=""
-                tools:text="http://192.168.1.169:11311"/>
+                tools:text="http://192.168.1.168:11311"/>
         </LinearLayout>
         <LinearLayout
             android:layout_alignParentEnd="true"

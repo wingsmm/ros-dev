@@ -4,7 +4,7 @@
 
 环境：
 
-- 真机 `192.168.1.169`：xtark / ROS Melodic
+- 真机 `192.168.1.168`：xtark / ROS Melodic
 - VM `192.168.1.154`：Ubuntu 18.04 / ROS Melodic
 - Windows 部署机
 

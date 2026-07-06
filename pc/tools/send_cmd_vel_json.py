@@ -9,7 +9,7 @@ import time
 
 def main():
     parser = argparse.ArgumentParser(description="Send one JSON cmd_vel line.")
-    parser.add_argument("--host", default="192.168.1.169")
+    parser.add_argument("--host", default="192.168.1.168")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--linear-x", type=float, default=0.0)
     parser.add_argument("--linear-y", type=float, default=0.0)

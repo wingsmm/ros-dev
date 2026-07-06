@@ -3,7 +3,7 @@
 
 STACK_NAME="qt_stack"
 
-HOST_IP="${HOST_IP:-192.168.1.169}"
+HOST_IP="${HOST_IP:-192.168.1.168}"
 export ROS_MASTER_URI="${ROS_MASTER_URI:-http://${HOST_IP}:11311}"
 export ROS_IP="${ROS_IP:-${HOST_IP}}"
 unset ROS_HOSTNAME

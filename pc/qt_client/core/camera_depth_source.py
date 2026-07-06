@@ -16,7 +16,7 @@ DEPTH_HTTP_POLL_MS = int(os.environ.get("DEPTH_HTTP_POLL_MS", "200") or "200")
 DEPTH_HTTP_TIMEOUT_S = float(os.environ.get("DEPTH_HTTP_TIMEOUT_S", "1.5") or "1.5")
 
 
-def depth_http_base_url(*, master_uri: str = "", default_host: str = "192.168.1.169") -> str:
+def depth_http_base_url(*, master_uri: str = "", default_host: str = "192.168.1.168") -> str:
     configured = os.environ.get("XTARK_DEPTH_HTTP_BASE_URL", "").strip().rstrip("/")
     if configured:
         return configured

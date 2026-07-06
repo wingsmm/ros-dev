@@ -150,7 +150,7 @@ MjpegStreamController
 默认 URL：
 
 ```text
-http://192.168.1.169:8080/stream?topic=/camera/image_raw
+http://192.168.1.168:8080/stream?topic=/camera/image_raw
 ```
 
 说明：
@@ -339,7 +339,7 @@ ManualControlStrip
 机器人端相机脚本保持中性：
 
 - Android 观察：`/image_raw/compressed`
-- Qt/浏览器预览：`http://192.168.1.169:8080/stream?topic=/camera/image_raw`
+- Qt/浏览器预览：`http://192.168.1.168:8080/stream?topic=/camera/image_raw`
 
 控车需要底盘和 JSON 网关，使用 `qt_stack.sh start`，不要只启动 `dev/camera_stack.sh`。
 

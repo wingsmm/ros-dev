@@ -7,7 +7,7 @@
 ## 低速指令测试
 
 ```bash
-python send_cmd_vel_json.py --host 192.168.1.169 --linear-x 0.10 --duration 2
+python send_cmd_vel_json.py --host 192.168.1.168 --linear-x 0.10 --duration 2
 ```
 
 ## 链路检查
@@ -21,13 +21,13 @@ python check_links.py
 ## 键盘遥控
 
 ```bash
-python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.10 --turn 0.20
+python xtark_json_keyboard.py --host 192.168.1.168 --port 8765 --speed 0.10 --turn 0.20
 ```
 
 只遥控、不打印反馈：
 
 ```bash
-python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.10 --turn 0.20 --no-feedback
+python xtark_json_keyboard.py --host 192.168.1.168 --port 8765 --speed 0.10 --turn 0.20 --no-feedback
 ```
 
 ## 目录边界

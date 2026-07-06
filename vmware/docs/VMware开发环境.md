@@ -11,7 +11,7 @@
 | 项目 | 真机 `xtark-robot` | VMware 虚拟机 `xtark-vmpc` |
 |------|-------------------|---------------------------|
 | 主机名 | `xtark-robot` | `xtark-vmpc` |
-| IP | `192.168.1.169` | `192.168.1.154` |
+| IP | `192.168.1.168` | `192.168.1.154` |
 | 平台 | Jetson Nano / aarch64 | VMware 虚拟机 / x86_64 |
 | 内核 | `4.9.201-tegra` | `5.3.0-28-generic` |
 | 系统 | Ubuntu 18.04.5 LTS | Ubuntu 18.04.5 LTS |
@@ -25,7 +25,7 @@
 ```text
 Windows PC ──SSH──► xtark-vmpc (154)          RViz / 键盘遥控
                          │
-                         │  ROS_MASTER_URI → 192.168.1.169:11311
+                         │  ROS_MASTER_URI → 192.168.1.168:11311
                          ▼
                     xtark-robot (169)         roscore / 驱动 / SLAM / move_base
 ```
@@ -51,7 +51,7 @@ ssh xtark@192.168.1.154
 登录成功后会看到塔克 ASCII 横幅，以及：
 
 ```text
-ROS Master URI: http://192.168.1.169:11311
+ROS Master URI: http://192.168.1.168:11311
 ROS IP: 192.168.1.154
 ```
 
@@ -66,7 +66,7 @@ $hostkey = "SHA256:PtzWE2T7/bY7TdqIzyfTc7bJuifo0PjA4BEaorV0odA"
 & $plink -batch -hostkey $hostkey xtark@192.168.1.154 "hostname; ls ~/ros_ws/src"
 ```
 
-VM 内已配置 `alias sshrobot='ssh xtark@$ROBOT_IP'`，可快速 SSH 到真机（`ROBOT_IP=192.168.1.169`）。
+VM 内已配置 `alias sshrobot='ssh xtark@$ROBOT_IP'`，可快速 SSH 到真机（`ROBOT_IP=192.168.1.168`）。
 
 ---
 
@@ -82,7 +82,7 @@ export IPAddress=`ifconfig $interface | grep -o 'inet [^ ]*' | cut -d " " -f2`
 source /opt/ros/melodic/setup.bash
 source ~/ros_ws/devel/setup.bash
 
-export ROBOT_IP=192.168.1.169            # 机器人 IP，换机时改这里
+export ROBOT_IP=192.168.1.168            # 机器人 IP，换机时改这里
 alias sshrobot='ssh xtark@$ROBOT_IP'
 
 export ROS_IP=$IPAddress                 # 本机 VM IP（154）
@@ -156,7 +156,7 @@ rviz -d ~/ros_ws/src/xtark_viz/rviz/xtark_mapping.rviz
 
 ## 5. 与真机 `~/ros_ws` 对比
 
-真机 `xtark@192.168.1.169` 上的 `~/ros_ws/src`（2026-07-03 实测）：
+真机 `xtark@192.168.1.168` 上的 `~/ros_ws/src`（2026-07-03 实测）：
 
 ```text
 third_packages
@@ -182,7 +182,7 @@ xtark_nav_depthcamera
 | 键盘遥控 `/cmd_vel` | **VM 154**（`xtark_ctl`）或真机本地 |
 | 改导航参数、保存地图 | **真机 169** |
 
-本仓库 Windows 侧脚本（如 `xtark/scripts/android_remote.bat`）默认 `XTARK_HOST=192.168.1.169`，**不会**连到 VM。
+本仓库 Windows 侧脚本（如 `xtark/scripts/android_remote.bat`）默认 `XTARK_HOST=192.168.1.168`，**不会**连到 VM。
 
 ---
 
@@ -200,7 +200,7 @@ xtark_nav_depthcamera
 
 ## 7. 典型工作流
 
-1. 真机 `169` 上电，确认 `ping 192.168.1.169` 通。
+1. 真机 `169` 上电，确认 `ping 192.168.1.168` 通。
 2. SSH 登录 VM `154`，确认 `ROS Master URI` 指向 `169`。
 3. 在**真机**手动启动 `pc_stack`（与 `android_stack` / `qt_stack` 互斥）：
 
@@ -235,7 +235,7 @@ vmware\scripts\vm_qt_remote.bat run
 # VM 终端
 source /opt/ros/melodic/setup.bash
 source ~/ros_ws/devel/setup.bash
-export ROS_MASTER_URI=http://192.168.1.169:11311
+export ROS_MASTER_URI=http://192.168.1.168:11311
 export ROS_IP=192.168.1.154
 rviz -d ~/ros-dev/vmware/qt/config/rviz_depth_light.rviz
 ```

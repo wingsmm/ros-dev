@@ -20,7 +20,7 @@ xtark_driver /odom /imu /voltage -> JSON odom_base / base_status
 | 项 | 值 |
 |----|----|
 | 主机 | `xtark-robot` |
-| IP | `192.168.1.169` |
+| IP | `192.168.1.168` |
 | 用户 | `xtark` |
 | 系统 | Ubuntu 18.04.5 LTS / Jetson Nano / ROS Melodic |
 | 工作区 | `~/ros_ws` |
@@ -159,7 +159,7 @@ error_code = 0
 也可以放在 PC 上运行，但 PC 需要加入 ROS1 网络，并正确配置：
 
 ```text
-ROS_MASTER_URI=http://192.168.1.169:11311
+ROS_MASTER_URI=http://192.168.1.168:11311
 ROS_IP=<PC 局域网 IP>
 ```
 
@@ -225,7 +225,7 @@ PC 端命令：
 
 ```bash
 cd pc/tools
-python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.10 --turn 0.20
+python xtark_json_keyboard.py --host 192.168.1.168 --port 8765 --speed 0.10 --turn 0.20
 ```
 
 验收结果：

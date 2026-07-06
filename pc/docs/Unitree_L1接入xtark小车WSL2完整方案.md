@@ -38,7 +38,7 @@ WSL2 / pc-client
 仓库中已有以下基础能力：
 
 - `pc/qt_client` 已作为 WSL2 统一入口，负责连接 xtark JSON、发布 ROS2 里程计/状态、启动 RViz2 / slam_toolbox。
-- xtark 侧已有 JSON 桥接思路，默认地址为 `192.168.1.169:8765`。
+- xtark 侧已有 JSON 桥接思路，默认地址为 `192.168.1.168:8765`。
 - WSL2 侧已有 `/odom_base`、`/base_status`、`odom -> base_link` TF 发布逻辑。
 - `plj/src/slam_bringup/launch/l1_driver.launch.py` 已有 Unitree L1 ROS2 驱动启动入口。
 - `plj/src/slam_bringup/launch/obstacle_scan.launch.py` 已有点云转 2D `/scan` 的入口。

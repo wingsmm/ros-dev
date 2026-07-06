@@ -4,14 +4,14 @@ Orchestration, deployment, and diagnostics for the robot-side xtark stack.
 
 ## Production stacks (pick one)
 
-Two mutually exclusive daily entrypoints on the **robot** (`192.168.1.169`), plus a VMware-specific partner stack:
+Two mutually exclusive daily entrypoints on the **robot** (`192.168.1.168`), plus a VMware-specific partner stack:
 
 ### `pc_stack.sh` — Robot stack for VMware Qt client
 
 | | |
 |--|--|
 | **Purpose** | roscore + bringup + camera ROS topics for `vmware/qt` on VM |
-| **Runs on** | Robot `192.168.1.169` |
+| **Runs on** | Robot `192.168.1.168` |
 | **Client** | VMware VM `192.168.1.154` — RViz + diagnostics inside `vmware/qt` |
 | **Starts** | roscore, bringup, RGB + depth camera topics |
 | **Does not start** | JSON :8765, HTTP depth, RViz, teleop |

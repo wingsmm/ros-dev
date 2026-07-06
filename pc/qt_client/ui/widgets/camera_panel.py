@@ -23,7 +23,7 @@ class CameraPanel(QWidget):
     def __init__(
         self,
         settings_key: str = "camera_http_url",
-        default_url: str = "http://192.168.1.169:8080/stream?topic=/camera/image_raw",
+        default_url: str = "http://192.168.1.168:8080/stream?topic=/camera/image_raw",
         parent=None,
     ):
         super().__init__(parent)

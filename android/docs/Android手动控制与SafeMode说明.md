@@ -140,4 +140,4 @@ Subscribers:
 
 ## 注意
 
-不要因为 `192.168.1.169:8765` 不通就判断 Android 遥控异常。Android 当前不使用 `8765`，只要 ROS master 和 `/cmd_vel` 链路正常即可。
+不要因为 `192.168.1.168:8765` 不通就判断 Android 遥控异常。Android 当前不使用 `8765`，只要 ROS master 和 `/cmd_vel` 链路正常即可。

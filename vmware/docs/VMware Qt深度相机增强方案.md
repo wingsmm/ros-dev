@@ -58,7 +58,7 @@
 
 ### 命令设计
 
-在小车 `192.168.1.169` 上：
+在小车 `192.168.1.168` 上：
 
 ```bash
 ~/ros_ws/scripts/pc_stack.sh camera-deep-start

@@ -13,7 +13,7 @@ def resolve_mjpeg_url(
     *,
     camera_url: str = "",
     master_uri: str = "",
-    default_host: str = "192.168.1.169",
+    default_host: str = "192.168.1.168",
 ) -> str:
     if camera_url.strip():
         return camera_url.strip()

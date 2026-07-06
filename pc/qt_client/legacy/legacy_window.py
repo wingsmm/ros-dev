@@ -118,7 +118,7 @@ class LegacyWindow(QMainWindow):
 
         conn_row = QHBoxLayout()
         conn_row.addWidget(QLabel("Host"))
-        self.host_edit = QLineEdit("192.168.1.169")
+        self.host_edit = QLineEdit("192.168.1.168")
         conn_row.addWidget(self.host_edit)
         conn_row.addWidget(QLabel("Port"))
         self.port_spin = QSpinBox()
@@ -195,7 +195,7 @@ class LegacyWindow(QMainWindow):
             self.nav_panel.emergency_stop.connect(self._emergency_stop)
 
     def _load_settings(self) -> None:
-        host = self.settings.value("host", "192.168.1.169")
+        host = self.settings.value("host", "192.168.1.168")
         port = int(self.settings.value("port", 8765))
         linear = float(self.settings.value("linear_speed", 0.10))
         angular = float(self.settings.value("angular_speed", 0.20))

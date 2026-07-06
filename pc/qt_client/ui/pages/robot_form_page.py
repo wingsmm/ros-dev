@@ -51,7 +51,7 @@ class RobotFormPage(QWidget):
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("机器人名称")
         self.uri_edit = QLineEdit()
-        self.uri_edit.setPlaceholderText("http://192.168.1.169:11311")
+        self.uri_edit.setPlaceholderText("http://192.168.1.168:11311")
         self._configure_line_edit(self.name_edit)
         self._configure_line_edit(self.uri_edit)
         form.addRow("机器人名称", self.name_edit)

@@ -5,7 +5,7 @@ rem Environment variables below override defaults when already set.
 
 if not defined PLINK set "PLINK=C:\Program Files\PuTTY\plink.exe"
 if not defined PSCP set "PSCP=C:\Program Files\PuTTY\pscp.exe"
-if not defined XTARK_HOST set "XTARK_HOST=192.168.1.169"
+if not defined XTARK_HOST set "XTARK_HOST=192.168.1.168"
 if not defined XTARK_USER set "XTARK_USER=xtark"
 if not defined XTARK_PASSWORD set "XTARK_PASSWORD=xtark"
 if not defined XTARK_HOSTKEY set "XTARK_HOSTKEY=SHA256:hrGvBYXQfk9JH6fq71t0BYZEoulJ5WjZomhk5NlkLOY"

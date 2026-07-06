@@ -75,7 +75,7 @@ public class RobotInfo implements Comparable<RobotInfo>, Savable {
     public RobotInfo() {
         //id = UUID.randomUUID();
         name = "xtark";
-        masterUriString = "http://192.168.1.169:11311";
+        masterUriString = "http://192.168.1.168:11311";
         joystickTopic = "/cmd_vel";
         cameraTopic = "/image_raw/compressed";
         laserTopic = "/scan";

@@ -91,7 +91,7 @@ apks\xtark-control-alt-debug.apk
 Robot:
 
 ```text
-192.168.1.169
+192.168.1.168
 xtark / xtark
 ```
 
@@ -109,7 +109,7 @@ The robot-side script starts roscore, `xtark_bringup.launch`, camera, gmapping, 
 On the Android App, use this ROS Master URI:
 
 ```text
-http://192.168.1.169:11311
+http://192.168.1.168:11311
 ```
 
 ## Launcher Note

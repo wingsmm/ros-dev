@@ -244,7 +244,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="xtark JSON keyboard teleop (logic from xtark_twist_keyboard.py)"
     )
-    parser.add_argument("--host", default="192.168.1.169")
+    parser.add_argument("--host", default="192.168.1.168")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--speed", type=float, default=0.5)
     parser.add_argument("--turn", type=float, default=1.0)

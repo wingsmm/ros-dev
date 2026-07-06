@@ -7,7 +7,7 @@
 | 文档 | 定位 |
 |------|------|
 | `Android与xtark交互说明.html` | 当前 Android ↔ 小车主契约文档：11311、/scan、/map、/robot_pose_in_map、move_base、状态语义、路径显示、速度同步、部署顺序。 |
-| `远端登录.md` | 给 agent/开发者用的远端登录与开发手册：SSH、plink、ROS 环境、远程检查（真机 `xtark-robot` / `192.168.1.169`）。 |
+| `远端登录.md` | 给 agent/开发者用的远端登录与开发手册：SSH、plink、ROS 环境、远程检查（真机 `xtark-robot` / `192.168.1.168`）。 |
 | `远端硬件与传感器.md` | 远端设备总结：硬件、传感器、设备节点、ROS 话题，方便 agent 快速了解小车。 |
 | `深度相机与机器人端相机功能梳理.md` | Android / Qt 端到端相机链路说明：Android 走 ROS 话题，Qt 走 HTTP/MJPEG。 |
 | `机器人控制链路说明.md` | Android / Qt 手动控制、底盘反馈和 Qt“机器人”页激光链路说明：控制最终落到 `/cmd_vel`；Qt 经 JSON 收 `odom_base` / `base_status` / `laser_scan` / `scan_warning`。 |
@@ -59,7 +59,7 @@ xtark\scripts\android_remote.bat stop
 Android App 的 ROS Master URI：
 
 ```text
-http://192.168.1.169:11311
+http://192.168.1.168:11311
 ```
 
 ## 维护规则

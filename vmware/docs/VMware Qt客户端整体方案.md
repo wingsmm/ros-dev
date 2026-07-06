@@ -6,7 +6,7 @@
 
 - `pc/qt_client`：PC / WSL 侧旧 Qt 客户端路径。
 - `qt_stack`：对应 PC / WSL Qt 客户端的机器人侧栈，不是本方案主线。
-- `pc_stack`：对应 VMware Qt 客户端的机器人侧栈，部署并运行在小车 `192.168.1.169`。
+- `pc_stack`：对应 VMware Qt 客户端的机器人侧栈，部署并运行在小车 `192.168.1.168`。
 - `vmware/qt`：运行在 VMware `192.168.1.154`，只负责连接、检查、RViz 配置与显示。
 
 ## 一句话结论
@@ -26,7 +26,7 @@
 ## 正确分工
 
 ```text
-小车 192.168.1.169
+小车 192.168.1.168
   ├─ 部署 ~/ros_ws/scripts/pc_stack.sh
   ├─ 手动执行 pc_stack camera-start / radar2d-start / full-start / stop / status
   ├─ 启动 roscore / bringup / 相机 / 深度相机 / 雷达 / 里程计等机器人侧服务
@@ -35,7 +35,7 @@
 VMware 192.168.1.154
   ├─ 运行 vmware/qt
   ├─ source /opt/ros/melodic/setup.bash 和 ~/ros_ws/devel/setup.bash
-  ├─ export ROS_MASTER_URI=http://192.168.1.169:11311
+  ├─ export ROS_MASTER_URI=http://192.168.1.168:11311
   ├─ export ROS_IP=192.168.1.154
   ├─ 本地执行 rostopic list/info/echo/hz 做诊断
   └─ 本地执行 rviz -d config/*.rviz 打开不同显示配置
@@ -59,7 +59,7 @@ VMware 192.168.1.154
 
 1. 在 `vmware/qt` 下实现一个可启动的 PyQt5 客户端。
 2. 客户端启动后能自动/手动检查 ROS 环境：
-   - ROS Master：`http://192.168.1.169:11311`
+   - ROS Master：`http://192.168.1.168:11311`
    - ROS IP：VM 本机 IP，例如 `192.168.1.154`
    - ROS setup 是否存在
    - RViz 是否可执行
@@ -83,7 +83,7 @@ VMware 192.168.1.154
 
 ## 小车侧 pc_stack 要求
 
-`pc_stack.sh` 部署在小车 `192.168.1.169` 的 `~/ros_ws/scripts/` 下。它是 VMware Qt 的机器人侧服务栈，不是 VM 客户端脚本。
+`pc_stack.sh` 部署在小车 `192.168.1.168` 的 `~/ros_ws/scripts/` 下。它是 VMware Qt 的机器人侧服务栈，不是 VM 客户端脚本。
 
 建议支持这些命令：
 
@@ -164,9 +164,9 @@ vmware/qt/
 
 显示：
 
-- Robot IP：`192.168.1.169`
+- Robot IP：`192.168.1.168`
 - VM ROS IP：自动检测或配置，例如 `192.168.1.154`
-- ROS Master：`http://192.168.1.169:11311`
+- ROS Master：`http://192.168.1.168:11311`
 - Master 可达 / 不可达
 - RViz 状态：未启动 / 运行中 / 已停止
 
@@ -314,7 +314,7 @@ VMware Qt 的所有本地 ROS/RViz 子进程必须带上：
 ```bash
 source /opt/ros/melodic/setup.bash
 source ~/ros_ws/devel/setup.bash
-export ROS_MASTER_URI=http://192.168.1.169:11311
+export ROS_MASTER_URI=http://192.168.1.168:11311
 export ROS_IP=<VM 本机 IP>
 export LIBGL_ALWAYS_SOFTWARE=1
 ```
@@ -323,15 +323,15 @@ export LIBGL_ALWAYS_SOFTWARE=1
 
 1. 优先读配置文件 `config/vmware_client.env`。
 2. 再读环境变量 `ROS_IP`。
-3. 再通过 `ip route get 192.168.1.169` 找 VM 到小车的网卡。
+3. 再通过 `ip route get 192.168.1.168` 找 VM 到小车的网卡。
 4. 再通过 `ip -4 addr show <iface>` 获取 VM IP。
 5. 检测失败时提示用户手动设置。
 
 配置示例：
 
 ```dotenv
-ROBOT_IP=192.168.1.169
-ROS_MASTER_URI=http://192.168.1.169:11311
+ROBOT_IP=192.168.1.168
+ROS_MASTER_URI=http://192.168.1.168:11311
 ROS_IP=192.168.1.154
 ROS_SETUP=/opt/ros/melodic/setup.bash
 WS_SETUP=/home/xtark/ros_ws/devel/setup.bash
@@ -480,7 +480,7 @@ cd ~/ros-dev/vmware/qt
 
 - VMware 下 `LIBGL_ALWAYS_SOFTWARE=1` 可能导致复杂 RViz 显示慢；深度验收默认只显示 Image。
 - 深度图格式可能是 `16UC1`，RViz Image Display 的 min/max、normalize 可能需要现场调整。
-- `ROS_MASTER_URI` 必须指向小车 `192.168.1.169`，不是 VM。
+- `ROS_MASTER_URI` 必须指向小车 `192.168.1.168`，不是 VM。
 - `ROS_IP` 必须是 VM 自己的 IP，不能误设成小车 IP。
 - 小车侧 `pc_stack` 必须先启动，否则 VM 只能显示 Master 不可达或 topic 缺失。
 - 不写密码、token、私钥。

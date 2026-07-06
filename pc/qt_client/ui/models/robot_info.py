@@ -60,5 +60,5 @@ def default_robot() -> RobotInfo:
     return RobotInfo(
         id="xtark-default",
         name="xtark",
-        master_uri="http://192.168.1.169:11311",
+        master_uri="http://192.168.1.168:11311",
     )

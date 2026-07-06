@@ -32,7 +32,7 @@ def _parse_json_gateway(profile: RobotInfo) -> Tuple[str, int]:
         if host:
             return host, port
     parsed = urlparse(profile.master_uri)
-    host = parsed.hostname or "192.168.1.169"
+    host = parsed.hostname or "192.168.1.168"
     return host, 8765
 
 
