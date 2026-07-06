@@ -82,14 +82,14 @@ WSL2 建议使用 Mirrored 网络，保证 WSL2 与 RK3568、xtark 在同一局�
 ```bash
 ip -4 addr
 ping 192.168.1.163
-ping 192.168.1.169
+ping 192.168.1.168
 ```
 
 当前实测：
 
 ```text
 RK3568: 192.168.1.163
-xtark:  192.168.1.169
+xtark:  192.168.1.168
 WSL2:   192.168.1.137 附近的 192.168.1.x 地址
 ```
 
@@ -159,13 +159,13 @@ python3 check_links.py
 低速遥控：
 
 ```bash
-python3 xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.10 --turn 0.20
+python3 xtark_json_keyboard.py --host 192.168.1.168 --port 8765 --speed 0.10 --turn 0.20
 ```
 
 只发低速测试指令：
 
 ```bash
-python3 send_cmd_vel_json.py --host 192.168.1.169 --linear-x 0.05 --duration 2
+python3 send_cmd_vel_json.py --host 192.168.1.168 --linear-x 0.05 --duration 2
 ```
 
 ## 5. 已解决的问题

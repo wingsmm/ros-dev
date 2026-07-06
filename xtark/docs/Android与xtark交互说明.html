@@ -215,8 +215,8 @@
     <h3>1.1 连接前提</h3>
     <table>
       <tr><th>项</th><th>值</th></tr>
-      <tr><td>小车 IP</td><td><code>192.168.1.169</code></td></tr>
-      <tr><td>App Master URI</td><td><code>http://192.168.1.169:11311</code></td></tr>
+      <tr><td>小车 IP</td><td><code>192.168.1.168</code></td></tr>
+      <tr><td>App Master URI</td><td><code>http://192.168.1.168:11311</code></td></tr>
       <tr><td>网络</td><td>手机/模拟器与小车在同一局域网</td></tr>
       <tr><td>小车启动脚本</td><td><code>xtark/scripts/android_stack.sh start</code></td></tr>
       <tr><td>Windows 同步启动</td><td><code>xtark/scripts/android_remote.bat</code></td></tr>
@@ -316,7 +316,7 @@ gmapping → TF(map→base)  → robot_pose_in_map.launch → /robot_pose_in_map
     </table>
 
     <h4>连接建立过程</h4>
-    <pre>1. Android App 连接 http://192.168.1.169:11311
+    <pre>1. Android App 连接 http://192.168.1.168:11311
 2. 向 Master 注册节点 android/robot_controller
 3. 声明：我要订阅 /scan、/map、/robot_pose_in_map …
 4. Master 回复：/scan 的发布者在 169 的某个 TCP 端口
@@ -564,7 +564,7 @@ move_base → /move_base/status → App</pre>
       <tr><td>3. 清理远端</td><td><code>xtark\scripts\android_remote.bat stop</code></td><td>停掉远端旧 ROS 进程；会中断当前运行，执行前需确认</td></tr>
       <tr><td>4. 同步并启动</td><td><code>xtark\scripts\android_remote.bat all</code></td><td>scp <code>android_stack.sh</code> + <code>xtark_nav</code> 到 169，并启动 Android 验证栈</td></tr>
       <tr><td>5. 状态</td><td><code>xtark\scripts\android_remote.bat status</code></td><td>检查 <code>/map</code>、<code>/robot_pose_in_map</code>、move_base</td></tr>
-      <tr><td>6. App</td><td>MuMu / 手机</td><td>Master URI 填 <code>http://192.168.1.169:11311</code>，在已走过白色区域设置 A/B 点</td></tr>
+      <tr><td>6. App</td><td>MuMu / 手机</td><td>Master URI 填 <code>http://192.168.1.168:11311</code>，在已走过白色区域设置 A/B 点</td></tr>
     </table>
 
     <div class="note">

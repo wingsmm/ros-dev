@@ -55,7 +55,7 @@ app.py
 
 - 新版 `CameraPage` 已接入机器人工作区。
 - `CameraPage` 与 legacy `CameraPanel` 复用 `MjpegStreamController`。
-- 当前 HTTP/MJPEG 默认 URL：`http://192.168.1.169:8080/stream?topic=/camera/image_raw`。
+- 当前 HTTP/MJPEG 默认 URL：`http://192.168.1.168:8080/stream?topic=/camera/image_raw`。
 - 已实测 `./run.sh --no-ros` 下进入摄像头页自动出图，FPS 约 25。
 - 长期仍应通过 `ros1_bridge` / backend 对齐 Android 的 `/image_raw/compressed` ROS 话题模型。
 

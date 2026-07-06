@@ -8,7 +8,7 @@ import subprocess
 import sys
 import time
 
-XTARK_HOST = "192.168.1.169"
+XTARK_HOST = "192.168.1.168"
 XTARK_PORT = 8765
 RK_HOST = "192.168.1.163"
 

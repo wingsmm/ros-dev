@@ -23,8 +23,8 @@ source devel/setup.bash
 复制示例（在 PC / WSL 上，路径按本机仓库调整）：
 
 ```bash
-scp -r xtark/scripts xtark@192.168.1.169:~/ros_ws/
-ssh xtark@192.168.1.169 'chmod +x ~/ros_ws/scripts/json_stack.sh'
+scp -r xtark/scripts xtark@192.168.1.168:~/ros_ws/
+ssh xtark@192.168.1.168 'chmod +x ~/ros_ws/scripts/json_stack.sh'
 ```
 
 一键后台启动（先 bringup，再 json 适配，日志在 `~/xtark_logs/`）：
@@ -72,14 +72,14 @@ roslaunch xtark_json_bridge json_base_adapter.launch
 
 ```bash
 cd pc/tools
-python send_cmd_vel_json.py --host 192.168.1.169 --linear-x 0.10 --duration 2
+python send_cmd_vel_json.py --host 192.168.1.168 --linear-x 0.10 --duration 2
 ```
 
 停止：
 
 ```bash
 cd pc/tools
-python send_cmd_vel_json.py --host 192.168.1.169
+python send_cmd_vel_json.py --host 192.168.1.168
 ```
 
 ## 5. 键盘遥控验证
@@ -90,7 +90,7 @@ PC 或 RK3568 上：
 
 ```bash
 cd pc/tools
-python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.15 --turn 0.4
+python xtark_json_keyboard.py --host 192.168.1.168 --port 8765 --speed 0.15 --turn 0.4
 ```
 
 按键逻辑与远端 `xtark_twist_keyboard.py` 相同；建图时建议低速，按住移动键可连续发送。默认会打印低频 `odom_base` / `base_status` 反馈。
@@ -99,7 +99,7 @@ python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.15 --tu
 
 ```bash
 cd pc/tools
-python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.15 --turn 0.4 --no-feedback
+python xtark_json_keyboard.py --host 192.168.1.168 --port 8765 --speed 0.15 --turn 0.4 --no-feedback
 ```
 
 ## 6. 安全要求

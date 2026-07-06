@@ -240,7 +240,7 @@ Phase 1.5 完成后进入 Phase 2.0：在 PC/WSL2/ROS2/Python3 侧消费同一�
 当前默认 HTTP/MJPEG URL：
 
 ```text
-http://192.168.1.169:8080/stream?topic=/camera/image_raw
+http://192.168.1.168:8080/stream?topic=/camera/image_raw
 ```
 
 注意边界：
@@ -602,7 +602,7 @@ Phase 1.5 禁止项：
 PC/Qt 验收：
 
 - 打开摄像头页，切到 Depth。
-- 不依赖 `http://192.168.1.169:8080/stream?topic=/camera/depth/preview` 也能看到 PC/Qt 生成的深度预览。
+- 不依赖 `http://192.168.1.168:8080/stream?topic=/camera/depth/preview` 也能看到 PC/Qt 生成的深度预览。
 - 能显示中心距离、最近距离、FPS、有效像素比例、深度范围。
 - RGB 不在线时，Depth 仍可独立显示。
 - 深度 topic 断开后，UI 显示离线，不崩溃。
@@ -1118,7 +1118,7 @@ xtark ROS1 /image_raw/compressed
 
 注意点：
 
-- WSL2 需能访问 `ROS_MASTER_URI=http://192.168.1.169:11311`
+- WSL2 需能访问 `ROS_MASTER_URI=http://192.168.1.168:11311`
 - `ros1_bridge` 对消息包需要双方都存在对应定义（`sensor_msgs/CompressedImage` 通常没问题）
 
 ### 3.2 方案 B（先会走）：HTTP 拉 `web_video_server`
@@ -1141,14 +1141,14 @@ xtark /dev/video0
 最小可用 URL：
 
 ```text
-http://192.168.1.169:8080/stream?topic=/camera/image_raw
+http://192.168.1.168:8080/stream?topic=/camera/image_raw
 ```
 
 可选验证 URL：
 
 ```text
-http://192.168.1.169:8080/snapshot?topic=/camera/image_raw
-http://192.168.1.169:8080/stream?topic=/image_raw
+http://192.168.1.168:8080/snapshot?topic=/camera/image_raw
+http://192.168.1.168:8080/stream?topic=/image_raw
 ```
 
 最小验证命令：
@@ -1160,8 +1160,8 @@ rostopic hz /image_raw/compressed
 rostopic info /camera/image_raw
 
 # PC / WSL2 / Windows 任一能访问机器人 IP 的环境
-curl -I http://192.168.1.169:8080/
-curl -I "http://192.168.1.169:8080/snapshot?topic=/camera/image_raw"
+curl -I http://192.168.1.168:8080/
+curl -I "http://192.168.1.168:8080/snapshot?topic=/camera/image_raw"
 ```
 
 优点：
@@ -1244,14 +1244,14 @@ rostopic info /camera/image_raw
 2. **PC 侧确认浏览器/HTTP 能访问**
 
 ```bash
-curl -I http://192.168.1.169:8080/
-curl -I "http://192.168.1.169:8080/snapshot?topic=/camera/image_raw"
+curl -I http://192.168.1.168:8080/
+curl -I "http://192.168.1.168:8080/snapshot?topic=/camera/image_raw"
 ```
 
 浏览器打开：
 
 ```text
-http://192.168.1.169:8080/stream?topic=/camera/image_raw
+http://192.168.1.168:8080/stream?topic=/camera/image_raw
 ```
 
 3. **qt_client 新增 HTTP/MJPEG 相机 UI**
@@ -1259,7 +1259,7 @@ http://192.168.1.169:8080/stream?topic=/camera/image_raw
 - 新版工作区：`CameraPage`
 - legacy 调试台：`CameraPanel`
 - 共享拉流组件：`MjpegStreamController`
-- 默认 URL：`http://192.168.1.169:8080/stream?topic=/camera/image_raw`
+- 默认 URL：`http://192.168.1.168:8080/stream?topic=/camera/image_raw`
 - 后台线程拉 MJPEG，不阻塞 Qt 主线程
 - 解码 JPEG 帧为 `QImage` / `QPixmap`
 - 首帧前显示 “No Camera”
@@ -1291,7 +1291,7 @@ rostopic info /image_raw/compressed
 source /opt/ros/humble/setup.bash
 export ROS_DOMAIN_ID=0
 
-export ROS_MASTER_URI=http://192.168.1.169:11311
+export ROS_MASTER_URI=http://192.168.1.168:11311
 export ROS_IP=<wsl2可达IP或留空按现场配置>
 
 ros2 run ros1_bridge dynamic_bridge
@@ -1353,7 +1353,7 @@ ros2 run ros1_bridge dynamic_bridge
 - 现有 UI widgets 位于 `pc/qt_client/ui/widgets/`。
 - 现有设置使用 `QSettings("xtark", "json_debug_client")`。
 - 现有日志入口是 `MainWindow._on_log()` 和 `LogPanel`。
-- 默认机器人 IP 是 `192.168.1.169`。
+- 默认机器人 IP 是 `192.168.1.168`。
 
 ### 修改范围
 
@@ -1371,7 +1371,7 @@ ros2 run ros1_bridge dynamic_bridge
 ### 实现步骤
 
 1. 新增 `CameraPanel`，包含 URL 输入框、连接/断开/重连按钮、状态标签、FPS 标签和图像显示区域。
-2. 默认 URL 使用 `http://192.168.1.169:8080/stream?topic=/camera/image_raw`。
+2. 默认 URL 使用 `http://192.168.1.168:8080/stream?topic=/camera/image_raw`。
 3. 使用后台线程或 `QThread` 拉取 MJPEG stream，不能在 Qt 主线程里阻塞读取。
 4. 解析 MJPEG 边界，提取 JPEG 帧；用 `QImage.fromData()` 解码。
 5. 通过 Qt signal 把 `QImage`、状态、错误文本、FPS 传回主线程更新 UI。

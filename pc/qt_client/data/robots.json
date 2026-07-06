@@ -2,7 +2,7 @@
   {
     "id": "xtark-default",
     "name": "xtark",
-    "master_uri": "http://192.168.1.169:11311",
+    "master_uri": "http://192.168.1.168:11311",
     "joystick_topic": "/joy_teleop/cmd_vel",
     "camera_topic": "/image_raw/compressed",
     "laser_topic": "/scan",
@@ -27,9 +27,9 @@
     "invert_y": false,
     "invert_angular_velocity": false,
     "backend_type": "json_gateway",
-    "gateway_uri": "192.168.1.169:8765",
+    "gateway_uri": "192.168.1.168:8765",
     "camera_mode": "mjpeg",
-    "camera_url": "http://192.168.1.169:8080/stream?topic=/camera/image_raw",
+    "camera_url": "http://192.168.1.168:8080/stream?topic=/camera/image_raw",
     "ros_domain_id": 0,
     "manual_linear_speed": 0.3,
     "manual_angular_speed": 0.5

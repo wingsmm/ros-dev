@@ -113,7 +113,7 @@ PC / RK3568 上的命令行工具已放到仓库根目录 `pc/tools/`，不随 R
 
 ```bash
 cd pc/tools
-python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.15 --turn 0.4
+python xtark_json_keyboard.py --host 192.168.1.168 --port 8765 --speed 0.15 --turn 0.4
 ```
 
 流程：
@@ -128,7 +128,7 @@ python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.15 --tu
 
 ```bash
 cd pc/tools
-python xtark_json_keyboard.py --host 192.168.1.169 --port 8765 --speed 0.15 --turn 0.4 --no-feedback
+python xtark_json_keyboard.py --host 192.168.1.168 --port 8765 --speed 0.15 --turn 0.4 --no-feedback
 ```
 
 ## 安全

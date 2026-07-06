@@ -135,7 +135,7 @@ cd /mnt/d/Downloads/work/ros-dev/pc/qt_client
 GUI 中连接：
 
 ```text
-192.168.1.169:8765
+192.168.1.168:8765
 ```
 
 ## 4. 建图前检查
@@ -190,7 +190,7 @@ ros2 topic echo /scan --once | grep frame_id
 ## 5. GUI 建图流程
 
 1. 启动 `./run.sh`。
-2. 点击连接，连接 xtark `192.168.1.169:8765`。
+2. 点击连接，连接 xtark `192.168.1.168:8765`。
 3. 确认状态区有 `base_status` 和 `odom_base`。
 4. 完成第 4 节检查。
 5. 点击一键启动建图栈，启动 RViz2 和 SLAM。
