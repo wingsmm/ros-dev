@@ -188,8 +188,10 @@ def load_config(env_file=None):
     def get(key, default=""):
         return _get_env(file_env, key, default)
 
-    robot_ip = _get_env_first(file_env, ("XTARK_HOST", "ROBOT_IP"), "192.168.1.169")
-    ros_master_uri = _get_env(file_env, "ROS_MASTER_URI", "")
+    robot_ip = _get_env_first(file_env, ("XTARK_HOST", "ROBOT_IP"), "192.168.1.168")
+    # .env 显式设了 ROS_MASTER_URI 才用；否则统一按 XTARK_HOST 推导，
+    # 避免 shell 里陈旧的 ROS_MASTER_URI（例如老 .bashrc / xtark_vmwareStartup.sh）盖过 .env。
+    ros_master_uri = file_env.get("ROS_MASTER_URI", "").strip()
     if not ros_master_uri or "localhost" in ros_master_uri or "127.0.0.1" in ros_master_uri:
         ros_master_uri = "http://%s:11311" % robot_ip
     ros_ip_override = get("ROS_IP", "")

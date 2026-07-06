@@ -87,7 +87,7 @@ VMware 专用：
 
 | 模式 | 配置文件 | 用途 | 小车命令 | 额外 VM 进程 |
 |------|----------|------|----------|--------------|
-| 雷达/里程计 | `config/rviz_mapping.rviz` | 看 `/scan`、TF（Map 默认关） | `radar2d-start` / `full-start` | 无 |
+| 雷达/里程计 | `config/rviz_mapping.rviz` | 看 `/scan`、`/odom`、TF（Map 默认关） | `radar2d-start` / `full-start` | 无 |
 | 深度轻量 | `config/rviz_depth_light.rviz` | 深度卡顿验收基准 | `camera-start` | RGB + Depth `image_view` |
 | RGB+Depth 诊断 | `config/rviz_rgb_depth_diag.rviz` | RGB+深度+TF 排错 | `camera-start` | RGB + Depth `image_view` |
 | 深度增强 | `config/rviz_depth_enhanced.rviz` | 完整深度观察 + VM 点云 | **`camera-deep-start`** | RGB + Depth + Preview `image_view`，本地点云 |

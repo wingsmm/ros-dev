@@ -75,7 +75,7 @@ Visualization Manager:
       Axes Radius: 0.05
       Class: rviz/Odometry
       Color: 255; 85; 0
-      Enabled: false
+      Enabled: true
       Keep: 1
       Name: Odometry
       Position Tolerance: 0.1
@@ -83,7 +83,7 @@ Visualization Manager:
       Shape: Arrow
       Topic: /odom
       Unreliable: false
-      Value: false
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48

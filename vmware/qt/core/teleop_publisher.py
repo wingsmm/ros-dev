@@ -30,10 +30,11 @@ class TeleopPublisher(object):
             str(self.cfg.app_dir / "scripts" / "teleop_ros1_bridge.py")
         )
         return (
-            "%sexport CMD_VEL_TOPIC=%s; python2 %s"
+            "%sexport CMD_VEL_TOPIC=%s; export TELEOP_REPEAT_HZ=%s; python2 %s"
             % (
                 bash_ros_prefix(self.cfg),
                 shlex.quote(self.cfg.cmd_vel_topic),
+                shlex.quote(str(self.cfg.teleop_repeat_hz)),
                 script,
             )
         )
