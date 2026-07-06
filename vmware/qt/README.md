@@ -4,13 +4,14 @@ VMware `192.168.1.154` 上的**纯客户端**：连接小车 ROS Master、本地
 
 **不 SSH、不远程启脚本、不需要 VM 本地 `pc_stack.sh`。**
 
-当前 v1 以显示和诊断为主；基础遥控是下一阶段计划，见
+当前 v1 已覆盖显示、诊断、RViz 启停、深度增强与基础 `/cmd_vel` 遥控。
+基础遥控采用五键 dead-man 方式，设计与验收说明见
 [VMware Qt基础遥控与RViz联动方案.md](../docs/VMware%20Qt基础遥控与RViz联动方案.md)。
 
 ## 架构
 
 ```text
-小车 169：手动 pc_stack camera-start / camera-deep-start / radar2d-start / full-start
+小车 168：手动 pc_stack camera-start / camera-deep-start / radar2d-start / full-start
 VM 154：./run.sh → 检查环境 + RViz + topic 诊断
 ```
 
@@ -43,7 +44,7 @@ vmware\scripts\vm_qt_remote.bat bootstrap
 ## 日常使用
 
 ```bash
-# 1. 小车 169（SSH 登录真机后手动）
+# 1. 小车 168（SSH 登录真机后手动）
 ~/ros_ws/scripts/pc_stack.sh camera-start      # 深度轻量
 ~/ros_ws/scripts/pc_stack.sh camera-deep-start # 深度增强（+ /camera/depth/preview）
 # 或
@@ -106,9 +107,9 @@ RViz 由 Qt 在本机 `rviz -d config/*.rviz` 启动。
 
 停止 RViz 时，Qt 按顺序停止 preview view、RGB/Depth view、点云进程、RViz。
 
-## 基础遥控（下一阶段）
+## 基础遥控（已实现，需实车低速验收）
 
-计划新增 `vmware/qt/ui/teleop_panel.py`，提供五键手动遥控：
+已实现 `vmware/qt/ui/teleop_panel.py`，提供五键手动遥控：
 
 ```text
       前进
@@ -166,6 +167,6 @@ RViz 由 Qt 在本机 `rviz -d config/*.rviz` 启动。
 
 - v1（2026-07-03）：雷达/里程计、深度轻量、RGB+Depth 诊断已在真机 + VM 验证。
 - v1 + 遥控（2026-07-03）：五键 dead-man `/cmd_vel`；与深度增强分阶段验收。
-- 下一阶段：基础 `/cmd_vel` 遥控 + RViz 移动显示联动。
+- 下一阶段：实车低速回归、遥控桥异常恢复、可选手柄遥控与导航显示扩展。
 
 详见 [vmware/docs/VMware Qt深度相机增强方案.md](../docs/VMware%20Qt深度相机增强方案.md)。
