@@ -218,7 +218,7 @@ class MainWindow(QMainWindow):
         if not self.teleop.is_available:
             self.teleop_panel.set_controls_enabled(
                 False,
-                "rospy 不可用：请在 VM ROS Melodic 环境运行 ./run.sh",
+                "python2 不可用：请在 VM 安装 ROS Melodic 后使用 ./run.sh 启动",
             )
             return
         if not master_reachable(self.cfg):
@@ -235,6 +235,7 @@ class MainWindow(QMainWindow):
             )
             return
         self.teleop_panel.set_controls_enabled(True)
+        self.teleop_panel.set_keyboard_enabled(self.cfg.teleop_enable_keyboard)
 
     def _on_teleop_velocity(self, lx, ly, az):
         ok, err = self.teleop.publish_velocity(lx, ly, az)

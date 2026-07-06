@@ -79,7 +79,7 @@ VMware 专用：
 |------|------|
 | `CMD_VEL_TOPIC` | `/cmd_vel` |
 | `TELEOP_REPEAT_HZ` | `10` |
-| `TELEOP_ENABLE_KEYBOARD` | `0` |
+| `TELEOP_ENABLE_KEYBOARD` | `1`（W/S/A/D + 方向键 dead-man） |
 | `CAMERA_TF_ENABLE` | `1` |
 | `XTARK_RVIZ_SOFTWARE_GL` | VM 段覆盖为 `1`（软件渲染） |
 

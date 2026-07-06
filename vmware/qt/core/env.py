@@ -105,7 +105,9 @@ def _load_dotenv(path):
 
 
 def _get_env(file_env, key, default=""):
-    return os.environ.get(key, file_env.get(key, default))
+    if key in file_env and file_env[key] != "":
+        return file_env[key]
+    return os.environ.get(key, default)
 
 
 def _get_env_first(file_env, keys, default=""):
@@ -187,7 +189,9 @@ def load_config(env_file=None):
         return _get_env(file_env, key, default)
 
     robot_ip = _get_env_first(file_env, ("XTARK_HOST", "ROBOT_IP"), "192.168.1.169")
-    ros_master_uri = get("ROS_MASTER_URI", "http://%s:11311" % robot_ip)
+    ros_master_uri = _get_env(file_env, "ROS_MASTER_URI", "")
+    if not ros_master_uri or "localhost" in ros_master_uri or "127.0.0.1" in ros_master_uri:
+        ros_master_uri = "http://%s:11311" % robot_ip
     ros_ip_override = get("ROS_IP", "")
     pc_net_if = get("PC_NET_IF", "")
     ros_ip, _ = detect_ros_ip(robot_ip, ros_ip_override, pc_net_if)

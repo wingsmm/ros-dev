@@ -50,7 +50,7 @@ class RvizCommands(object):
             "export CAMERA_POINTCLOUD_STRIDE=%d "
             "CAMERA_POINTCLOUD_MIN_RANGE_M=%s CAMERA_POINTCLOUD_MAX_RANGE_M=%s "
             "VMWARE_DEPTH_POINTS_TOPIC=%s; "
-            "python3 %s"
+            "python2 %s"
             % (
                 bash_ros_prefix(self.cfg),
                 c.camera_pointcloud_stride,

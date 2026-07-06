@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python2
 """Publish a strided depth point cloud on the VM (ROS1 Melodic)."""
 
 import os
