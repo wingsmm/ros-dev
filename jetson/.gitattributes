@@ -1,0 +1,32 @@
+# 强制 LF，防止 Windows 编辑器/git 把远端拉回来的源码转成 CRLF
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.py   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.css  text eol=lf
+*.js   text eol=lf
+*.xml  text eol=lf
+*.launch text eol=lf
+
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# 二进制：不要碰行尾
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.pt binary
+*.pth binary
+*.onnx binary

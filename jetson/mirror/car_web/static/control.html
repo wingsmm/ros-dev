@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小车控制系统 - 控制面板</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="navbar">
+            <a href="/" class="nav-link">首页</a>
+            <a href="/ctl" class="nav-link active">控制面板</a>
+        </div>
+        <div class="panel-row">
+
+            <!-- ===== 第1列：底盘行走（后轮驱动 + 前轮行走 + 转向控制） ===== -->
+            <div class="panel-col1">
+                <div class="panel">
+                    <h1>后轮驱动</h1>
+                    <div class="section">
+                        <div class="section-title">速度 (0-100)</div>
+                        <input type="number" id="rw_speed" value="50" class="input-number" style="width:100%;">
+                    </div>
+                    <div class="section">
+                        <div class="section-title">统一控制</div>
+                        <div class="btn-group">
+                            <button class="btn btn-forward" onclick="rearDrive('fwd')">前进</button>
+                            <button class="btn btn-backward" onclick="rearDrive('bwd')">后退</button>
+                            <button class="btn btn-stop" onclick="rearDrive('stop')">停止</button>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title">单电机测试</div>
+                        <div class="btn-group">
+                            <button class="btn btn-forward" onclick="rearWalk(1,'fwd')">右轮正转</button>
+                            <button class="btn btn-backward" onclick="rearWalk(1,'rev')">右轮反转</button>
+                            <button class="btn btn-stop" onclick="rearWalk(1,'stop')">右轮停止</button>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-forward" onclick="rearWalk(2,'fwd')">左轮正转</button>
+                            <button class="btn btn-backward" onclick="rearWalk(2,'rev')">左轮反转</button>
+                            <button class="btn btn-stop" onclick="rearWalk(2,'stop')">左轮停止</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h1>前轮行走</h1>
+                    <div class="section">
+                        <div class="section-title">速度 (rpm)</div>
+                        <input type="number" id="fw_speed" value="100" class="input-number" style="width:100%;">
+                    </div>
+                    <div class="section">
+                        <div class="section-title">统一控制</div>
+                        <div class="btn-group">
+                            <button class="btn btn-forward" onclick="frontWalk('fwd')">前进</button>
+                            <button class="btn btn-backward" onclick="frontWalk('bwd')">后退</button>
+                            <button class="btn btn-stop" onclick="frontWalk('stop')">停止</button>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title">单电机测试</div>
+                        <div class="btn-group">
+                            <button class="btn btn-forward" onclick="frontWalkSingle(1,'fwd')">右轮正转</button>
+                            <button class="btn btn-backward" onclick="frontWalkSingle(1,'bwd')">右轮反转</button>
+                            <button class="btn btn-stop" onclick="frontWalkSingle(1,'stop')">右轮停止</button>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-forward" onclick="frontWalkSingle(2,'fwd')">左轮正转</button>
+                            <button class="btn btn-backward" onclick="frontWalkSingle(2,'bwd')">左轮反转</button>
+                            <button class="btn btn-stop" onclick="frontWalkSingle(2,'stop')">左轮停止</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h1>转向控制</h1>
+                    <div class="section">
+                        <div class="section-title">速度 (0-100)</div>
+                        <input type="number" id="st_speed" value="50" class="input-number" style="width:100%;">
+                    </div>
+                    <div class="section">
+                        <div class="section-title">单电机测试</div>
+                        <div class="btn-group">
+                            <button class="btn btn-forward" onclick="steerRun(1,'fwd')">右轮正转</button>
+                            <button class="btn btn-backward" onclick="steerRun(1,'rev')">右轮反转</button>
+                            <button class="btn btn-stop" onclick="steerRun(1,'stop')">右轮停止</button>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-forward" onclick="steerRun(2,'fwd')">左轮正转</button>
+                            <button class="btn btn-backward" onclick="steerRun(2,'rev')">左轮反转</button>
+                            <button class="btn btn-stop" onclick="steerRun(2,'stop')">左轮停止</button>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title">相对转向</div>
+                        <div class="inline-input">
+                            <input type="number" id="st_rel_angle" value="90" class="input-number" style="width:60px;" min="1" max="360">
+                            <button class="btn btn-forward" onclick="steerRelativeLeft()" style="flex:1;">左转(增大)</button>
+                            <button class="btn btn-backward" onclick="steerRelativeRight()" style="flex:1;">右转(减小)</button>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title">绝对转向</div>
+                        <div class="inline-input">
+                            <input type="number" id="st_target_angle" value="253.4" class="input-number" style="flex:1;" step="0.1">
+                            <button class="btn btn-info" onclick="steerToAngle()">转向到</button>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title">紧急停止</div>
+                        <div class="btn-group">
+                            <button class="btn btn-stop" onclick="steerRun(0,'stop')" style="flex:1;">停止全部</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 第2列：车体机构（前侧扒手 + 后侧升降 + 爬楼梯） ===== -->
+            <div class="panel-col2">
+                <div class="panel">
+                    <h1>前侧扒手</h1>
+                    <div class="section">
+                        <div class="section-title">位置控制</div>
+                        <div class="btn-group">
+                            <button class="btn btn-sync" onclick="grabHome()" style="flex:1;">找零(回SQ2)</button>
+                            <button class="btn btn-stop" onclick="grabStop()" style="flex:1;">停止</button>
+                        </div>
+                        <div class="inline-input">
+                            <input type="number" id="grab_target" value="100" class="input-number" style="flex:1;">
+                            <button class="btn btn-info" onclick="grabMoveTo()">移动到</button>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title">速度模式（测试用）</div>
+                        <div class="inline-input">
+                            <input type="number" id="grab_speed" value="100" class="input-number" style="flex:1;" step="1">
+                            <button class="btn btn-info" onclick="grabSpeedRun()">运行</button>
+                            <button class="btn btn-stop" onclick="grabSpeedRun(0)">停止</button>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title">状态信息</div>
+                        <div class="status-row">
+                            <span>位置: <span id="grab_position" class="tag tag-gray">--</span></span>
+                            <span>找零: <span id="grab_homed" class="tag tag-gray">--</span></span>
+                            <button class="btn btn-info btn-sm" onclick="grabStatus()">刷新</button>
+                        </div>
+                        <div class="status-row">
+                            <span>SQ1(行程): <span id="grab_limit_sq1" class="tag tag-gray">--</span></span>
+                            <span>SQ2(原点): <span id="grab_limit_sq2" class="tag tag-gray">--</span></span>
+                            <button class="btn btn-info btn-sm" onclick="grabReadLimits()">刷新</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h1>后侧升降</h1>
+                    <div class="section">
+                        <div class="section-title">位置控制</div>
+                        <div class="btn-group">
+                            <button class="btn btn-sync" onclick="liftHome()" style="flex:1;">找零(回上限)</button>
+                            <button class="btn btn-stop" onclick="liftStop()" style="flex:1;">停止</button>
+                        </div>
+                        <div class="inline-input">
+                            <input type="number" id="lift_target" value="100" class="input-number" style="flex:1;">
+                            <button class="btn btn-info" onclick="liftMoveTo()">移动到</button>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title">速度模式（测试用）</div>
+                        <div class="inline-input">
+                            <input type="number" id="lift_speed" value="100" class="input-number" style="flex:1;" step="1">
+                            <button class="btn btn-info" onclick="liftSpeedRun()">运行</button>
+                            <button class="btn btn-stop" onclick="liftSpeedRun(0)">停止</button>
+                        </div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title">状态信息</div>
+                        <div class="status-row">
+                            <span>位置: <span id="lift_position" class="tag tag-gray">--</span></span>
+                            <span>找零: <span id="lift_homed" class="tag tag-gray">--</span></span>
+                            <button class="btn btn-info btn-sm" onclick="liftStatus()">刷新</button>
+                        </div>
+                        <div class="status-row">
+                            <span>SQ2(上限): <span id="lift_limit_sq2" class="tag tag-gray">--</span></span>
+                            <button class="btn btn-info btn-sm" onclick="liftReadLimits()">刷新</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h1>爬楼梯</h1>
+                    <div class="btn-group">
+                        <button class="btn btn-sync" onclick="bothMoveTo()" style="flex:1;">前后同时移动</button>
+                    </div>
+                    <div class="section">
+                        <div class="section-title">水平自动调整</div>
+                        <div class="inline-input">
+                            <span style="flex:0 0 50px;">后侧:</span>
+                            <input type="number" id="level_lift_speed" value="300" class="input-number" style="flex:1;">
+                            <span style="flex:0 0 50px;margin-left:8px;">前侧:</span>
+                            <input type="number" id="level_grab_speed" value="300" class="input-number" style="flex:1;">
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-sync" onclick="startLeveling()" style="flex:1;">开始调平</button>
+                            <button class="btn btn-stop" onclick="stopLeveling()" style="flex:1;">停止</button>
+                        </div>
+                        <div class="status-row">
+                            <span>状态: <span id="level_status" class="tag tag-gray">停止</span></span>
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sync" onclick="callApi('/api/stair/climb')">执行爬楼梯</button>
+                        <button class="btn btn-danger" onclick="callApi('/api/stair/stop')">紧急停止</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 第3列：监控信息（角度传感器 + 数据查看） ===== -->
+            <div class="panel-col3">
+                <div class="panel">
+                    <h1>角度传感器</h1>
+                    <div class="sensor-display">
+                        <div class="sensor-card">
+                            <div class="sensor-label">左轮电压</div>
+                            <div class="sensor-value"><span id="sen_left_voltage">--</span> <span class="sensor-unit">V</span></div>
+                        </div>
+                        <div class="sensor-card">
+                            <div class="sensor-label">右轮电压</div>
+                            <div class="sensor-value"><span id="sen_right_voltage">--</span> <span class="sensor-unit">V</span></div>
+                        </div>
+                    </div>
+                    <div class="sensor-display">
+                        <div class="sensor-card">
+                            <div class="sensor-label">左轮角度</div>
+                            <div class="sensor-value"><span id="sen_left_angle">--</span> <span class="sensor-unit">°</span></div>
+                        </div>
+                        <div class="sensor-card">
+                            <div class="sensor-label">右轮角度</div>
+                            <div class="sensor-value"><span id="sen_right_angle">--</span> <span class="sensor-unit">°</span></div>
+                        </div>
+                    </div>
+                    <div class="sensor-display">
+                        <div class="sensor-card">
+                            <div class="sensor-label">车身倾角</div>
+                            <div class="sensor-value"><span id="tilt_angle">--</span> <span class="sensor-unit">°</span></div>
+                        </div>
+                        <div class="sensor-card">
+                            <div class="sensor-label">倾角原始值</div>
+                            <div class="sensor-value"><span id="tilt_raw">--</span></div>
+                        </div>
+                    </div>
+                    <div class="section-hint">0-5V → 0°~360° (72°/V)</div>
+                    <div class="btn-group">
+                        <button class="btn btn-info" onclick="readSensor()" style="flex:1;">读取一次</button>
+                        <button class="btn btn-sync" id="btn_sensor_auto" onclick="toggleAutoRead()" style="flex:1;">自动读取</button>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h1>数据查看</h1>
+                    <div class="btn-group">
+                        <button class="btn btn-info" onclick="callApi('/api/status')" style="flex:1;">系统状态</button>
+                    </div>
+                    <div id="result" class="result"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="./js/control.js"></script>
+</body>
+</html>

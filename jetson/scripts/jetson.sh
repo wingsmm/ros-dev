@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# jetson/scripts/jetson.sh
+# Windows → WSL/Git Bash → ssh/rsync → Jetson。
+#
+# 目录约定：
+#   本地 jetson/mirror/  ↔  远端 ~/qt/
+#   两边双向同步；本地是主开发目录。
+#
+# 用法：
+#   jetson.sh                       交互式 ssh（默认）
+#   jetson.sh probe                 只读探测：OS/CUDA/ROS/磁盘
+#   jetson.sh pull [subdir]         远端 ~/qt/[subdir]/ → 本地 jetson/mirror/[subdir]/
+#                                    不传 subdir = 整个 ~/qt/
+#   jetson.sh push <subdir>         dry-run：预览本地 → 远端 会写什么
+#   jetson.sh push <subdir> --yes   真写；默认不带 --delete
+#   jetson.sh <任意远端命令...>     单条命令
+#
+# .env（jetson/.env）需要：
+#   HOST=172.0.0.82
+#   USER=nvidia
+#   PORT=22
+#   PASSWORD=nvidia          # 可选
+#   KEY=/path/to/id_ed25519  # 可选，优先
+
+set -euo pipefail
+
+REPO_JETSON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENV_FILE="$REPO_JETSON_DIR/.env"
+[[ -f "$ENV_FILE" ]] || { echo "missing $ENV_FILE" >&2; exit 1; }
+set -a; . "$ENV_FILE"; set +a
+: "${HOST:?HOST required in .env}"
+: "${USER:?USER required in .env}"
+PORT="${PORT:-22}"
+
+# 本地镜像根（对应远端 ~/qt/）
+LOCAL_QT="$REPO_JETSON_DIR/mirror"
+
+ssh_opts=(-p "$PORT" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8)
+
+_auth_prefix=()
+if [[ -n "${KEY:-}" && -f "$KEY" ]]; then
+  ssh_opts+=(-i "$KEY")
+elif [[ -n "${PASSWORD:-}" ]]; then
+  command -v sshpass >/dev/null || { echo "need sshpass: sudo apt install -y sshpass" >&2; exit 3; }
+  _auth_prefix=(sshpass -p "$PASSWORD")
+fi
+
+ssh_run() {
+  "${_auth_prefix[@]}" ssh "${ssh_opts[@]}" "$USER@$HOST" "$@"
+}
+
+_rsync_ssh_cmd() {
+  local ssh_cmd="ssh ${ssh_opts[*]}"
+  [[ ${#_auth_prefix[@]} -gt 0 ]] && ssh_cmd="sshpass -p $PASSWORD $ssh_cmd"
+  printf '%s' "$ssh_cmd"
+}
+
+_rsync_excludes=(
+  --exclude='.env'
+  --exclude='__pycache__/'
+  --exclude='*.pyc'
+  --exclude='.venv/'
+  --exclude='log/'
+  --exclude='build/'
+  --exclude='install/'
+  --exclude='.git/'
+  --exclude='.DS_Store'
+)
+
+# pull: 远端 → 本地。带 --delete，本地严格追远端。
+rsync_pull() {
+  command -v rsync >/dev/null || { echo "need rsync" >&2; exit 3; }
+  local sub="${1:-}"
+  local remote_path="qt${sub:+/$sub}"
+  local local_path="$LOCAL_QT${sub:+/$sub}"
+  mkdir -p "$local_path"
+  rsync -av --delete "${_rsync_excludes[@]}" \
+    -e "$(_rsync_ssh_cmd)" \
+    "$USER@$HOST:$remote_path/" \
+    "$local_path/"
+}
+
+# push: 本地 → 远端。默认 dry-run；--yes 才真写；不带 --delete。
+rsync_push() {
+  command -v rsync >/dev/null || { echo "need rsync" >&2; exit 3; }
+  local sub="${1:-}"
+  local yes="${2:-}"
+  if [[ -z "$sub" ]]; then
+    echo "push 必须显式指定子目录，例：jetson.sh push car_web" >&2
+    exit 2
+  fi
+  local local_path="$LOCAL_QT/$sub"
+  local remote_path="qt/$sub"
+  if [[ ! -d "$local_path" ]]; then
+    echo "本地目录不存在：$local_path" >&2
+    exit 2
+  fi
+
+  local mode="dry-run" flag=(-n)
+  if [[ "$yes" == "--yes" ]]; then
+    mode="write"
+    flag=()
+    echo ">>> push $local_path/ → $USER@$HOST:$remote_path/ (真写，无 --delete)"
+  else
+    echo ">>> push $local_path/ → $USER@$HOST:$remote_path/ (dry-run，加 --yes 才真写)"
+  fi
+
+  # 先确保远端父目录存在
+  if [[ "$mode" == "write" ]]; then
+    ssh_run "mkdir -p 'qt/$sub'"
+  fi
+
+  rsync -av "${flag[@]}" "${_rsync_excludes[@]}" \
+    -e "$(_rsync_ssh_cmd)" \
+    "$local_path/" \
+    "$USER@$HOST:$remote_path/"
+}
+
+case "${1:-}" in
+  "")
+    if [[ ${#_auth_prefix[@]} -gt 0 ]]; then
+      exec "${_auth_prefix[@]}" ssh "${ssh_opts[@]}" "$USER@$HOST"
+    else
+      exec ssh "${ssh_opts[@]}" "$USER@$HOST"
+    fi
+    ;;
+  probe)
+    ssh_run '
+      set +e
+      echo "== host =="; hostname; uname -a; uptime
+      echo "== os ==";   grep -E "^(NAME|VERSION)=" /etc/os-release
+      cat /etc/nv_tegra_release 2>/dev/null | head -1
+      echo "== disk =="; df -h / /home 2>/dev/null
+      echo "== cuda =="; command -v nvcc && nvcc --version | tail -2
+      echo "== ros ==";  ls /opt/ros 2>/dev/null
+      echo "== ~/qt =="; ls -la ~/qt 2>/dev/null
+    '
+    ;;
+  pull)
+    shift
+    rsync_pull "${1:-}"
+    ;;
+  push)
+    shift
+    rsync_push "${1:-}" "${2:-}"
+    ;;
+  *)
+    ssh_run "$*"
+    ;;
+esac

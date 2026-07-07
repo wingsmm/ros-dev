@@ -1,0 +1,20 @@
+# cockpit runtime deps — 暂时最小集，按需追加
+# 保持锁定较宽的下限，避免 WSL/Ubuntu 22.04 系统 python3 (3.10) 拿不到轮子
+
+# HTTP 客户端：调 car_web Flask
+requests>=2.31
+
+# 结构化日志/CLI 起步用（可选）
+rich>=13.7
+
+# 环境变量加载
+python-dotenv>=1.0
+
+# 类型/校验（用于后面写 API schema）
+pydantic>=2.6
+
+# --- 后面按需解注 ---
+# rclpy 通过 apt 装（ros-humble-rclpy），不走 pip
+# opencv-python>=4.9        # 算法/视觉
+# numpy>=1.26
+# paramiko>=3.4             # 若要脱开 jetson.sh 直接 ssh

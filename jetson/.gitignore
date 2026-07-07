@@ -1,0 +1,17 @@
+# 本地环境
+.env
+cockpit/.env
+
+# 本地镜像下不入库的产物
+mirror/**/__pycache__/
+mirror/**/*.pyc
+mirror/**/.venv/
+mirror/**/log/
+mirror/**/build/
+mirror/**/install/
+
+# cockpit 本地开发产物
+cockpit/.venv/
+cockpit/**/__pycache__/
+cockpit/**/*.pyc
+cockpit/logs/

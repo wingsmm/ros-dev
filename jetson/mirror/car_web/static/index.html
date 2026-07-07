@@ -1,0 +1,48 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小车控制系统 - 首页</title>
+    <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="navbar">
+            <a href="/" class="nav-link active">首页</a>
+            <a href="/ctl" class="nav-link">控制面板</a>
+        </div>
+        <div class="panel">
+            <h1>小车控制系统</h1>
+            <p class="subtitle">空项目模板 - 你可以在此基础之上开发</p>
+            <div class="info-cards">
+                <div class="card">
+                    <h3>系统状态</h3>
+                    <div class="card-body">
+                        <p>服务器: <span id="server-status">--</span></p>
+                        <p>版本: 1.0.0</p>
+                        <button class="btn btn-info" onclick="checkStatus()">检测连接</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>快速导航</h3>
+                    <div class="card-body">
+                        <a href="/ctl" class="btn btn-primary">进入控制面板</a>
+                        <p style="margin-top:12px;color:#888;font-size:13px;">控制电机、查看数据</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>项目结构</h3>
+                    <div class="card-body" style="font-size:13px;color:#555;">
+                        <p>main.py - 后端服务器</p>
+                        <p>model/ - 控制逻辑（待实现）</p>
+                        <p>static/ - 前端页面</p>
+                        <p>tool/ - 工具函数（待实现）</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="./js/control.js"></script>
+</body>
+</html>

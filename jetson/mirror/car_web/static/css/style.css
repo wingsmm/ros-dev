@@ -1,0 +1,94 @@
+﻿* { margin: 0; padding: 0; box-sizing: border-box; font-family: "微软雅黑", Arial, sans-serif; }
+body { background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); min-height: 100vh; padding: 16px; }
+.container { max-width: 1260px; margin: 0 auto; }
+
+/* 导航栏 */
+.navbar { background: white; border-radius: 10px; padding: 10px 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; gap: 6px; }
+.nav-link { padding: 7px 18px; border-radius: 8px; text-decoration: none; color: #666; font-size: 14px; transition: all 0.2s; }
+.nav-link:hover { background: #f0f4ff; color: #2196F3; }
+.nav-link.active { background: #2196F3; color: white; }
+
+/* 三列布局 */
+.panel-row { display: flex; gap: 16px; align-items: flex-start; }
+.panel-col1 { flex: 1; min-width: 0; }
+.panel-col2 { flex: 1; min-width: 0; }
+.panel-col3 { flex: 1; min-width: 0; }
+
+/* 面板卡片 */
+.panel { background: white; border-radius: 12px; padding: 16px; margin-bottom: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+h1 { color: #2d3748; font-size: 16px; margin-bottom: 12px; text-align: center; padding-bottom: 8px; border-bottom: 2px solid #eef0f4; }
+
+/* 首页卡片 */
+.subtitle { text-align: center; color: #999; font-size: 13px; margin-bottom: 20px; }
+.info-cards { display: flex; flex-direction: column; gap: 14px; }
+.card { border: 1px solid #e8e8e8; border-radius: 10px; padding: 16px; }
+.card h3 { color: #2d3748; font-size: 15px; margin-bottom: 10px; }
+.card-body p { margin-bottom: 6px; font-size: 13px; color: #555; }
+
+/* 区块 */
+.section { margin-bottom: 14px; }
+.section:last-child { margin-bottom: 0; }
+.section-title { color: #4a5568; font-size: 13px; font-weight: 500; margin-bottom: 8px; padding-left: 8px; border-left: 3px solid #2196F3; }
+.section-hint { font-size: 11px; color: #999; text-align: center; margin: 6px 0 10px; }
+
+/* 按钮组 */
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.btn-group:last-child { margin-bottom: 0; }
+
+/* 按钮 */
+.btn { padding: 7px 12px; border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s; box-shadow: 0 1px 3px rgba(0,0,0,0.08); min-width: 72px; text-align: center; text-decoration: none; display: inline-block; }
+.btn:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.12); }
+.btn:active { transform: translateY(0); }
+.btn-sm { padding: 3px 10px; font-size: 11px; min-width: auto; border-radius: 4px; }
+.btn-forward { background: #2196F3; }
+.btn-forward:hover { background: #1976D2; }
+.btn-backward { background: #f44336; }
+.btn-backward:hover { background: #d32f2f; }
+.btn-stop { background: #ff9800; }
+.btn-stop:hover { background: #f57c00; }
+.btn-sync { background: #4CAF50; }
+.btn-sync:hover { background: #388E3C; }
+.btn-info { background: #607D8B; }
+.btn-info:hover { background: #455A64; }
+.btn-danger { background: #e74c3c; }
+.btn-danger:hover { background: #c0392b; }
+.btn-primary { background: #2196F3; }
+.btn-primary:hover { background: #1976D2; }
+
+/* 输入框 */
+.input-number { padding: 7px 10px; border: 1px solid #dcdfe6; border-radius: 6px; font-size: 13px; width: 120px; outline: none; transition: border-color 0.2s; }
+.input-number:focus { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64,158,255,0.15); }
+
+/* 行内输入+按钮 */
+.inline-input { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
+
+/* 状态行 */
+.status-row { display: flex; gap: 10px; font-size: 12px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+.status-row:last-child { margin-bottom: 0; }
+
+/* 传感器展示 */
+.sensor-display { display: flex; gap: 12px; margin-bottom: 8px; }
+.sensor-card { flex: 1; background: #f8fafc; border-radius: 8px; padding: 12px 8px; text-align: center; border: 1px solid #e8ecf1; }
+.sensor-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+.sensor-value { font-size: 22px; font-weight: bold; color: #2d3748; }
+.sensor-unit { font-size: 13px; color: #888; font-weight: normal; }
+
+/* 标签 */
+.tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+.tag-gray { background: #eef0f4; color: #666; }
+.tag-green { background: #e8f5e9; color: #2e7d32; }
+.tag-red { background: #ffebee; color: #c62828; }
+
+/* 结果显示 */
+.result { margin-top: 12px; padding: 12px; border-radius: 6px; font-size: 12px; font-weight: 500; display: none; background: #f5f7fa; border: 1px solid #e8e8e8; color: #333; word-break: break-all; font-family: "Consolas", monospace; }
+.result.show { display: block; }
+.result.success { background: #e8f5e9; border-color: #c8e6c9; color: #2e7d32; }
+.result.error { background: #ffebee; border-color: #ffcdd2; color: #c62828; }
+
+/* 响应式 */
+@media (max-width: 960px) {
+    .panel-row { flex-direction: column; }
+    .panel { padding: 14px; }
+    .btn { min-width: calc(33% - 6px); }
+    .container { padding: 0; }
+}
