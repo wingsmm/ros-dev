@@ -25,7 +25,8 @@
 set -euo pipefail
 
 REPO_JETSON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="$REPO_JETSON_DIR/.env"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/.env"
 [[ -f "$ENV_FILE" ]] || { echo "missing $ENV_FILE" >&2; exit 1; }
 set -a; . "$ENV_FILE"; set +a
 : "${HOST:?HOST required in .env}"
@@ -34,6 +35,7 @@ PORT="${PORT:-22}"
 
 # 本地镜像根（对应远端 ~/qt/）
 LOCAL_QT="$REPO_JETSON_DIR/mirror"
+REMOTE_ROS2_WS="qt/ros2_ws"
 
 ssh_opts=(-p "$PORT" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8)
 
@@ -116,6 +118,77 @@ rsync_push() {
     "$USER@$HOST:$remote_path/"
 }
 
+usage() {
+  cat <<'USAGE'
+Usage:
+  jetson.sh                         interactive ssh
+  jetson.sh probe                   inspect remote host
+  jetson.sh pull [subdir]           remote ~/qt/[subdir] -> local mirror/[subdir]
+  jetson.sh push <subdir> [--yes]   local mirror/[subdir] -> remote ~/qt/[subdir]
+  jetson.sh ros2 <command>          manage remote ~/qt/ros2_ws
+  jetson.sh <remote command>        run one remote command
+
+ROS2 commands:
+  ros2 push                         dry-run sync mirror/ros2_ws -> ~/qt/ros2_ws
+  ros2 push --yes                   sync mirror/ros2_ws -> ~/qt/ros2_ws
+  ros2 build                        colcon build cmd_vel_car_web_bridge on Jetson
+  ros2 deploy                       sync --yes, then build on Jetson
+  ros2 start                        start cmd_vel_car_web_bridge via bridge_stack.sh
+  ros2 stop                         stop bridge
+  ros2 restart                      restart bridge
+  ros2 status                       bridge process + relevant topic status
+  ros2 logs [N|-f]                  bridge log tail/follow
+  ros2 verify                       Jetson-local dry-run DDS verify
+USAGE
+}
+
+remote_ros2_build() {
+  ssh_run "
+    set -e
+    cd ~/$REMOTE_ROS2_WS
+    find scripts src -type f \\( -name '*.sh' -o -name '*.py' \\) -print0 2>/dev/null | xargs -0 -r sed -i 's/\\r$//'
+    chmod +x scripts/*.sh 2>/dev/null || true
+    set +u
+    source /opt/ros/humble/setup.bash
+    set -u
+    colcon build --packages-select cmd_vel_car_web_bridge
+  "
+}
+
+remote_ros2_stack() {
+  local cmd="${1:-status}"
+  shift || true
+  ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/bridge_stack.sh '$cmd' $*"
+}
+
+ros2_cmd() {
+  local cmd="${1:-help}"
+  shift || true
+  case "$cmd" in
+    help|-h|--help)
+      usage
+      ;;
+    push)
+      rsync_push ros2_ws "${1:-}"
+      ;;
+    build)
+      remote_ros2_build
+      ;;
+    deploy)
+      rsync_push ros2_ws --yes
+      remote_ros2_build
+      ;;
+    start|stop|restart|status|logs|verify)
+      remote_ros2_stack "$cmd" "$@"
+      ;;
+    *)
+      echo "unknown ros2 command: $cmd" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+}
+
 case "${1:-}" in
   "")
     if [[ ${#_auth_prefix[@]} -gt 0 ]]; then
@@ -123,6 +196,9 @@ case "${1:-}" in
     else
       exec ssh "${ssh_opts[@]}" "$USER@$HOST"
     fi
+    ;;
+  help|-h|--help)
+    usage
     ;;
   probe)
     ssh_run '
@@ -143,6 +219,10 @@ case "${1:-}" in
   push)
     shift
     rsync_push "${1:-}" "${2:-}"
+    ;;
+  ros2)
+    shift
+    ros2_cmd "$@"
     ;;
   *)
     ssh_run "$*"

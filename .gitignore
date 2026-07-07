@@ -72,6 +72,9 @@ xtark/record/**
 .env.*
 !.env.example
 !vmware/qt/.env
+!jetson/cockpit/.env
+!jetson/cockpit/logs/
+!jetson/cockpit/logs/.gitkeep
 *.pem
 *.key
 secrets.*

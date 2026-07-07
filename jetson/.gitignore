@@ -1,6 +1,5 @@
 # 本地环境
-.env
-cockpit/.env
+scripts/.env
 
 # 本地镜像下不入库的产物
 mirror/**/__pycache__/
@@ -14,4 +13,5 @@ mirror/**/install/
 cockpit/.venv/
 cockpit/**/__pycache__/
 cockpit/**/*.pyc
-cockpit/logs/
+cockpit/logs/*
+!cockpit/logs/.gitkeep
