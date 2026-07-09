@@ -1,24 +1,30 @@
 # jetson
 
-Jetson 82 (`nvidia@172.0.0.82`) 相关的所有开发资产。三块：
+Jetson（`scripts/.env` 里的 `HOST`，当前多为 `172.0.0.82`）相关开发资产。三块：
 
 ```text
 jetson/
   scripts/   与远端通信的入口（ssh / rsync）
   mirror/    远端 ~/qt/ 的同步区
-  cockpit/   PC/WSL 上位机（永不部署到 Jetson）
+  cockpit/   PC/VMware 上位机（永不部署到 Jetson）
 ```
+
+> **2026-07-08 回退说明**：自研「雷达整链」（bridge + unilidar_stack + Point-LIO + adapter）方向做错，已撤出工作区。  
+> - 远端 `~/qt/ros2_ws` 已恢复为从 `~/ros2_ws` 拷回的**原版**（仅官方/同事侧包，**无** `scripts/`）。  
+> - 本地改过的完整链路已迁到仓库根 `other/ros2_ws/`（`.gitignore` 忽略，不入库）。  
+> - `jetson/mirror/ros2_ws` 已 `pull` 对齐远端原版。  
+> 日常不要再把 `jetson.sh ros2 start` 当成完整观测栈入口（远端已无 `scripts/ros2_stack.sh`）。
 
 ## 关系图
 
 ```text
-        [PC / WSL]                                [Jetson 82  ~/qt/]
+        [PC / VMware]                            [Jetson  ~/qt/]
 
         cockpit/  ── HTTP / ROS2 DDS ─────────►   car_web/   (副本, 来自同事)
-           │                                      ros2_ws/   (自己写)
+           │                                      ros2_ws/   (当前=原版镜像)
            │
         mirror/car_web/  ◄── pull ── rsync ────   car_web/
-        mirror/ros2_ws/  ── push ── rsync ─────►  ros2_ws/
+        mirror/ros2_ws/  ◄── pull / push ─────►  ros2_ws/
 ```
 
 ## 三个组件
@@ -27,8 +33,8 @@ jetson/
 |---|---|---|---|---|
 | `scripts/jetson.sh` | 本仓库 | PC | — | connect / probe / pull / push / \<remote cmd\> |
 | `mirror/car_web/` | 同事 Flask 副本 | 尽量对齐同事版本 | 双向（当前手工） | 相对同事仅端口 + `config/` 差异；不是 fork 分支 |
-| `mirror/ros2_ws/` | 自己 | PC (WSL 里 ROS2 Humble) | 本地 → 远端 | WSL 写 → push → Jetson 编译运行 |
-| `cockpit/` | 自己 | PC (WSL) | 无 | 控制 / SLAM / 算法；见 [cockpit/README.md](cockpit/README.md) |
+| `mirror/ros2_ws/` | 原版（unitree / point_lio / 示例包） | 以远端为准 | **先 pull 对齐**；改代码后再 push | 自研整链不在此目录，见 `other/ros2_ws` |
+| `cockpit/` | 自己 | PC / VMware | 无 | 控制 / SLAM / 算法；L1/RViz 当前只认 VMware 观测端验证，见 [cockpit/README.md](cockpit/README.md) |
 
 ## `.env`（不入库，不做示例）
 
@@ -60,67 +66,70 @@ wsl -d Ubuntu-22.04 -- bash -lc "cd /mnt/d/Downloads/work/ros-dev && bash jetson
 # 探远端环境（只读）
 bash jetson/scripts/jetson.sh probe
 
-# 双向同步
+# 同步
 bash jetson/scripts/jetson.sh pull car_web        # 远端 ~/qt/car_web → 本地
-bash jetson/scripts/jetson.sh push ros2_ws        # 本地 → 远端 (dry-run)
+bash jetson/scripts/jetson.sh pull ros2_ws        # 远端原版 → mirror（先对齐）
+bash jetson/scripts/jetson.sh push ros2_ws        # dry-run
 bash jetson/scripts/jetson.sh push ros2_ws --yes  # 真写；默认不带 --delete
-
-# ROS2 干跑控制链路（等价于 push/build/bridge_stack 常用动作）
-bash jetson/scripts/jetson.sh ros2 push           # dry-run
-bash jetson/scripts/jetson.sh ros2 deploy         # push --yes + Jetson colcon build
-bash jetson/scripts/jetson.sh ros2 start
-bash jetson/scripts/jetson.sh ros2 status
-bash jetson/scripts/jetson.sh ros2 logs
-bash jetson/scripts/jetson.sh ros2 stop
 
 # 交互式 ssh / 单条远端命令
 bash jetson/scripts/jetson.sh
 bash jetson/scripts/jetson.sh 'ros2 topic list'
 ```
 
-## ROS2 干跑控制链路部署
+## ROS2 / L1 现状（2026-07-08 回退后）
 
-`mirror/ros2_ws/` 的权威验证环境是 Jetson `~/qt/ros2_ws`。WSL 本机
-`colcon build` 只能作为推送前的低成本冒烟检查，不能替代远端验收。
-
-当前第一阶段只验证控制链路：
+`mirror/ros2_ws/src/` 当前只有原版包：
 
 ```text
-PC / WSL cockpit
-  -> ROS2 /cmd_vel
-Jetson ~/qt/ros2_ws
-  -> cmd_vel_car_web_bridge
-  -> /vehicle/control_action
+my_motor_ctrl / my_py_pkg          # 示例
+unitree_lidar_ros2 / unitree_lidar_sdk
+point_lio_ros2                     # 官方 Point-LIO（有则用官方 launch，勿自造整栈）
 ```
 
-部署和验收顺序：
+自研整链（`ros2_stack.sh`、`cmd_vel_car_web_bridge`、`lio_odom_adapter` 等）在 `other/ros2_ws/`，**不是**当前 `mirror` 入口。
 
-```bash
-# 1. 预览同步内容；只同步 mirror/ros2_ws，不推 cockpit
-bash jetson/scripts/jetson.sh ros2 push
+雷达第一阶段建议按[宇树官方文档](https://support.unitree.com/home/zh/L1_SDK/L1_Use_unilidar_ros2)在 Jetson 上直接 `ros2 launch` 官方包，本仓库只做同步与观测，不再维护自造 `ros2 start` 全栈。
 
-# 2. 确认无误后写入 Jetson ~/qt/ros2_ws 并编译
-bash jetson/scripts/jetson.sh ros2 deploy
+相关问题排查笔记（**参考用，非日常入口**）：[docs/l1-lio-drift-triage-task.md](docs/l1-lio-drift-triage-task.md)。
 
-# 3. 启动 / 检查 / 查看日志
-bash jetson/scripts/jetson.sh ros2 start
-bash jetson/scripts/jetson.sh ros2 status
-bash jetson/scripts/jetson.sh ros2 logs
-```
-
-如果要先让 Jetson 自己做一次干跑闭环，可执行：
-
-```bash
-bash jetson/scripts/jetson.sh ros2 verify
-```
-
-真正的跨机验收仍然是：Jetson bridge 保持运行，PC/WSL 启动
-`jetson/cockpit`，按键发布 `/cmd_vel`，Jetson 日志或
-`/vehicle/control_action` 回显看到：
+## Unitree L1 最小观测：Jetson 采点云 + VMware RViz2
 
 ```text
-FORWARD / BACKWARD / TURN_LEFT / TURN_RIGHT / STOP
+Jetson (~/qt/ros2_ws) 跑官方 unitree_lidar_ros2
+  -> /unilidar/cloud  /unilidar/imu
+VMware/PC rviz2
+  -> Fixed Frame=unilidar_lidar，PointCloud2=/unilidar/cloud
 ```
+
+2026-07-09 阶段一已通过：Jetson 侧 `/unilidar/cloud` 约 8.76 Hz、`/unilidar/imu` 约 246 Hz；VM `172.0.0.87` 作为观测端已看到 topic、Hz 和 RViz 点云。WSL 曾出现 DDS multicast/discovery 问题，不作为 L1 阶段一验收路径；后续 cockpit 体验若要回到 WSL，再单独修 WSL/Windows DDS。
+
+### 固定串口别名（推荐）：`/dev/unilidar_lidar`
+
+USB 串口名（`/dev/ttyUSB*` / `ttyCH341USB*`）可能因重启/拔插/插口变更而漂移。建议用 udev 生成稳定别名 `/dev/unilidar_lidar`，并在 launch 参数里使用该路径。
+
+在 Jetson 上执行（需要 sudo）：
+
+```bash
+sudo -v
+
+sudo tee /etc/udev/rules.d/99-unilidar.rules >/dev/null <<'EOF'
+# Unitree L1 (CH340) stable symlink
+# Bound to physical USB path 1-2.4 (ttyCH341USB0 as of 2026-07-08)
+SUBSYSTEM=="tty", KERNEL=="ttyCH341USB*", KERNELS=="1-2.4", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", SYMLINK+="unilidar_lidar", GROUP="dialout", MODE="0660"
+EOF
+
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+sleep 1
+ls -la /dev/unilidar_lidar
+```
+
+说明：
+
+- 该规则按 **CH340/CH341 (1a86:7523)** + **物理 USB 口路径 `KERNELS=="1-2.4"`** 绑定。若换插口，需要用 `udevadm info -a -n /dev/ttyCH341USBx` 重新确认对应的 `KERNELS=="1-2.X"`。
+
+卧放安装时坐标轴可能与「竖直装」文档不一致（例如 Z 朝前），见 [cockpit/README.md](cockpit/README.md) 相关节。
 
 ## 行尾 / 编码规范
 

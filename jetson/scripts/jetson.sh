@@ -15,12 +15,23 @@
 #   jetson.sh push <subdir> --yes   真写；默认不带 --delete
 #   jetson.sh <任意远端命令...>     单条命令
 #
-# .env（jetson/.env）需要：
-#   HOST=172.0.0.82
+# .env（jetson/scripts/.env）需要：
+#   HOST=172.0.0.52          # 默认 profile（不写 profile 时用它）
 #   USER=nvidia
 #   PORT=22
 #   PASSWORD=nvidia          # 可选
 #   KEY=/path/to/id_ed25519  # 可选，优先
+#
+# 可选：同一份 .env 里维护多套 profile（向后兼容，不影响默认 HOST/USER）
+#   HOST_VM=172.0.0.87
+#   USER_VM=wingsmm
+#   PORT_VM=22
+#   PASSWORD_VM=mm830830
+#   KEY_VM=/path/to/id_ed25519
+#
+# 选择 profile 的方式（二选一）：
+#   1) 环境变量：JETSON_PROFILE=vm jetson.sh probe
+#   2) 参数：    jetson.sh --profile vm probe
 
 set -euo pipefail
 
@@ -29,9 +40,44 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$SCRIPT_DIR/.env"
 [[ -f "$ENV_FILE" ]] || { echo "missing $ENV_FILE" >&2; exit 1; }
 set -a; . "$ENV_FILE"; set +a
-: "${HOST:?HOST required in .env}"
-: "${USER:?USER required in .env}"
-PORT="${PORT:-22}"
+
+PROFILE="${JETSON_PROFILE:-}"
+if [[ "${1:-}" == "--profile" ]]; then
+  PROFILE="${2:-}"
+  shift 2
+elif [[ "${1:-}" == "--profile="* ]]; then
+  PROFILE="${1#--profile=}"
+  shift 1
+fi
+
+_upper() { printf '%s' "${1^^}"; }
+_get_profile_var() {
+  local key="$1" profile="$2"
+  local up="$(_upper "$profile")"
+  local name="${key}_${up}"
+  # shellcheck disable=SC2163
+  if [[ -n "${!name:-}" ]]; then
+    printf '%s' "${!name}"
+    return 0
+  fi
+  return 1
+}
+
+if [[ -n "${PROFILE:-}" ]]; then
+  # profile 存在时，优先读取 HOST_<PROFILE>/USER_<PROFILE>/...，缺省则回退到默认 HOST/USER/...
+  HOST="$(_get_profile_var HOST "$PROFILE" || printf '%s' "${HOST:-}")"
+  USER="$(_get_profile_var USER "$PROFILE" || printf '%s' "${USER:-}")"
+  PORT="$(_get_profile_var PORT "$PROFILE" || printf '%s' "${PORT:-22}")"
+  PASSWORD="$(_get_profile_var PASSWORD "$PROFILE" || printf '%s' "${PASSWORD:-}")"
+  KEY="$(_get_profile_var KEY "$PROFILE" || printf '%s' "${KEY:-}")"
+else
+  : "${HOST:?HOST required in .env}"
+  : "${USER:?USER required in .env}"
+  PORT="${PORT:-22}"
+fi
+
+: "${HOST:?HOST required (profile=${PROFILE:-default})}"
+: "${USER:?USER required (profile=${PROFILE:-default})}"
 
 # 本地镜像根（对应远端 ~/qt/）
 LOCAL_QT="$REPO_JETSON_DIR/mirror"
@@ -67,6 +113,8 @@ _rsync_excludes=(
   --exclude='install/'
   --exclude='.git/'
   --exclude='.DS_Store'
+  # point_lio 官方示例 gif ~246M，源码联调不需要
+  --exclude='point_lio_ros2/image/'
 )
 
 # pull: 远端 → 本地。带 --delete，本地严格追远端。
@@ -122,23 +170,22 @@ usage() {
   cat <<'USAGE'
 Usage:
   jetson.sh                         interactive ssh
+  jetson.sh --profile vm            interactive ssh (use HOST_VM/USER_VM/..)
   jetson.sh probe                   inspect remote host
+  jetson.sh --profile vm probe      inspect remote host (vm profile)
   jetson.sh pull [subdir]           remote ~/qt/[subdir] -> local mirror/[subdir]
   jetson.sh push <subdir> [--yes]   local mirror/[subdir] -> remote ~/qt/[subdir]
   jetson.sh ros2 <command>          manage remote ~/qt/ros2_ws
   jetson.sh <remote command>        run one remote command
 
-ROS2 commands:
+ROS2 commands (注意：远端原版无 scripts/ 时 start/stop/deploy 不可用):
   ros2 push                         dry-run sync mirror/ros2_ws -> ~/qt/ros2_ws
   ros2 push --yes                   sync mirror/ros2_ws -> ~/qt/ros2_ws
-  ros2 build                        colcon build cmd_vel_car_web_bridge on Jetson
-  ros2 deploy                       sync --yes, then build on Jetson
-  ros2 start                        start cmd_vel_car_web_bridge via bridge_stack.sh
-  ros2 stop                         stop bridge
-  ros2 restart                      restart bridge
-  ros2 status                       bridge process + relevant topic status
-  ros2 logs [N|-f]                  bridge log tail/follow
-  ros2 verify                       Jetson-local dry-run DDS verify
+  ros2 build                        colcon build on Jetson（需远端有对应包）
+  ros2 deploy                       push --yes + colcon build
+  ros2 start|stop|restart           依赖远端 scripts/ros2_stack.sh（原版已撤回，勿当日常入口）
+  ros2 status|logs [-f]
+  ros2 lio-* / verify               同上，仅归档方案曾使用
 USAGE
 }
 
@@ -151,14 +198,33 @@ remote_ros2_build() {
     set +u
     source /opt/ros/humble/setup.bash
     set -u
-    colcon build --packages-select cmd_vel_car_web_bridge
+    colcon build --packages-select cmd_vel_car_web_bridge unitree_lidar_ros2 point_lio lio_odom_adapter
   "
 }
 
 remote_ros2_stack() {
   local cmd="${1:-status}"
   shift || true
-  ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/bridge_stack.sh '$cmd' $*"
+  ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/ros2_stack.sh '$cmd' $*"
+}
+
+remote_lio_build() {
+  ssh_run "
+    set -e
+    cd ~/$REMOTE_ROS2_WS
+    find scripts src -type f \\( -name '*.sh' -o -name '*.py' \\) -print0 2>/dev/null | xargs -0 -r sed -i 's/\\r$//'
+    chmod +x scripts/*.sh 2>/dev/null || true
+    set +u
+    source /opt/ros/humble/setup.bash
+    set -u
+    colcon build --packages-select point_lio lio_odom_adapter
+  "
+}
+
+remote_lio_stack() {
+  local cmd="${1:-status}"
+  shift || true
+  ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/lio_stack.sh '$cmd' $*"
 }
 
 ros2_cmd() {
@@ -178,8 +244,17 @@ ros2_cmd() {
       rsync_push ros2_ws --yes
       remote_ros2_build
       ;;
-    start|stop|restart|status|logs|verify)
+    start|stop|restart|status|logs)
       remote_ros2_stack "$cmd" "$@"
+      ;;
+    verify)
+      ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/bridge_stack.sh verify $*"
+      ;;
+    lio-build)
+      remote_lio_build
+      ;;
+    lio-start|lio-stop|lio-status|lio-logs)
+      remote_lio_stack "${cmd#lio-}" "$@"
       ;;
     *)
       echo "unknown ros2 command: $cmd" >&2

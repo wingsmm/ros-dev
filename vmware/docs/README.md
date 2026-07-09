@@ -11,6 +11,7 @@
 | [VMware Qt纯客户端实现与测试报告.md](./VMware%20Qt纯客户端实现与测试报告.md) | 2026-07-03 实现结果与真机/VM 验收记录 |
 | [VMware Qt深度相机增强方案.md](./VMware%20Qt深度相机增强方案.md) | 深度 preview、VM 本地点云、第四档增强模式专项方案 |
 | [VMware Qt基础遥控与RViz联动方案.md](./VMware%20Qt基础遥控与RViz联动方案.md) | 五键 `/cmd_vel` 手动遥控与移动时 RViz 显示验收 |
+| [VMware Qt雷达里程计联调指南.md](./VMware%20Qt雷达里程计联调指南.md) | 雷达/里程计模式：障碍显示、TF 对应、遥控移动、RViz 验收 |
 
 ## 相关（真机 / 脚本）
 

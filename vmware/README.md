@@ -34,6 +34,7 @@ vmware/
 | [docs/VMware Qt纯客户端实现与测试报告.md](<./docs/VMware Qt纯客户端实现与测试报告.md>) | 2026-07-03 实现结果与验收记录 |
 | [docs/VMware Qt深度相机增强方案.md](<./docs/VMware Qt深度相机增强方案.md>) | 深度 preview、VM 本地点云、第四档增强模式 |
 | [docs/VMware Qt基础遥控与RViz联动方案.md](<./docs/VMware Qt基础遥控与RViz联动方案.md>) | 五键 `/cmd_vel` 遥控与 RViz 联动 |
+| [docs/VMware Qt雷达里程计联调指南.md](<./docs/VMware Qt雷达里程计联调指南.md>) | 雷达/里程计：障碍、TF、遥控移动、RViz 验收 |
 | [qt/README.md](./qt/README.md) | PyQt5 客户端使用与 `.env` 配置 |
 | [scripts/README.md](./scripts/README.md) | Windows 侧远端脚本入口 |
 

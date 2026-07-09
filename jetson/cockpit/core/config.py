@@ -66,6 +66,15 @@ class CockpitConfig:
     teleop_enable_keyboard: bool
     log_dir: Path
     log_level: str
+    lidar_cloud_topic: str
+    lidar_imu_topic: str
+    lidar_fixed_frame: str
+    rviz_config: Path
+    lidar_mapping_rviz: Path
+    lio_odom_topic: str
+    lio_path_topic: str
+    lio_cloud_registered_topic: str
+    lio_fixed_frame: str
 
 
 def load_config() -> CockpitConfig:
@@ -82,4 +91,17 @@ def load_config() -> CockpitConfig:
         teleop_enable_keyboard=_bool(env_file, "TELEOP_ENABLE_KEYBOARD", True),
         log_dir=_path(env_file, "JETSON_COCKPIT_LOG_DIR", "logs"),
         log_level=_value(env_file, "JETSON_COCKPIT_LOG_LEVEL", "INFO").upper(),
+        lidar_cloud_topic=_value(env_file, "LIDAR_CLOUD_TOPIC", "/unilidar/cloud"),
+        lidar_imu_topic=_value(env_file, "LIDAR_IMU_TOPIC", "/unilidar/imu"),
+        lidar_fixed_frame=_value(env_file, "LIDAR_FIXED_FRAME", "odom"),
+        rviz_config=_path(env_file, "LIDAR_RVIZ_CONFIG", "config/unilidar.rviz"),
+        lidar_mapping_rviz=_path(
+            env_file, "LIDAR_MAPPING_RVIZ_CONFIG", "config/unilidar_mapping.rviz"
+        ),
+        lio_odom_topic=_value(env_file, "LIO_ODOM_TOPIC", "/odom"),
+        lio_path_topic=_value(env_file, "LIO_PATH_TOPIC", "/odom_path"),
+        lio_cloud_registered_topic=_value(
+            env_file, "LIO_CLOUD_REGISTERED_TOPIC", "/cloud_registered"
+        ),
+        lio_fixed_frame=_value(env_file, "LIO_FIXED_FRAME", "odom"),
     )

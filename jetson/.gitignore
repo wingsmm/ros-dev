@@ -1,5 +1,6 @@
 # 本地环境
 scripts/.env
+scripts/.env.*
 
 # 本地镜像下不入库的产物
 mirror/**/__pycache__/
