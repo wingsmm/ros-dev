@@ -35,6 +35,10 @@ class LidarStatus:
     cloud_ok: bool
     imu_ok: bool
     jetson_port: str
+    tf_parent: str
+    tf_child: str
+    tf_ok: bool
+    tf_detail: str
     detail: str
 
 
@@ -71,6 +75,38 @@ def _publisher_node(topic: str) -> str:
         if line.strip().startswith("Node name:"):
             return line.split(":", 1)[1].strip()
     return ""
+
+
+def probe_static_tf(
+    parent: str = "base_link",
+    child: str = "unilidar_lidar",
+) -> tuple[bool, str]:
+    """Return whether base_link -> unilidar_lidar is visible on /tf_static or tf2."""
+    label = "%s -> %s" % (parent, child)
+    try:
+        proc = _run("timeout 4 ros2 topic echo /tf_static --once 2>&1", timeout=6)
+    except (OSError, subprocess.TimeoutExpired):
+        proc = None
+    if proc is not None:
+        text = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        if ("frame_id: %s" % parent) in text and ("child_frame_id: %s" % child) in text:
+            return True, "%s OK" % label
+
+    try:
+        proc = _run(
+            "timeout 4 ros2 run tf2_ros tf2_echo %s %s 2>&1" % (parent, child),
+            timeout=7,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False, "%s missing" % label
+
+    text = (proc.stdout or "") + "\n" + (proc.stderr or "")
+    lowered = text.lower()
+    if "frame does not exist" in lowered or "invalid frame" in lowered:
+        return False, "%s missing" % label
+    if "translation:" in lowered or "at time" in lowered:
+        return True, "%s OK" % label
+    return False, "%s no data" % label
 
 
 def fetch_jetson_lidar_port(cockpit_root: Path | None = None) -> str:
@@ -154,6 +190,8 @@ def probe_lidar_status(
     cloud_topic: str = "/unilidar/cloud",
     imu_topic: str = "/unilidar/imu",
     cockpit_root: Path | None = None,
+    tf_parent: str = "base_link",
+    tf_child: str = "unilidar_lidar",
 ) -> LidarStatus:
     cloud_row = topic_status(cloud_topic)
     imu_row = topic_status(imu_topic)
@@ -162,6 +200,7 @@ def probe_lidar_status(
     cloud_pub = _publisher_node(cloud_topic) if cloud_row.has_publisher else ""
     imu_pub = _publisher_node(imu_topic) if imu_row.has_publisher else ""
     port = fetch_jetson_lidar_port(cockpit_root)
+    tf_ok, tf_detail = probe_static_tf(tf_parent, tf_child)
 
     parts = []
     if not cloud_row.has_publisher:
@@ -174,6 +213,8 @@ def probe_lidar_status(
         parts.append("%s 无频率数据" % imu_topic)
     if cloud_pub and cloud_pub != "unitree_lidar_ros2_node":
         parts.append("cloud publisher 异常: %s" % cloud_pub)
+    if not tf_ok:
+        parts.append("TF %s" % tf_detail)
 
     return LidarStatus(
         cloud_topic=cloud_topic,
@@ -185,6 +226,10 @@ def probe_lidar_status(
         cloud_ok=cloud_row.has_publisher and cloud_hz is not None and cloud_hz > 0.5,
         imu_ok=imu_row.has_publisher and imu_hz is not None and imu_hz > 1.0,
         jetson_port=port,
+        tf_parent=tf_parent,
+        tf_child=tf_child,
+        tf_ok=tf_ok,
+        tf_detail=tf_detail,
         detail="；".join(parts) if parts else "OK",
     )
 
@@ -192,14 +237,16 @@ def probe_lidar_status(
 def format_lidar_summary(status: LidarStatus) -> str:
     cloud_hz = "-" if status.cloud_hz is None else "%.1f Hz" % status.cloud_hz
     imu_hz = "-" if status.imu_hz is None else "%.0f Hz" % status.imu_hz
+    tf_state = status.tf_detail if status.tf_ok else status.tf_detail
     return (
-        "port=%s；%s %s；%s %s；publisher=%s"
+        "port=%s；%s %s；%s %s；TF %s；publisher=%s"
         % (
             status.jetson_port,
             status.cloud_topic,
             cloud_hz,
             status.imu_topic,
             imu_hz,
+            tf_state,
             status.cloud_publisher,
         )
     )

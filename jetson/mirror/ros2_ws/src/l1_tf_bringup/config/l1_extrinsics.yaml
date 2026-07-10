@@ -1,0 +1,27 @@
+# L1 static TF extrinsics (radians)
+#
+# This file is the *source of truth* for Jetson-side static TF:
+#   base_link -> unilidar_lidar
+#
+# Notes:
+# - rpy_rad are in radians (NOT degrees)
+# - final_rpy = base_rpy_rad + trim_rpy_rad
+#
+# Vehicle convention (base_link):
+#   +X forward (车头)
+#   +Y left    (车左)
+#   +Z up      (车上)
+
+parent: base_link
+child: unilidar_lidar
+
+xyz: [0.0, 0.0, 0.0]
+
+# Current mount (卧放) — derived from:
+#   lidar +Z -> base +X
+#   lidar +X -> base +Z
+#   lidar +Y -> base -Y
+base_rpy_rad: [3.14159265359, -1.57079632679, 0.0]
+
+# Small on-site trims (start with 0.0, adjust by ±(1~3) deg => ±(0.017~0.052) rad)
+trim_rpy_rad: [0.0, 0.0, 0.0]

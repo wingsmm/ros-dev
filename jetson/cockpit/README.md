@@ -37,7 +37,9 @@ cockpit/
     teleop_panel.py              五键 dead-man 遥控面板
     topic_panel.py               Topic 诊断面板
   config/
-    unilidar.rviz                预置基础雷达/odom 视图（Grid + TF + Odometry + Path + PointCloud2）
+    unilidar.rviz                阶段一原始点云（Fixed Frame=unilidar_lidar）
+    unilidar_base.rviz           阶段二车体对齐（Fixed Frame=base_link）
+    unilidar_mapping.rviz        阶段四 LIO/odom（勿用于阶段二）
   scripts/
     start_unilidar_rviz.sh       无 Qt 时一键 RViz2
     stop_unilidar_rviz.sh
@@ -80,8 +82,9 @@ Jetson 的部署、编译、启动、停止统一交给 `jetson/scripts/jetson.s
 | `JETSON_COCKPIT_LOG_LEVEL` | `INFO` | 日志等级 |
 | `LIDAR_CLOUD_TOPIC` | `/unilidar/cloud` | 雷达点云 topic |
 | `LIDAR_IMU_TOPIC` | `/unilidar/imu` | 雷达 IMU topic |
-| `LIDAR_FIXED_FRAME` | `odom` | RViz Fixed Frame |
-| `LIDAR_RVIZ_CONFIG` | `config/unilidar.rviz` | RViz2 配置 |
+| `LIDAR_RVIZ_CONFIG` | `config/unilidar.rviz` | 阶段一原始点云 RViz |
+| `LIDAR_BASE_RVIZ_CONFIG` | `config/unilidar_base.rviz` | 阶段二车体对齐 RViz |
+| `LIDAR_MAPPING_RVIZ_CONFIG` | `config/unilidar_mapping.rviz` | 阶段四 LIO/odom RViz |
 
 日志文件写入：
 
@@ -109,12 +112,27 @@ cd jetson/cockpit
 bash run.sh
 ```
 
-雷达观测面板：
+雷达观测面板（三模式，**Jetson 端 L1 + static TF 需手动启动**，Qt 只开本地 RViz）：
 
-- 选择 **雷达/里程计** → `config/unilidar_mapping.rviz`
-- 选择 **原始点云** → `config/unilidar.rviz`（阶段一应使用 `Fixed Frame=unilidar_lidar`）
-- **启动 RViz (观测端本地)** / **停止 RViz**
-- 一行摘要；需要时再展开 **高级诊断** → 刷新
+| 模式 | RViz 配置 | Fixed Frame | 阶段 |
+|------|-----------|-------------|------|
+| 原始点云 | `unilidar.rviz` | `unilidar_lidar` | 1 |
+| 车体对齐 | `unilidar_base.rviz` | `base_link` | 2 |
+| 雷达/里程计 | `unilidar_mapping.rviz` | `odom` | 4 |
+
+- **启动 RViz (本地)** / **停止 RViz**
+- 一行摘要示例：`cloud 8.8Hz · imu 246Hz · TF OK · RViz:车体对齐`
+- 展开 **高级诊断** → 刷新（含 TF `base_link -> unilidar_lidar`）
+
+阶段二 Jetson 手动启动（不接进 Qt）：
+
+```bash
+# Jetson
+ros2 launch unitree_lidar_ros2 launch.py
+ros2 launch l1_tf_bringup l1_static_tf.launch.py
+```
+
+然后 VM 上 `bash run.sh` → 选「车体对齐」→ 启动 RViz。
 
 **方式 B：仅脚本（无 Qt）**
 
@@ -208,7 +226,7 @@ bash jetson/scripts/jetson.sh ros2 deploy   # 首次或改代码后
 bash jetson/scripts/jetson.sh ros2 start
 ```
 
-cockpit 选择 **「雷达/里程计」**，再点 **「启动 RViz (WSL 本地)」**，加载 `config/unilidar_mapping.rviz`：
+后续 LIO 阶段若恢复该入口，应在 VMware/VM 观测端选择 **「雷达/里程计」**，再点 **「启动 RViz (观测端本地)」**，加载 `config/unilidar_mapping.rviz`：
 
 ```text
 Fixed Frame: odom
@@ -287,7 +305,7 @@ python3 scripts/control_action_echo.py
 
 ## 验收边界
 
-`cockpit/` 只运行在 PC/WSL，不部署到 Jetson。雷达驱动编译与 topic 验证**只认远端 Jetson**；本机 WSL 不做 `mirror/ros2_ws` 的 `colcon build` 作为雷达验收依据。
+`cockpit/` 只运行在 PC/VMware 观测端，不部署到 Jetson。雷达驱动编译与 topic 验证**只认远端 Jetson**；本机 WSL 不做 `mirror/ros2_ws` 的 `colcon build` 作为雷达验收依据，当前 L1/RViz 观测只认 VMware/VM 侧闭环。
 
 ### 改哪里要部署
 
@@ -345,7 +363,7 @@ wsl -d Ubuntu-22.04 -- bash /mnt/d/Downloads/work/ros-dev/jetson/cockpit/scripts
 VERIFY_CMD_VEL_BRIDGE_OK
 ```
 
-如果本机冒烟通过，只说明 bridge 包语法/本机 DDS 基本可用；跨机控制与雷达观测仍以远端 Jetson + WSL RViz 为准。
+如果本机冒烟通过，只说明 bridge 包语法/本机 DDS 基本可用；跨机控制与雷达观测仍以远端 Jetson + VMware/VM RViz 为准。
 
 ## 当前边界
 

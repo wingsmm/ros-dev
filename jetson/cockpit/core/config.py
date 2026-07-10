@@ -70,6 +70,7 @@ class CockpitConfig:
     lidar_imu_topic: str
     lidar_fixed_frame: str
     rviz_config: Path
+    lidar_base_rviz: Path
     lidar_mapping_rviz: Path
     lio_odom_topic: str
     lio_path_topic: str
@@ -95,6 +96,9 @@ def load_config() -> CockpitConfig:
         lidar_imu_topic=_value(env_file, "LIDAR_IMU_TOPIC", "/unilidar/imu"),
         lidar_fixed_frame=_value(env_file, "LIDAR_FIXED_FRAME", "odom"),
         rviz_config=_path(env_file, "LIDAR_RVIZ_CONFIG", "config/unilidar.rviz"),
+        lidar_base_rviz=_path(
+            env_file, "LIDAR_BASE_RVIZ_CONFIG", "config/unilidar_base.rviz"
+        ),
         lidar_mapping_rviz=_path(
             env_file, "LIDAR_MAPPING_RVIZ_CONFIG", "config/unilidar_mapping.rviz"
         ),

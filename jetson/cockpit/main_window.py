@@ -272,23 +272,39 @@ class MainWindow(QMainWindow):
         self._lidar_worker.start()
 
     @staticmethod
-    def _one_line_lidar_summary(status, lio_status) -> tuple[str, bool]:
-        cloud = "%.0fHz" % status.cloud_hz if status.cloud_hz else "cloud无"
-        lio = "LIO运行" if "running" in lio_status.jetson_lio else "LIO停"
-        path = "path有" if lio_status.path_has_pub else "path无"
-        ok = status.cloud_ok
-        return "%s · %s · %s" % (cloud, lio, path), ok
+    def _one_line_lidar_summary(status, lio_status, mode: str, rviz_label: str = "") -> tuple[str, bool]:
+        cloud = "%.1fHz" % status.cloud_hz if status.cloud_hz else "cloud无"
+        imu = "%.0fHz" % status.imu_hz if status.imu_hz else "imu无"
+        tf = "OK" if status.tf_ok else "missing"
+        parts = ["cloud %s" % cloud, "imu %s" % imu, "TF %s" % tf]
+        if rviz_label:
+            parts.append("RViz:%s" % rviz_label)
+        if mode == LidarPanel.MODE_LIO:
+            parts.append("LIO:%s" % ("运行" if "running" in lio_status.jetson_lio else "停"))
+
+        if mode == LidarPanel.MODE_BASE:
+            ok = status.cloud_ok and status.tf_ok
+        elif mode == LidarPanel.MODE_RAW:
+            ok = status.cloud_ok
+        else:
+            ok = status.cloud_ok
+        return " · ".join(parts), ok
 
     def _update_lidar_summary_display(self, rviz_extra: str = "") -> None:
         text = self._lidar_summary_line + rviz_extra
         self._lidar_panel.set_summary(text, self._lidar_summary_ok)
 
     def _on_lidar_status_done(self, status, lio_status) -> None:
+        rviz_label = self._rviz_label if self._rviz_mgr.running else ""
         self._lidar_summary_line, self._lidar_summary_ok = (
-            self._one_line_lidar_summary(status, lio_status)
+            self._one_line_lidar_summary(
+                status,
+                lio_status,
+                self._lidar_panel.selected_mode(),
+                rviz_label,
+            )
         )
-        rviz_extra = (" · RViz:%s" % self._rviz_label) if self._rviz_mgr.running else ""
-        self._update_lidar_summary_display(rviz_extra)
+        self._update_lidar_summary_display()
 
         diag = (
             "[原始]\n"
@@ -316,12 +332,15 @@ class MainWindow(QMainWindow):
         self._rviz_label = label
         cmd = rviz2_start_command(cfg_path)
         if self._rviz_mgr.start(cmd, str(cfg_path), process_label=label):
-            self._update_lidar_summary_display(" · RViz:%s" % label)
+            self._refresh_lidar_status()
             self._append_log("已打开 %s" % label)
 
     def _selected_lidar_rviz(self):
-        if self._lidar_panel.selected_mode() == LidarPanel.MODE_RAW:
+        mode = self._lidar_panel.selected_mode()
+        if mode == LidarPanel.MODE_RAW:
             return self._cfg.rviz_config, "原始点云"
+        if mode == LidarPanel.MODE_BASE:
+            return self._cfg.lidar_base_rviz, "车体对齐"
         return self._cfg.lidar_mapping_rviz, "雷达/里程计"
 
     def _update_lidar_rviz_path_label(self) -> None:
@@ -341,11 +360,13 @@ class MainWindow(QMainWindow):
         self._rviz_label = ""
 
     def _on_rviz_running_changed(self, running: bool) -> None:
-        rviz_extra = (" · RViz:%s" % self._rviz_label) if running and self._rviz_label else ""
         if self._lidar_summary_line:
-            self._update_lidar_summary_display(rviz_extra)
+            self._refresh_lidar_status()
         elif running:
-            self._lidar_panel.set_summary("RViz 运行中" + (":%s" % self._rviz_label if self._rviz_label else ""), True)
+            self._lidar_panel.set_summary(
+                "RViz 运行中" + (":%s" % self._rviz_label if self._rviz_label else ""),
+                True,
+            )
         else:
             self._lidar_panel.set_summary("RViz 未启动", True)
 

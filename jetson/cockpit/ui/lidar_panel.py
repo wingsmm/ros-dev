@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
 class LidarPanel(QWidget):
     MODE_LIO = "lio"
     MODE_RAW = "raw"
+    MODE_BASE = "base"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -22,18 +23,21 @@ class LidarPanel(QWidget):
 
         self.mode_group = QButtonGroup(self)
         self.radio_lio = QRadioButton("雷达/里程计")
+        self.radio_base = QRadioButton("车体对齐")
         self.radio_raw = QRadioButton("原始点云")
         self.mode_group.addButton(self.radio_lio, 0)
-        self.mode_group.addButton(self.radio_raw, 1)
-        self.radio_lio.setChecked(True)
+        self.mode_group.addButton(self.radio_base, 1)
+        self.mode_group.addButton(self.radio_raw, 2)
+        self.radio_raw.setChecked(True)
 
         mode_layout = QVBoxLayout()
-        mode_layout.addWidget(self.radio_lio)
         mode_layout.addWidget(self.radio_raw)
+        mode_layout.addWidget(self.radio_base)
+        mode_layout.addWidget(self.radio_lio)
 
         self.config_path_label = QLabel("当前配置：-")
 
-        self.btn_start_rviz = QPushButton("启动 RViz (WSL 本地)")
+        self.btn_start_rviz = QPushButton("启动 RViz (本地)")
         self.btn_stop_rviz = QPushButton("停止 RViz")
 
         actions = QHBoxLayout()
@@ -56,7 +60,8 @@ class LidarPanel(QWidget):
         diag_layout.addWidget(self.btn_diag_refresh)
 
         note = QLabel(
-            "雷达/里程计：unilidar_mapping.rviz；原始点云：unilidar.rviz。"
+            "原始点云：unilidar.rviz；车体对齐：unilidar_base.rviz；"
+            "雷达/里程计：unilidar_mapping.rviz（阶段 4）。"
         )
         note.setWordWrap(True)
 
@@ -82,6 +87,8 @@ class LidarPanel(QWidget):
     def selected_mode(self) -> str:
         if self.radio_raw.isChecked():
             return self.MODE_RAW
+        if self.radio_base.isChecked():
+            return self.MODE_BASE
         return self.MODE_LIO
 
     def set_config_path(self, path: str) -> None:
