@@ -19,7 +19,10 @@ def generate_launch_description():
             'config', 'unilidar_l1.yaml'
         ]),
         {
-            'use_imu_as_input': False,  # Change to True to use IMU as input of Point-LIO
+            # Stage 3a keeps L1's IMU enabled in unilidar_l1.yaml, but uses the
+            # kf_output path here. The kf_input path processed clouds but did
+            # not publish odom/tf in the current L1 hand-move validation.
+            'use_imu_as_input': False,
             'prop_at_freq_of_imu': True,
             'check_satu': True,
             'init_map_size': 10,

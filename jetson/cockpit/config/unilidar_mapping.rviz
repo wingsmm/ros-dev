@@ -39,15 +39,7 @@ Visualization Manager:
         All Enabled: true
         aft_mapped:
           Value: true
-        base_link:
-          Value: true
         camera_init:
-          Value: true
-        odom:
-          Value: true
-        unilidar_imu:
-          Value: true
-        unilidar_lidar:
           Value: true
       Marker Scale: 0.5
       Name: TF
@@ -55,16 +47,72 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        odom:
-          base_link:
-            unilidar_imu:
-              {}
-            unilidar_lidar:
-              {}
-          camera_init:
-            aft_mapped:
-              {}
+        camera_init:
+          aft_mapped:
+            {}
       Update Interval: 0
+      Value: true
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz_default_plugins/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 255
+      Min Color: 0; 0; 0
+      Min Intensity: 30
+      Name: CloudRegistered
+      Position Transformer: XYZ
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.02
+      Style: Points
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Value: /cloud_registered
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz_default_plugins/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.3
+      Head Length: 0.2
+      Length: 3000
+      Line Style: Lines
+      Line Width: 0.05
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Radius: 0.03
+      Shaft Diameter: 0.1
+      Shaft Length: 0.1
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /path
       Value: true
     - Angle Tolerance: 0.05
       Class: rviz_default_plugins/Odometry
@@ -78,7 +126,7 @@ Visualization Manager:
           Scale: 1
           Value: true
         Position:
-          Alpha: 0.30000001192092896
+          Alpha: 0.3
           Color: 204; 51; 204
           Scale: 1
           Value: true
@@ -90,12 +138,12 @@ Visualization Manager:
       Shape:
         Alpha: 1
         Axes Length: 1
-        Axes Radius: 0.10000000149011612
+        Axes Radius: 0.1
         Color: 255; 25; 0
-        Head Length: 0.30000001192092896
-        Head Radius: 0.10000000149011612
+        Head Length: 0.3
+        Head Radius: 0.1
         Shaft Length: 1
-        Shaft Radius: 0.05000000074505806
+        Shaft Radius: 0.05
         Value: Arrow
       Topic:
         Depth: 5
@@ -103,115 +151,45 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /odom
-      Value: true
-    - Class: rviz_default_plugins/Axes
-      Enabled: true
-      Length: 0.6000000238418579
-      Name: Axes_base
-      Radius: 0.10000000149011612
-      Reference Frame: base_link
-      Value: true
-    - Alpha: 1
-      Buffer Length: 1
-      Class: rviz_default_plugins/Path
-      Color: 25; 255; 0
-      Enabled: true
-      Head Diameter: 0.30000001192092896
-      Head Length: 0.20000000298023224
-      Length: 0.30000001192092896
-      Line Style: Lines
-      Line Width: 0.029999999329447746
-      Name: Path
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Pose Color: 255; 85; 255
-      Pose Style: None
-      Radius: 0.029999999329447746
-      Shaft Diameter: 0.10000000149011612
-      Shaft Length: 0.10000000149011612
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /odom_path
+        Value: /aft_mapped_to_init
       Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
-        Max Value: 10
-        Min Value: -10
+        Max Value: 255
+        Min Value: 0
         Value: true
       Axis: Z
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 255; 255
       Color Transformer: Intensity
-      Decay Time: 3
-      Enabled: true
+      Decay Time: 0
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 255
       Min Color: 0; 0; 0
       Min Intensity: 30
-      Name: RawUnilidarCloud
+      Name: RawCloud
       Position Transformer: XYZ
       Selectable: true
-      Size (Pixels): 5
-      Size (m): 0.009999999776482582
+      Size (Pixels): 3
+      Size (m): 0.01
       Style: Points
       Topic:
         Depth: 5
         Durability Policy: Volatile
         Filter size: 10
         History Policy: Keep Last
-        Reliability Policy: Reliable
+        Reliability Policy: Best Effort
         Value: /unilidar/cloud
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
-    - Alpha: 1
-      Autocompute Intensity Bounds: true
-      Autocompute Value Bounds:
-        Max Value: 3.263568878173828
-        Min Value: -0.0843304917216301
-        Value: true
-      Axis: Z
-      Channel Name: intensity
-      Class: rviz_default_plugins/PointCloud2
-      Color: 255; 255; 255
-      Color Transformer: AxisColor
-      Decay Time: 4
-      Enabled: true
-      Invert Rainbow: false
-      Max Color: 255; 255; 255
-      Max Intensity: 4096
-      Min Color: 0; 0; 0
-      Min Intensity: 0
-      Name: CloudRegistered
-      Position Transformer: XYZ
-      Selectable: true
-      Size (Pixels): 7
-      Size (m): 0.009999999776482582
-      Style: Points
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /cloud_registered
-      Use Fixed Frame: true
-      Use rainbow: true
-      Value: true
-  Enabled: true
+      Value: false
   Global Options:
     Background Color: 48; 48; 48
-    Fixed Frame: odom
+    Fixed Frame: camera_init
     Frame Rate: 30
   Name: root
   Tools:
@@ -222,11 +200,11 @@ Visualization Manager:
   Transformation:
     Current:
       Class: rviz_default_plugins/TF
-  Value: true
+      Value: false
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 10
+      Distance: 8
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -252,7 +230,7 @@ Window Geometry:
   Height: 999
   Hide Left Dock: false
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd00000001000000000000019b00000391fc0200000002fb000000100044006900730070006c006100790073010000003b00000215000000c700fffffffb0000000a00560069006500770073010000025600000176000000a000ffffff000005d30000039100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000001000000000000019b00000391fc0200000002fb000000100044006900730070006c006100790073010000003b00000215000000c700fffffffb0000000a00560069006500770073010000025600000176000000a000ffffff000005d30000039100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c0073000100000000ffffffff0000000000000000
   Views:
     collapsed: false
   Width: 1908

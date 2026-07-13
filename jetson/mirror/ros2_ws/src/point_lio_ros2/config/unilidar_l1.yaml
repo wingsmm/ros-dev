@@ -48,7 +48,9 @@
                           0.0, 0.0, 1.0 ] # ulhk 4 utbm 3
 
         odometry: 
-            publish_odometry_without_downsample: true  
+            # Keep odometry near LiDAR frame rate for VMware/WiFi observation.
+            # The high-rate mode can flood DDS with /aft_mapped_to_init and /tf.
+            publish_odometry_without_downsample: false
 
         publish:
             path_en: true                 # false: close the path output
