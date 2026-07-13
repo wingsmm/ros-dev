@@ -67,6 +67,7 @@ class CockpitConfig:
     log_dir: Path
     log_level: str
     lidar_cloud_topic: str
+    lidar_cloud_aligned_topic: str
     lidar_imu_topic: str
     lidar_fixed_frame: str
     rviz_config: Path
@@ -76,6 +77,12 @@ class CockpitConfig:
     lio_path_topic: str
     lio_cloud_registered_topic: str
     lio_fixed_frame: str
+    jetson_ssh_host: str
+    jetson_ssh_user: str
+    jetson_ssh_port: int
+    jetson_ssh_key: str
+    jetson_ssh_password: str
+    jetson_remote_ros2_ws: str
 
 
 def load_config() -> CockpitConfig:
@@ -93,6 +100,9 @@ def load_config() -> CockpitConfig:
         log_dir=_path(env_file, "JETSON_COCKPIT_LOG_DIR", "logs"),
         log_level=_value(env_file, "JETSON_COCKPIT_LOG_LEVEL", "INFO").upper(),
         lidar_cloud_topic=_value(env_file, "LIDAR_CLOUD_TOPIC", "/unilidar/cloud"),
+        lidar_cloud_aligned_topic=_value(
+            env_file, "LIDAR_CLOUD_ALIGNED_TOPIC", "/unilidar/cloud_aligned"
+        ),
         lidar_imu_topic=_value(env_file, "LIDAR_IMU_TOPIC", "/unilidar/imu"),
         lidar_fixed_frame=_value(env_file, "LIDAR_FIXED_FRAME", "odom"),
         rviz_config=_path(env_file, "LIDAR_RVIZ_CONFIG", "config/unilidar.rviz"),
@@ -108,4 +118,12 @@ def load_config() -> CockpitConfig:
             env_file, "LIO_CLOUD_REGISTERED_TOPIC", "/cloud_registered"
         ),
         lio_fixed_frame=_value(env_file, "LIO_FIXED_FRAME", "odom"),
+        jetson_ssh_host=_value(env_file, "JETSON_SSH_HOST", ""),
+        jetson_ssh_user=_value(env_file, "JETSON_SSH_USER", "nvidia"),
+        jetson_ssh_port=max(1, _int(env_file, "JETSON_SSH_PORT", 22)),
+        jetson_ssh_key=_value(env_file, "JETSON_SSH_KEY", ""),
+        jetson_ssh_password=_value(env_file, "JETSON_SSH_PASSWORD", ""),
+        jetson_remote_ros2_ws=_value(
+            env_file, "JETSON_REMOTE_ROS2_WS", "~/qt/ros2_ws"
+        ),
     )

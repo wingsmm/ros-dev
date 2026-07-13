@@ -69,8 +69,9 @@ bash jetson/scripts/jetson.sh probe
 # 同步
 bash jetson/scripts/jetson.sh pull car_web        # 远端 ~/qt/car_web → 本地
 bash jetson/scripts/jetson.sh pull ros2_ws        # 远端原版 → mirror（先对齐）
-bash jetson/scripts/jetson.sh push ros2_ws        # dry-run
-bash jetson/scripts/jetson.sh push ros2_ws --yes  # 真写；默认不带 --delete
+# 同步 ros2_ws（含 l1_static_tf.sh、l1_tf_bringup 等）
+bash jetson/scripts/jetson.sh ros2 push        # dry-run
+bash jetson/scripts/jetson.sh ros2 push --yes  # 真写；默认不带 --delete
 
 # 交互式 ssh / 单条远端命令
 bash jetson/scripts/jetson.sh

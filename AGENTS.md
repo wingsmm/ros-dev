@@ -38,6 +38,15 @@ rg -n "keyword" `
 - For complex Android SDK, Gradle, rosjava, or environment-heavy commands, prefer checked-in scripts or temporary `.bat` scripts when appropriate.
 - If Chinese Markdown appears corrupted in PowerShell output, treat it as possible console mojibake first. Confirm with a UTF-8-safe read before reporting corruption or patching localized text.
 
+## Remote Access
+
+- For Jetson / VMware / ROS2 runtime checks in this workspace, use the known-good path: Codex/WSL -> SSH -> Jetson or VMware. This path has worked before; do not describe it as "the user manually proved WSL works".
+- If the current Codex tool session cannot enter that previously working WSL context, state the limitation exactly: "this Codex tool session cannot enter the known-good WSL context right now." Do not say or imply that WSL is unavailable on the machine.
+- For source, script, docs, and Chinese-text inspection, prefer WSL. If WSL is not reachable from the current tool session, use Git Bash or another UTF-8-safe reader. Do not use PowerShell `Get-Content` output to judge Chinese text corruption.
+- For shell script syntax checks, prefer WSL `bash`. If WSL is not reachable, Git Bash `bash -n` is acceptable for local syntax checks only; it is not Jetson/VM runtime validation.
+- Treat Windows-side `wsl.exe` failures in Codex as tool-context limitations, not proof that the known-good WSL remote workflow is broken.
+- Do not keep trying Windows OpenSSH password workarounds for Jetson/VM when WSL is the intended access path unless the user explicitly asks.
+
 ## Documentation And Architecture
 
 - For docs-only architecture questions, start with the documentation set before reopening code.

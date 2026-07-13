@@ -186,6 +186,10 @@ ROS2 commands (注意：远端原版无 scripts/ 时 start/stop/deploy 不可用
   ros2 start|stop|restart           依赖远端 scripts/ros2_stack.sh（原版已撤回，勿当日常入口）
   ros2 status|logs [-f]
   ros2 lio-* / verify               同上，仅归档方案曾使用
+  ros2 tf-start|tf-stop|tf-restart|tf-status
+                                    Jetson l1_static_tf（不动 unitree_lidar_ros2）
+  ros2 l1-start|l1-stop|l1-restart|l1-status
+                                    Jetson L1 驱动 + TF 幂等栈（l1_stack.sh）
 USAGE
 }
 
@@ -198,7 +202,7 @@ remote_ros2_build() {
     set +u
     source /opt/ros/humble/setup.bash
     set -u
-    colcon build --packages-select cmd_vel_car_web_bridge unitree_lidar_ros2 point_lio lio_odom_adapter
+    colcon build --packages-select cmd_vel_car_web_bridge unitree_lidar_ros2 point_lio lio_odom_adapter l1_tf_bringup l1_cloud_align
   "
 }
 
@@ -225,6 +229,18 @@ remote_lio_stack() {
   local cmd="${1:-status}"
   shift || true
   ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/lio_stack.sh '$cmd' $*"
+}
+
+remote_l1_static_tf() {
+  local cmd="${1:-status}"
+  shift || true
+  ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/l1_static_tf.sh '$cmd' $*"
+}
+
+remote_l1_stack() {
+  local cmd="${1:-status}"
+  shift || true
+  ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/l1_stack.sh '$cmd' $*"
 }
 
 ros2_cmd() {
@@ -255,6 +271,12 @@ ros2_cmd() {
       ;;
     lio-start|lio-stop|lio-status|lio-logs)
       remote_lio_stack "${cmd#lio-}" "$@"
+      ;;
+    tf-start|tf-stop|tf-restart|tf-status)
+      remote_l1_static_tf "${cmd#tf-}" "$@"
+      ;;
+    l1-start|l1-stop|l1-restart|l1-status)
+      remote_l1_stack "${cmd#l1-}" "$@"
       ;;
     *)
       echo "unknown ros2 command: $cmd" >&2

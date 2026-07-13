@@ -1,0 +1,35 @@
+# L1 point cloud alignment (rigid-body transform on /unilidar/cloud)
+#
+# Written / read by cockpit ExtrinsicsDialog. Values here rotate the point
+# cloud itself and republish it as /unilidar/cloud_aligned. Do NOT mix with
+# ~/qt/ros2_ws/src/l1_tf_bringup/config/l1_extrinsics.yaml — that YAML
+# only defines the base_link -> unilidar_lidar TF and is not for visual
+# levelling anymore.
+#
+# Axis baseline for the current physical mounting:
+#   lidar +Z -> base_link +X  (车头)
+#   lidar +X -> base_link +Z  (朝上)
+#   lidar +Y -> base_link -Y  (车右)
+#
+# Rotation composition applied in the node:
+#   R_base_lidar = R(base_rpy_rad)     # 安装基准：把 L1 坐标转到车体
+#   R_trim_base  = R(trim_rpy_rad)     # 车体系里再微调（UI 输入的度）
+#   R_final      = R_trim_base * R_base_lidar
+#   p_out        = R_final * p_in + xyz
+#
+# UI 只让新手改 xyz 和 trim_rpy_deg；base_rpy_rad 由 Jetson YAML 决定，
+# 不要在 UI 里覆写，否则会破坏已确认的“Z 朝车头、X 朝天”基准。
+# 现场调平楼顶/地面时，通常先调 roll，也就是绕 base_link +X 做侧倾修正。
+
+input_topic: /unilidar/cloud
+output_topic: /unilidar/cloud_aligned
+target_frame: base_link
+
+xyz: [0.0, 0.0, 0.0]
+
+# 安装基准（弧度）——不由 UI 改
+base_rpy_rad: [3.14159265359, -1.57079632679, 0.0]
+
+# 现场微调（弧度）——UI 「点云对齐」修改这个
+# roll=左右歪/侧倾；pitch=前后翘；yaw=车头方向偏
+trim_rpy_rad: [0.0, 0.0, 0.0]

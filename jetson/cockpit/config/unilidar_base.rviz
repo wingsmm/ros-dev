@@ -55,15 +55,15 @@ Visualization Manager:
       Color Transformer: Intensity
       Decay Time: 2
       Enabled: true
-      Name: UnilidarCloud
+      Name: UnilidarCloudAligned
       Size (Pixels): 5
       Style: Points
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /unilidar/cloud
+        Reliability Policy: Best Effort
+        Value: /unilidar/cloud_aligned
       Use Fixed Frame: true
   Enabled: true
   Global Options:

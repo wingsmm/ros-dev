@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>l1_cloud_align</name>
+  <version>0.0.1</version>
+  <description>
+    Rigid-body rotate/translate Unitree L1 PointCloud2 into base_link so
+    the point cloud itself (not just the TF axes) is level with the vehicle.
+    Subscribes /unilidar/cloud and republishes /unilidar/cloud_aligned.
+  </description>
+
+  <maintainer email="wingsmm@qq.com">wingsmm</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

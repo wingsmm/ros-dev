@@ -12,6 +12,8 @@ PC / VMware cockpit Qt
 Jetson ~/qt/ros2_ws
   -> cmd_vel_car_web_bridge
   -> unitree_lidar_ros2 -> /unilidar/cloud + /unilidar/imu
+  -> l1_static_tf       -> base_link -> unilidar_lidar
+  -> l1_cloud_align     -> /unilidar/cloud_aligned (frame=base_link)
 ```
 
 本阶段不调用 `car_web` 电机、不驱动真实运动；雷达可视化走观测端本机 RViz2（当前已在 VM `172.0.0.87` 验证，预置 `config/unilidar.rviz`），不在 Qt 内嵌渲染点云。
@@ -63,11 +65,11 @@ bash run.sh
 
 ## 配置
 
-本地配置写在 `.env`：
+本地配置写在 `cockpit/.env`（从 `.env.example` 复制，不入库密钥）。
 
-这份 `.env` 只属于 cockpit，不读取 `../.env`，也不配置 Jetson SSH/IP。
-Jetson 的部署、编译、启动、停止统一交给 `jetson/scripts/jetson.sh` 读取
-同目录的 `jetson/scripts/.env` 处理。
+**为何需要 `.env`：** `vmware.sh deploy` 只同步 `jetson/cockpit/` 到 VM，不含仓库根的 `jetson/scripts/jetson.sh`。外参「读取 / 应用」走 **ssh 直连 Jetson**，主机地址、用户、端口、密码必须在 **VM 本地** `cockpit/.env` 配置。外参 YAML 仍在 Jetson 端，不放 cockpit `.env`。
+
+开发机整仓调试仍可用 `jetson/scripts/jetson.sh ros2 tf-*`；cockpit 内不依赖该脚本。
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
@@ -80,11 +82,34 @@ Jetson 的部署、编译、启动、停止统一交给 `jetson/scripts/jetson.s
 | `TELEOP_ENABLE_KEYBOARD` | `1` | 是否启用键盘遥控 |
 | `JETSON_COCKPIT_LOG_DIR` | `logs` | 本地日志目录 |
 | `JETSON_COCKPIT_LOG_LEVEL` | `INFO` | 日志等级 |
-| `LIDAR_CLOUD_TOPIC` | `/unilidar/cloud` | 雷达点云 topic |
+| `LIDAR_CLOUD_TOPIC` | `/unilidar/cloud` | 雷达原始点云 topic |
+| `LIDAR_CLOUD_ALIGNED_TOPIC` | `/unilidar/cloud_aligned` | l1_cloud_align 输出 topic（车体对齐 RViz） |
 | `LIDAR_IMU_TOPIC` | `/unilidar/imu` | 雷达 IMU topic |
 | `LIDAR_RVIZ_CONFIG` | `config/unilidar.rviz` | 阶段一原始点云 RViz |
 | `LIDAR_BASE_RVIZ_CONFIG` | `config/unilidar_base.rviz` | 阶段二车体对齐 RViz |
 | `LIDAR_MAPPING_RVIZ_CONFIG` | `config/unilidar_mapping.rviz` | 阶段四 LIO/odom RViz |
+| `JETSON_SSH_HOST` | *(空)* | Jetson IP；VM 上必填 |
+| `JETSON_SSH_USER` | `nvidia` | SSH 用户 |
+| `JETSON_SSH_PORT` | `22` | SSH 端口 |
+| `JETSON_SSH_PASSWORD` | *(空)* | SSH 密码（仅 VM 本地 `.env`，不入库） |
+| `JETSON_SSH_KEY` | *(空)* | 可选私钥；有密码时不必配 |
+| `JETSON_REMOTE_ROS2_WS` | `~/qt/ros2_ws` | 远端 ws，用于 `scripts/l1_static_tf.sh` |
+
+VM 首次配置（密码方式）：
+
+```bash
+sudo apt install -y sshpass
+# 编辑 ~/ros-dev/jetson/cockpit/.env（deploy 不覆盖已有 .env）：
+# JETSON_SSH_HOST=172.0.0.82
+# JETSON_SSH_USER=nvidia
+# JETSON_SSH_PASSWORD=你的密码
+```
+
+面板外参调试区分三类状态：
+
+- **写入**：读取 / 应用对齐参数的 SSH + YAML 结果
+- **对齐节点**：`l1_cloud_align` 在 Jetson 上是否运行，能否输出 `/unilidar/cloud_aligned`
+- **点云**：原始模式看 `/unilidar/cloud`，车体对齐模式看 `/unilidar/cloud_aligned`；频率只是辅助显示，publisher 存在才是打开 RViz 的主判断
 
 日志文件写入：
 
@@ -112,25 +137,84 @@ cd jetson/cockpit
 bash run.sh
 ```
 
-雷达观测面板（三模式，**Jetson 端 L1 + static TF 需手动启动**，Qt 只开本地 RViz）：
+雷达观测面板（阶段二闭环；SSH 远程启停 Jetson L1+TF，不暴露 TF 进程按钮）：
 
-| 模式 | RViz 配置 | Fixed Frame | 阶段 |
-|------|-----------|-------------|------|
-| 原始点云 | `unilidar.rviz` | `unilidar_lidar` | 1 |
-| 车体对齐 | `unilidar_base.rviz` | `base_link` | 2 |
-| 雷达/里程计 | `unilidar_mapping.rviz` | `odom` | 4 |
+| 模式 | RViz 配置 | Fixed Frame | PointCloud2 topic | 阶段 |
+|------|-----------|-------------|-------------------|------|
+| 原始点云 | `unilidar.rviz` | `unilidar_lidar` | `/unilidar/cloud` | 1 |
+| 车体对齐 | `unilidar_base.rviz` | `base_link` | `/unilidar/cloud_aligned` | 2 |
+| 雷达/里程计 | `unilidar_mapping.rviz` | `odom` | `/unilidar/cloud` | 4 |
 
-- **启动 RViz (本地)** / **停止 RViz**
-- 一行摘要示例：`cloud 8.8Hz · imu 246Hz · TF OK · RViz:车体对齐`
-- 展开 **高级诊断** → 刷新（含 TF `base_link -> unilidar_lidar`）
+`/unilidar/cloud_aligned` 由 `l1_cloud_align` 用 ROS2 `SensorDataQoS`
+发布，可靠性是 **Best Effort**。`unilidar_base.rviz` 的 PointCloud2
+Display 必须同样使用 `Reliability Policy: Best Effort`；如果误设为
+`Reliable`，现象是原始点云正常、`l1_stack` 显示 `aligned=yes`，但车体
+对齐 RViz 空白，并在 RViz 日志中出现
+`incompatible QoS ... RELIABILITY_QOS_POLICY`。
 
-阶段二 Jetson 手动启动（不接进 Qt）：
+主按钮：
+
+- **启动雷达**：幂等 start（L1 驱动 + static TF + l1_cloud_align，缺啥起啥）
+- **打开雷达视图**：仅当 `/unilidar/cloud` 有 publisher 时打开本地 RViz；车体对齐模式再检查 `/unilidar/cloud_aligned`
+- **停止雷达**：停 L1 驱动 + static TF + l1_cloud_align，并关闭本地 RViz
+
+一行摘要示例：
+
+```text
+原始点云：点云 8.8Hz · TF 正常 · 雷达运行中
+车体对齐：对齐点云在线 · TF 缺失(仅坐标轴) · 雷达运行中
+```
+
+车体对齐视图的点云已经由 `l1_cloud_align` 发布成 `frame=base_link`，
+所以主画面显示以 `/unilidar/cloud_aligned` publisher 为准。`base_link →
+unilidar_lidar` 静态 TF 缺失只会影响 RViz 里的坐标轴/TF 辅助显示，不应
+判定为“车体对齐点云不可用”。
+
+展开 **点云对齐…** → 编辑 xyz（米） / roll·pitch·yaw（度）→ **读取对齐参数** / **应用对齐参数**
+（应用对齐参数 = 写 `l1_cloud_align.yaml` + 仅重启 l1_cloud_align 节点，不动 L1 驱动，不动 static TF）
+
+点云对齐窗口的姿态微调是给现场使用者看的“人话”：
+
+```text
+roll（左右歪，先调这个）
+pitch（前后翘，再调这个）
+yaw（车头方向偏，最后调）
+```
+
+这里调的是 `/unilidar/cloud_aligned` 的点云整体，不是 RViz 坐标轴显示。
+当前现场调平楼顶/地面时，`roll` 已验证为主调参数。
+
+代码和 YAML 里的语义如下，后续 agent 不要混淆：
+
+- `base_rpy_rad`：L1 卧放安装基准，表示 `lidar +Z -> base +X`、`lidar +X -> base +Z`、`lidar +Y -> base -Y`，通常不由 UI 修改。
+- `trim_rpy_rad`：在 `base_link` 车体系里的现场微调。UI 只改这一组。
+- 最终点云变换是 `R_final = R_trim_base * R_base_lidar`，也就是先把 L1 原始点云转进车体，再绕车体轴微调。
+
+闭环：
+
+```text
+启动雷达 -> 打开雷达视图 -> 点云对齐 -> 应用对齐参数 -> 目视确认 -> 停止雷达
+```
+
+- 地面/楼顶左右倾斜：优先调 **roll**
+- 前后俯仰不平：调 **pitch**
+- 水平车头方向错：调 **yaw**
+- 点云整体前后左右偏、姿态已平：再调 `xyz`
+
+阶段二不再靠 `base_link -> unilidar_lidar` 静态 TF 来「视觉调平」——
+static TF 只用于保证坐标树存在；真实的点云旋转由 `l1_cloud_align`
+在 Jetson 上完成并发布到 `/unilidar/cloud_aligned`。
+
+首次同步 Jetson 脚本（开发机）：
 
 ```bash
-# Jetson
-ros2 launch unitree_lidar_ros2 launch.py
-ros2 launch l1_tf_bringup l1_static_tf.launch.py
+bash jetson/scripts/jetson.sh ros2 push --yes
+# 可选 CLI：bash jetson/scripts/jetson.sh ros2 l1-status
 ```
+
+VM cockpit：`bash jetson/scripts/vmware.sh deploy`，并在 VM `cockpit/.env` 配好 `JETSON_SSH_*`。
+
+`l1_stack.sh stop` / `l1_static_tf.sh stop` 会结束 `unilidar_lidar` 相关 static TF；**勿同时手工另起同 child frame 的 static TF**。
 
 然后 VM 上 `bash run.sh` → 选「车体对齐」→ 启动 RViz。
 

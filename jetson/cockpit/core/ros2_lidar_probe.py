@@ -27,12 +27,15 @@ class LioStatus:
 @dataclass(frozen=True)
 class LidarStatus:
     cloud_topic: str
+    cloud_aligned_topic: str
     imu_topic: str
     cloud_hz: float | None
     imu_hz: float | None
     cloud_publisher: str
+    cloud_aligned_publisher: str
     imu_publisher: str
     cloud_ok: bool
+    aligned_ok: bool
     imu_ok: bool
     jetson_port: str
     tf_parent: str
@@ -192,12 +195,15 @@ def probe_lidar_status(
     cockpit_root: Path | None = None,
     tf_parent: str = "base_link",
     tf_child: str = "unilidar_lidar",
+    cloud_aligned_topic: str = "/unilidar/cloud_aligned",
 ) -> LidarStatus:
     cloud_row = topic_status(cloud_topic)
+    aligned_row = topic_status(cloud_aligned_topic)
     imu_row = topic_status(imu_topic)
     cloud_hz = _topic_hz(cloud_topic) if cloud_row.has_publisher else None
     imu_hz = _topic_hz(imu_topic) if imu_row.has_publisher else None
     cloud_pub = _publisher_node(cloud_topic) if cloud_row.has_publisher else ""
+    aligned_pub = _publisher_node(cloud_aligned_topic) if aligned_row.has_publisher else ""
     imu_pub = _publisher_node(imu_topic) if imu_row.has_publisher else ""
     port = fetch_jetson_lidar_port(cockpit_root)
     tf_ok, tf_detail = probe_static_tf(tf_parent, tf_child)
@@ -205,6 +211,8 @@ def probe_lidar_status(
     parts = []
     if not cloud_row.has_publisher:
         parts.append("%s 无 publisher" % cloud_topic)
+    if not aligned_row.has_publisher:
+        parts.append("%s 无 publisher" % cloud_aligned_topic)
     if not imu_row.has_publisher:
         parts.append("%s 无 publisher" % imu_topic)
     if cloud_hz is None and cloud_row.has_publisher:
@@ -218,13 +226,16 @@ def probe_lidar_status(
 
     return LidarStatus(
         cloud_topic=cloud_topic,
+        cloud_aligned_topic=cloud_aligned_topic,
         imu_topic=imu_topic,
         cloud_hz=cloud_hz,
         imu_hz=imu_hz,
         cloud_publisher=cloud_pub or "-",
+        cloud_aligned_publisher=aligned_pub or "-",
         imu_publisher=imu_pub or "-",
-        cloud_ok=cloud_row.has_publisher and cloud_hz is not None and cloud_hz > 0.5,
-        imu_ok=imu_row.has_publisher and imu_hz is not None and imu_hz > 1.0,
+        cloud_ok=cloud_row.has_publisher,
+        aligned_ok=aligned_row.has_publisher,
+        imu_ok=imu_row.has_publisher,
         jetson_port=port,
         tf_parent=tf_parent,
         tf_child=tf_child,
