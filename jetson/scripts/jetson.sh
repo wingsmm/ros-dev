@@ -178,18 +178,18 @@ Usage:
   jetson.sh ros2 <command>          manage remote ~/qt/ros2_ws
   jetson.sh <remote command>        run one remote command
 
-ROS2 commands (注意：远端原版无 scripts/ 时 start/stop/deploy 不可用):
+ROS2 commands:
   ros2 push                         dry-run sync mirror/ros2_ws -> ~/qt/ros2_ws
   ros2 push --yes                   sync mirror/ros2_ws -> ~/qt/ros2_ws
   ros2 build                        colcon build on Jetson（需远端有对应包）
   ros2 deploy                       push --yes + colcon build
-  ros2 start|stop|restart           依赖远端 scripts/ros2_stack.sh（原版已撤回，勿当日常入口）
-  ros2 status|logs [-f]
-  ros2 lio-* / verify               同上，仅归档方案曾使用
+  ros2 lio-build                    colcon build point_lio lio_odom_adapter l1_tf_bringup
+  ros2 lio-start|lio-stop|lio-restart|lio-status|lio-logs
+                                    完整定位栈（scripts/l1_lio.sh）
   ros2 tf-start|tf-stop|tf-restart|tf-status
                                     Jetson l1_static_tf（不动 unitree_lidar_ros2）
   ros2 l1-start|l1-stop|l1-restart|l1-status
-                                    Jetson L1 驱动 + TF 幂等栈（l1_stack.sh）
+                                    Jetson L1 驱动 + TF + align（l1_stack.sh）
 USAGE
 }
 
@@ -202,14 +202,8 @@ remote_ros2_build() {
     set +u
     source /opt/ros/humble/setup.bash
     set -u
-    colcon build --packages-select cmd_vel_car_web_bridge unitree_lidar_ros2 point_lio lio_odom_adapter l1_tf_bringup l1_cloud_align
+    colcon build --packages-select unitree_lidar_ros2 point_lio lio_odom_adapter l1_tf_bringup l1_cloud_align
   "
-}
-
-remote_ros2_stack() {
-  local cmd="${1:-status}"
-  shift || true
-  ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/ros2_stack.sh '$cmd' $*"
 }
 
 remote_lio_build() {
@@ -221,14 +215,14 @@ remote_lio_build() {
     set +u
     source /opt/ros/humble/setup.bash
     set -u
-    colcon build --packages-select point_lio lio_odom_adapter
+    colcon build --packages-select point_lio lio_odom_adapter l1_tf_bringup
   "
 }
 
 remote_lio_stack() {
   local cmd="${1:-status}"
   shift || true
-  ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/lio_stack.sh '$cmd' $*"
+  ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/l1_lio.sh '$cmd' $*"
 }
 
 remote_l1_static_tf() {
@@ -260,16 +254,10 @@ ros2_cmd() {
       rsync_push ros2_ws --yes
       remote_ros2_build
       ;;
-    start|stop|restart|status|logs)
-      remote_ros2_stack "$cmd" "$@"
-      ;;
-    verify)
-      ssh_run "bash ~/$REMOTE_ROS2_WS/scripts/bridge_stack.sh verify $*"
-      ;;
     lio-build)
       remote_lio_build
       ;;
-    lio-start|lio-stop|lio-status|lio-logs)
+    lio-start|lio-stop|lio-restart|lio-status|lio-logs)
       remote_lio_stack "${cmd#lio-}" "$@"
       ;;
     tf-start|tf-stop|tf-restart|tf-status)

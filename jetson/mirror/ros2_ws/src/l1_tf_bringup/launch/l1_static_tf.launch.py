@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, LogInfo, Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -30,16 +30,27 @@ def _parse_simple_yaml_scalar(text: str, key: str) -> str | None:
     return m.group(1).strip() if m else None
 
 
-def _load_extrinsics(path: Path) -> dict[str, str] | None:
+def _load_extrinsics(path: Path) -> dict | None:
+    """Load extrinsics. Returns None on any required-field failure (fail-closed)."""
     if not path.is_file():
         return None
     text = path.read_text(encoding="utf-8", errors="replace")
     xyz = _parse_simple_yaml_list(text, "xyz")
     base = _parse_simple_yaml_list(text, "base_rpy_rad")
-    trim = _parse_simple_yaml_list(text, "trim_rpy_rad") or [0.0, 0.0, 0.0]
-    parent = _parse_simple_yaml_scalar(text, "parent") or "base_link"
-    child = _parse_simple_yaml_scalar(text, "child") or "unilidar_lidar"
-    if xyz is None or base is None:
+    trim = _parse_simple_yaml_list(text, "trim_rpy_rad")
+    imu_xyz = _parse_simple_yaml_list(text, "imu_xyz_in_lidar")
+    imu_rpy = _parse_simple_yaml_list(text, "imu_rpy_in_lidar")
+    parent = _parse_simple_yaml_scalar(text, "parent")
+    child = _parse_simple_yaml_scalar(text, "child")
+    if (
+        xyz is None
+        or base is None
+        or trim is None
+        or imu_xyz is None
+        or imu_rpy is None
+        or parent is None
+        or child is None
+    ):
         return None
     rpy = [base[i] + trim[i] for i in range(3)]
     return {
@@ -51,6 +62,12 @@ def _load_extrinsics(path: Path) -> dict[str, str] | None:
         "roll": str(rpy[0]),
         "pitch": str(rpy[1]),
         "yaw": str(rpy[2]),
+        "imu_x": str(imu_xyz[0]),
+        "imu_y": str(imu_xyz[1]),
+        "imu_z": str(imu_xyz[2]),
+        "imu_roll": str(imu_rpy[0]),
+        "imu_pitch": str(imu_rpy[1]),
+        "imu_yaw": str(imu_rpy[2]),
     }
 
 
@@ -59,16 +76,9 @@ def generate_launch_description():
     #   static_transform_publisher expects roll/pitch/yaw in radians.
     #   Do NOT pass degrees here.
     args = [
-        # If you pass x/y/z/roll/pitch/yaw on CLI, it overrides YAML.
-        # Otherwise YAML is used as default source of truth.
         DeclareLaunchArgument("x", default_value="__from_yaml__"),
         DeclareLaunchArgument("y", default_value="__from_yaml__"),
         DeclareLaunchArgument("z", default_value="__from_yaml__"),
-        # Default extrinsics for current vehicle mount (卧放) — radians.
-        # Verified mapping:
-        #   unilidar_lidar +Z -> base_link +X (车头)
-        #   unilidar_lidar +X -> base_link +Z (朝天)
-        #   unilidar_lidar +Y -> base_link -Y (车右)
         DeclareLaunchArgument("roll", default_value="__from_yaml__"),
         DeclareLaunchArgument("pitch", default_value="__from_yaml__"),
         DeclareLaunchArgument("yaw", default_value="__from_yaml__"),
@@ -82,22 +92,25 @@ def generate_launch_description():
         ),
     ]
 
-    def _make_tf_node(context, *_, **__):
+    def _make_tf_nodes(context, *_, **__):
         cfg_path = LaunchConfiguration("extrinsics_yaml").perform(context)
-        overrides = _load_extrinsics(Path(cfg_path)) or {
-            "parent": "base_link",
-            "child": "unilidar_lidar",
-            "x": "0.0",
-            "y": "0.0",
-            "z": "0.0",
-            "roll": "0.0",
-            "pitch": "0.0",
-            "yaw": "0.0",
-        }
+        loaded = _load_extrinsics(Path(cfg_path))
+        if loaded is None:
+            return [
+                LogInfo(
+                    msg=(
+                        "[l1_static_tf] FAIL-CLOSED: extrinsics YAML missing or "
+                        "malformed (need xyz, base_rpy_rad, trim_rpy_rad, "
+                        "imu_xyz_in_lidar, imu_rpy_in_lidar, parent, child): %s"
+                        % cfg_path
+                    )
+                ),
+                Shutdown(reason="l1_extrinsics.yaml invalid"),
+            ]
 
         def pick(name: str) -> str:
             raw = LaunchConfiguration(name).perform(context).strip()
-            return overrides[name] if raw == "__from_yaml__" else raw
+            return loaded[name] if raw == "__from_yaml__" else raw
 
         x = pick("x")
         y = pick("y")
@@ -108,9 +121,10 @@ def generate_launch_description():
         parent = pick("parent")
         child = pick("child")
 
-        tf = Node(
+        lidar_tf = Node(
             package="tf2_ros",
             executable="static_transform_publisher",
+            name="l1_static_tf_lidar",
             arguments=[
                 "--x",
                 x,
@@ -131,7 +145,31 @@ def generate_launch_description():
             ],
             output="screen",
         )
-        return [tf]
 
-    return LaunchDescription(args + [OpaqueFunction(function=_make_tf_node)])
+        imu_tf = Node(
+            package="tf2_ros",
+            executable="static_transform_publisher",
+            name="l1_static_tf_imu",
+            arguments=[
+                "--x",
+                loaded["imu_x"],
+                "--y",
+                loaded["imu_y"],
+                "--z",
+                loaded["imu_z"],
+                "--roll",
+                loaded["imu_roll"],
+                "--pitch",
+                loaded["imu_pitch"],
+                "--yaw",
+                loaded["imu_yaw"],
+                "--frame-id",
+                child,
+                "--child-frame-id",
+                "unilidar_imu",
+            ],
+            output="screen",
+        )
+        return [lidar_tf, imu_tf]
 
+    return LaunchDescription(args + [OpaqueFunction(function=_make_tf_nodes)])

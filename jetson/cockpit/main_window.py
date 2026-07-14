@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
 )
 
 from core.config import CockpitConfig, app_root
+from core.l1_lio_control import run_l1_lio
 from core.l1_stack_control import run_l1_stack
 from core.ros2_lidar_probe import probe_lidar_status, probe_lio_status, probe_static_tf
 from core.ros2_probe import (
@@ -89,6 +90,7 @@ class LidarWorker(QThread):
                 self._cfg.lio_path_topic,
                 self._cfg.lio_cloud_registered_topic,
                 root,
+                cfg=self._cfg,
             )
             self.finished_status.emit(raw, lio)
         except Exception as exc:
@@ -118,6 +120,44 @@ class RvizPrecheckWorker(QThread):
             self.failed.emit(str(exc))
 
 
+class LioRvizPrecheckWorker(QThread):
+    """Localization view requires registered cloud, odom, path, and odom->base_link."""
+
+    finished_check = pyqtSignal(bool, object)  # ok, missing list
+    failed = pyqtSignal(str)
+
+    def __init__(
+        self,
+        cloud_registered: str,
+        odom_topic: str,
+        path_topic: str,
+        odom_frame: str,
+        base_frame: str = "base_link",
+        parent=None,
+    ):
+        super().__init__(parent)
+        self._cloud_registered = cloud_registered
+        self._odom_topic = odom_topic
+        self._path_topic = path_topic
+        self._odom_frame = odom_frame
+        self._base_frame = base_frame
+
+    def run(self):
+        try:
+            from core.ros2_lidar_probe import probe_lio_mapping_ready
+
+            ok, missing = probe_lio_mapping_ready(
+                self._cloud_registered,
+                self._odom_topic,
+                self._path_topic,
+                self._odom_frame,
+                self._base_frame,
+            )
+            self.finished_check.emit(ok, missing)
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
 class L1StackWorker(QThread):
     finished_result = pyqtSignal(str, bool, str)
     failed = pyqtSignal(str)
@@ -130,6 +170,23 @@ class L1StackWorker(QThread):
     def run(self):
         try:
             ok, text = run_l1_stack(self._action, cfg=self._cfg)
+            self.finished_result.emit(self._action, ok, text)
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
+class L1LioWorker(QThread):
+    finished_result = pyqtSignal(str, bool, str)
+    failed = pyqtSignal(str)
+
+    def __init__(self, cfg: CockpitConfig, action: str, parent=None):
+        super().__init__(parent)
+        self._cfg = cfg
+        self._action = action
+
+    def run(self):
+        try:
+            ok, text = run_l1_lio(self._action, cfg=self._cfg)
             self.finished_result.emit(self._action, ok, text)
         except Exception as exc:
             self.failed.emit(str(exc))
@@ -175,13 +232,18 @@ class MainWindow(QMainWindow):
         self._lidar_worker = None
         self._rviz_precheck_worker = None
         self._l1_stack_worker = None
+        self._l1_lio_worker = None
+        self._lio_rviz_precheck_worker = None
         self._lidar_summary_line = ""
         self._lidar_summary_ok = True
         self._last_lidar_status = None
+        self._last_lio_status = None
         self._radar_running: bool | None = None
+        self._loc_running: bool | None = None
         self._remote_busy = False
         self._extrinsics_dialog: ExtrinsicsDialog | None = None
         self._rviz_label = ""
+        self._closing = False
 
         self._build_ui()
         self._wire()
@@ -230,6 +292,7 @@ class MainWindow(QMainWindow):
         self._lidar_panel.btn_extrinsics.clicked.connect(self._open_extrinsics_dialog)
 
     def _on_lidar_mode_changed(self, _button) -> None:
+        self._lidar_panel._sync_action_labels()
         if self._lidar_summary_line:
             self._update_lidar_summary_display()
 
@@ -252,6 +315,8 @@ class MainWindow(QMainWindow):
             self._extrinsics_dialog = None
 
     def _on_extrinsics_applied(self, ok: bool, detail: str) -> None:
+        if self._closing:
+            return
         if ok:
             self._append_log("应用外参成功：%s" % detail)
         else:
@@ -259,16 +324,22 @@ class MainWindow(QMainWindow):
         self._refresh_lidar_status()
 
     def _start_radar(self) -> None:
-        self._run_l1_stack("start", busy_label="雷达启动中…")
+        if self._lidar_panel.selected_mode() == LidarPanel.MODE_LIO:
+            self._run_l1_lio("start", busy_label="定位启动中…")
+        else:
+            self._run_l1_stack("start", busy_label="雷达启动中…")
 
     def _stop_radar(self) -> None:
-        self._run_l1_stack("stop", busy_label="雷达停止中…")
+        if self._lidar_panel.selected_mode() == LidarPanel.MODE_LIO:
+            self._run_l1_lio("stop", busy_label="定位停止中…")
+        else:
+            self._run_l1_stack("stop", busy_label="雷达停止中…")
 
     def _run_l1_stack(self, action: str, busy_label: str) -> None:
         if self._remote_busy:
             self._append_log("远程操作仍在进行")
             return
-        self._set_remote_busy(True)
+        self._set_remote_busy(True, phase=action)
         self._lidar_panel.set_summary(busy_label, False)
         self._append_log("Jetson L1：%s" % action)
         self._l1_stack_worker = L1StackWorker(self._cfg, action, self)
@@ -276,7 +347,21 @@ class MainWindow(QMainWindow):
         self._l1_stack_worker.failed.connect(self._on_l1_stack_failed)
         self._l1_stack_worker.start()
 
+    def _run_l1_lio(self, action: str, busy_label: str) -> None:
+        if self._remote_busy:
+            self._append_log("远程操作仍在进行")
+            return
+        self._set_remote_busy(True, phase=action)
+        self._lidar_panel.set_summary(busy_label, False)
+        self._append_log("Jetson 定位：%s" % action)
+        self._l1_lio_worker = L1LioWorker(self._cfg, action, self)
+        self._l1_lio_worker.finished_result.connect(self._on_l1_lio_done)
+        self._l1_lio_worker.failed.connect(self._on_l1_lio_failed)
+        self._l1_lio_worker.start()
+
     def _on_l1_stack_done(self, action: str, ok: bool, text: str) -> None:
+        if self._closing:
+            return
         self._set_remote_busy(False)
         if action == "start":
             self._radar_running = ok or ("L1=running" in text)
@@ -292,15 +377,42 @@ class MainWindow(QMainWindow):
         self._refresh_lidar_status()
 
     def _on_l1_stack_failed(self, text: str) -> None:
+        if self._closing:
+            return
         self._set_remote_busy(False)
         self._lidar_panel.set_summary("雷达操作失败", False)
         self._append_log("[ERR] Jetson L1 操作失败：%s" % text)
 
-    def _set_remote_busy(self, busy: bool) -> None:
+    def _on_l1_lio_done(self, action: str, ok: bool, text: str) -> None:
+        if self._closing:
+            return
+        self._set_remote_busy(False)
+        if action == "start":
+            self._loc_running = ok or ("LIO=running" in text and "adapter=running" in text)
+            self._radar_running = self._loc_running or ("L1=running" in text)
+        elif action == "stop":
+            self._loc_running = False
+            self._radar_running = False
+            if self._rviz_mgr.running:
+                self._close_local_rviz()
+        if ok:
+            self._append_log("Jetson 定位 %s:\n%s" % (action, text))
+        else:
+            self._append_log("[ERR] Jetson 定位 %s:\n%s" % (action, text))
+            self._lidar_panel.set_summary("定位%s失败" % action, False)
+        self._refresh_lidar_status()
+
+    def _on_l1_lio_failed(self, text: str) -> None:
+        if self._closing:
+            return
+        self._set_remote_busy(False)
+        self._lidar_panel.set_summary("定位操作失败", False)
+        self._append_log("[ERR] Jetson 定位操作失败：%s" % text)
+
+    def _set_remote_busy(self, busy: bool, phase: str = "") -> None:
         """Serialize Jetson SSH/YAML operations so TF/L1 state cannot race."""
         self._remote_busy = busy
-        self._lidar_panel.set_stack_busy(busy)
-
+        self._lidar_panel.set_stack_busy(busy, phase=phase)
     def _refresh_status(self) -> None:
         self._status_panel.set_domain_id(
             os.environ.get("ROS_DOMAIN_ID", "(未设置)")
@@ -394,7 +506,39 @@ class MainWindow(QMainWindow):
         mode: str,
         rviz_open: bool = False,
         radar_running: bool | None = None,
+        loc_running: bool | None = None,
     ) -> tuple[str, bool]:
+        if mode == LidarPanel.MODE_LIO:
+            parts = []
+            if loc_running is True or (
+                lio_status.odom_ok and lio_status.cloud_reg_ok
+            ):
+                parts.append("定位运行中")
+            elif loc_running is False:
+                parts.append("定位已停止")
+            else:
+                parts.append("定位未启动")
+            if lio_status.odom_ok:
+                if lio_status.odom_hz:
+                    parts.append("odom %.1fHz" % lio_status.odom_hz)
+                else:
+                    parts.append("odom 在线")
+            else:
+                parts.append("odom 无")
+            if lio_status.cloud_reg_ok:
+                if lio_status.cloud_reg_hz:
+                    parts.append("配准 %.1fHz" % lio_status.cloud_reg_hz)
+                else:
+                    parts.append("配准在线")
+            else:
+                parts.append("配准无")
+            if "adapter=running" in lio_status.jetson_lio:
+                parts.append("adapter 运行中")
+            if rviz_open:
+                parts.append("视图已打开")
+            ok = bool(lio_status.odom_ok and lio_status.cloud_reg_ok and lio_status.path_has_pub)
+            return " · ".join(parts), ok
+
         if mode == LidarPanel.MODE_BASE:
             if status.aligned_ok:
                 cloud = "对齐点云在线"
@@ -420,8 +564,6 @@ class MainWindow(QMainWindow):
         parts = [cloud, tf, radar]
         if rviz_open:
             parts.append("视图已打开")
-        if mode == LidarPanel.MODE_LIO and "running" in lio_status.jetson_lio:
-            parts.append("里程计运行中")
 
         if mode == LidarPanel.MODE_BASE:
             ok = status.aligned_ok
@@ -434,11 +576,16 @@ class MainWindow(QMainWindow):
         self._lidar_panel.set_summary(text, self._lidar_summary_ok)
 
     def _on_lidar_status_done(self, status, lio_status) -> None:
+        if self._closing:
+            return
         self._last_lidar_status = status
+        self._last_lio_status = lio_status
         if status.cloud_publisher not in ("", "-"):
             self._radar_running = True
         elif self._radar_running is None:
             self._radar_running = False
+        if lio_status.odom_ok and lio_status.cloud_reg_ok:
+            self._loc_running = True
 
         rviz_open = self._rviz_mgr.running
         self._lidar_summary_line, self._lidar_summary_ok = (
@@ -448,17 +595,20 @@ class MainWindow(QMainWindow):
                 self._lidar_panel.selected_mode(),
                 rviz_open,
                 self._radar_running,
+                self._loc_running,
             )
         )
         self._update_lidar_summary_display()
 
         if not self._lidar_summary_ok:
-            self._append_log("雷达诊断：%s" % status.detail)
+            detail = status.detail if self._lidar_panel.selected_mode() != LidarPanel.MODE_LIO else lio_status.detail
+            self._append_log("雷达诊断：%s" % detail)
 
     def _on_lidar_status_failed(self, text: str) -> None:
+        if self._closing:
+            return
         self._lidar_panel.set_summary("诊断失败: %s" % text, False)
         self._append_log("雷达诊断失败：%s" % text)
-
     def _open_rviz(self, cfg_path, label: str) -> None:
         if not cfg_path.is_file():
             self._append_log("RViz 配置不存在：%s" % cfg_path)
@@ -478,6 +628,32 @@ class MainWindow(QMainWindow):
         return self._cfg.lidar_mapping_rviz, "雷达/里程计"
 
     def _start_lidar_rviz(self) -> None:
+        if self._remote_busy:
+            self._append_log("远程操作仍在进行，稍后再打开视图")
+            return
+        mode = self._lidar_panel.selected_mode()
+        if mode == LidarPanel.MODE_LIO:
+            if (
+                self._lio_rviz_precheck_worker is not None
+                and self._lio_rviz_precheck_worker.isRunning()
+            ):
+                return
+            self._lidar_panel.btn_start_rviz.setEnabled(False)
+            self._lio_rviz_precheck_worker = LioRvizPrecheckWorker(
+                self._cfg.lio_cloud_registered_topic,
+                self._cfg.lio_odom_topic,
+                self._cfg.lio_path_topic,
+                self._cfg.lio_fixed_frame,
+                "base_link",
+                self,
+            )
+            self._lio_rviz_precheck_worker.finished_check.connect(
+                self._on_lio_rviz_precheck_done
+            )
+            self._lio_rviz_precheck_worker.failed.connect(self._on_lio_rviz_precheck_failed)
+            self._lio_rviz_precheck_worker.start()
+            return
+
         if (
             self._rviz_precheck_worker is not None
             and self._rviz_precheck_worker.isRunning()
@@ -493,8 +669,38 @@ class MainWindow(QMainWindow):
         self._rviz_precheck_worker.failed.connect(self._on_rviz_precheck_failed)
         self._rviz_precheck_worker.start()
 
+    def _on_lio_rviz_precheck_done(self, ok: bool, missing) -> None:
+        if self._closing:
+            return
+        self._lidar_panel.btn_start_rviz.setEnabled(not self._remote_busy)
+        if not ok:
+            items = "\n".join("- %s" % m for m in (missing or []))
+            QMessageBox.warning(
+                self,
+                "定位视图未就绪",
+                "以下条件未满足，已拒绝打开 RViz：\n%s\n\n请先点「启动定位」。"
+                % items,
+            )
+            self._append_log("打开定位视图被拒绝：%s" % "；".join(missing or []))
+            return
+        cfg_path, label = self._selected_lidar_rviz()
+        self._open_rviz(cfg_path, label)
+
+    def _on_lio_rviz_precheck_failed(self, text: str) -> None:
+        if self._closing:
+            return
+        self._lidar_panel.btn_start_rviz.setEnabled(not self._remote_busy)
+        QMessageBox.warning(
+            self,
+            "定位探测失败",
+            "无法确认定位 topic/TF 状态，未打开视图。\n\n%s" % text,
+        )
+        self._append_log("定位探测失败，未打开视图：%s" % text)
+
     def _on_rviz_precheck_done(self, has_publisher: bool, tf_ok: bool, aligned_ok: bool) -> None:
-        self._lidar_panel.btn_start_rviz.setEnabled(True)
+        if self._closing:
+            return
+        self._lidar_panel.btn_start_rviz.setEnabled(not self._remote_busy)
         if not has_publisher:
             QMessageBox.warning(
                 self,
@@ -527,7 +733,9 @@ class MainWindow(QMainWindow):
         self._open_rviz(cfg_path, label)
 
     def _on_rviz_precheck_failed(self, text: str) -> None:
-        self._lidar_panel.btn_start_rviz.setEnabled(True)
+        if self._closing:
+            return
+        self._lidar_panel.btn_start_rviz.setEnabled(not self._remote_busy)
         QMessageBox.warning(
             self,
             "点云探测失败",
@@ -535,7 +743,6 @@ class MainWindow(QMainWindow):
             "请检查 ROS_DOMAIN_ID / DDS。\n\n%s" % text,
         )
         self._append_log("点云探测失败，未打开视图：%s" % text)
-
     def _close_local_rviz(self) -> None:
         self._rviz_mgr.stop()
         stop_script = app_root() / "scripts" / "stop_unilidar_rviz.sh"
@@ -574,6 +781,26 @@ class MainWindow(QMainWindow):
         self._worker.publish_stop(repeat=3)
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt API
+        # Refuse close while Jetson SSH / QThread remote ops are in flight.
+        if self._remote_busy:
+            event.ignore()
+            self._append_log("远程定位/雷达操作进行中，请等待完成后再关闭")
+            return
+        for worker in (
+            self._l1_stack_worker,
+            self._l1_lio_worker,
+            self._lidar_worker,
+            self._rviz_precheck_worker,
+            self._lio_rviz_precheck_worker,
+            self._env_worker,
+            self._topic_worker,
+        ):
+            if worker is not None and worker.isRunning():
+                event.ignore()
+                self._append_log("后台线程仍在运行，请稍后再关闭")
+                return
+
+        self._closing = True
         self._teleop_panel.stop()
         self._worker.publish_stop(repeat=3)
         self._worker.stop()

@@ -2,15 +2,20 @@
 #
 # This file is the *source of truth* for Jetson-side static TF:
 #   base_link -> unilidar_lidar
+#   unilidar_lidar -> unilidar_imu
 #
 # Notes:
-# - rpy_rad are in radians (NOT degrees)
+# - rpy_rad / imu_rpy_in_lidar are in radians (NOT degrees)
 # - final_rpy = base_rpy_rad + trim_rpy_rad
+# - imu_* fields are required; launch fails closed if missing/malformed
 #
 # Vehicle convention (base_link):
 #   +X forward (车头)
 #   +Y left    (车左)
 #   +Z up      (车上)
+#
+# IMU offset is the inverse of Point-LIO mapping.extrinsic_T
+# (transform from imu to lidar: [0.007698, 0.014655, -0.00667]).
 
 parent: base_link
 child: unilidar_lidar
@@ -25,3 +30,7 @@ base_rpy_rad: [3.14159265359, -1.57079632679, 0.0]
 
 # Small on-site trims (start with 0.0, adjust by ±(1~3) deg => ±(0.017~0.052) rad)
 trim_rpy_rad: [0.0, 0.0, 0.0]
+
+# unilidar_lidar -> unilidar_imu (translation of IMU origin in lidar frame)
+imu_xyz_in_lidar: [-0.007698, -0.014655, 0.00667]
+imu_rpy_in_lidar: [0.0, 0.0, 0.0]

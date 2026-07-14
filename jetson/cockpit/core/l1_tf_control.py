@@ -25,6 +25,8 @@ class L1Extrinsics:
     xyz: tuple[float, float, float]
     base_rpy_rad: tuple[float, float, float]
     trim_rpy_rad: tuple[float, float, float]
+    imu_xyz_in_lidar: tuple[float, float, float] = (-0.007698, -0.014655, 0.00667)
+    imu_rpy_in_lidar: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -161,6 +163,8 @@ def parse_extrinsics_yaml(text: str) -> L1Extrinsics:
     xyz = [0.0, 0.0, 0.0]
     base_rpy: list[float] | None = None
     trim_rpy = [0.0, 0.0, 0.0]
+    imu_xyz = [-0.007698, -0.014655, 0.00667]
+    imu_rpy = [0.0, 0.0, 0.0]
     for raw in (text or "").splitlines():
         line = raw.split("#", 1)[0].strip()
         if not line:
@@ -180,20 +184,31 @@ def parse_extrinsics_yaml(text: str) -> L1Extrinsics:
             vals = _parse_bracket_floats(line)
             if len(vals) == 3:
                 trim_rpy = vals
+        elif line.startswith("imu_xyz_in_lidar:"):
+            vals = _parse_bracket_floats(line)
+            if len(vals) == 3:
+                imu_xyz = vals
+        elif line.startswith("imu_rpy_in_lidar:"):
+            vals = _parse_bracket_floats(line)
+            if len(vals) == 3:
+                imu_rpy = vals
     if base_rpy is None:
         raise ValueError("YAML 缺少 base_rpy_rad，无法保留远端安装基准")
     return L1Extrinsics(
         xyz=(xyz[0], xyz[1], xyz[2]),
         base_rpy_rad=(base_rpy[0], base_rpy[1], base_rpy[2]),
         trim_rpy_rad=(trim_rpy[0], trim_rpy[1], trim_rpy[2]),
+        imu_xyz_in_lidar=(imu_xyz[0], imu_xyz[1], imu_xyz[2]),
+        imu_rpy_in_lidar=(imu_rpy[0], imu_rpy[1], imu_rpy[2]),
     )
 
 
 def format_extrinsics_yaml(ext: L1Extrinsics) -> str:
-    """Fixed-format YAML; base_rpy_rad preserved from read, not edited in UI."""
+    """Fixed-format YAML; base_rpy_rad and imu_* preserved from read."""
     return (
         "# L1 static TF extrinsics (radians)\n"
         "# Written by cockpit apply; base_rpy_rad is mount baseline.\n"
+        "# imu_* fields required by l1_static_tf.launch.py (fail-closed).\n"
         "\n"
         "parent: base_link\n"
         "child: unilidar_lidar\n"
@@ -203,6 +218,9 @@ def format_extrinsics_yaml(ext: L1Extrinsics) -> str:
         "base_rpy_rad: [%s, %s, %s]\n"
         "\n"
         "trim_rpy_rad: [%s, %s, %s]\n"
+        "\n"
+        "imu_xyz_in_lidar: [%s, %s, %s]\n"
+        "imu_rpy_in_lidar: [%s, %s, %s]\n"
     ) % (
         ext.xyz[0],
         ext.xyz[1],
@@ -213,6 +231,12 @@ def format_extrinsics_yaml(ext: L1Extrinsics) -> str:
         ext.trim_rpy_rad[0],
         ext.trim_rpy_rad[1],
         ext.trim_rpy_rad[2],
+        ext.imu_xyz_in_lidar[0],
+        ext.imu_xyz_in_lidar[1],
+        ext.imu_xyz_in_lidar[2],
+        ext.imu_rpy_in_lidar[0],
+        ext.imu_rpy_in_lidar[1],
+        ext.imu_rpy_in_lidar[2],
     )
 
 
@@ -312,18 +336,23 @@ def apply_extrinsics(
 ) -> ExtrinsicsApplyResult:
     """Write Jetson YAML then restart l1_static_tf (user-facing「应用外参」)."""
     cfg = cfg or load_config()
-    if base_rpy_rad is None:
-        ok_read, current = read_extrinsics(cfg=cfg, timeout=timeout)
-        if ok_read and isinstance(current, L1Extrinsics):
+    imu_xyz = (-0.007698, -0.014655, 0.00667)
+    imu_rpy = (0.0, 0.0, 0.0)
+
+    ok_read, current = read_extrinsics(cfg=cfg, timeout=timeout)
+    if ok_read and isinstance(current, L1Extrinsics):
+        imu_xyz = current.imu_xyz_in_lidar
+        imu_rpy = current.imu_rpy_in_lidar
+        if base_rpy_rad is None:
             base_rpy_rad = current.base_rpy_rad
-        else:
-            detail = current if isinstance(current, str) else "读取失败"
-            return ExtrinsicsApplyResult(
-                False,
-                False,
-                "请先点「读取外参」以保留 Jetson base_rpy_rad：%s" % detail,
-                "未执行",
-            )
+    elif base_rpy_rad is None:
+        detail = current if isinstance(current, str) else "读取失败"
+        return ExtrinsicsApplyResult(
+            False,
+            False,
+            "请先点「读取外参」以保留 Jetson base_rpy_rad：%s" % detail,
+            "未执行",
+        )
 
     ext = L1Extrinsics(
         xyz=xyz,
@@ -333,6 +362,8 @@ def apply_extrinsics(
             deg_to_rad(trim_rpy_deg[1]),
             deg_to_rad(trim_rpy_deg[2]),
         ),
+        imu_xyz_in_lidar=imu_xyz,
+        imu_rpy_in_lidar=imu_rpy,
     )
     write_ok, write_detail = write_extrinsics_yaml(ext, cfg=cfg, timeout=timeout)
     if not write_ok:

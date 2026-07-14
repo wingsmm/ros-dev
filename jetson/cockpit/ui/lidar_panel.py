@@ -15,9 +15,9 @@ from PyQt5.QtWidgets import (
 class LidarPanel(QWidget):
     """Main-window radar panel.
 
-    Only exposes the day-to-day radar flow (start/open/stop) plus a button
-    that opens the standalone extrinsics dialog. Any xyz/roll/pitch/yaw
-    editing lives in :class:`ui.extrinsics_dialog.ExtrinsicsDialog`.
+    Modes:
+      - 原始点云 / 车体对齐: 启动雷达 / 打开雷达视图 / 停止雷达
+      - 雷达/里程计: 启动定位 / 打开定位视图 / 停止定位
     """
 
     MODE_LIO = "lio"
@@ -67,6 +67,7 @@ class LidarPanel(QWidget):
 
         outer = QVBoxLayout(self)
         outer.addWidget(box)
+        self._sync_action_labels()
 
     def selected_mode(self) -> str:
         if self.radio_raw.isChecked():
@@ -75,6 +76,16 @@ class LidarPanel(QWidget):
             return self.MODE_BASE
         return self.MODE_LIO
 
+    def _sync_action_labels(self) -> None:
+        if self.selected_mode() == self.MODE_LIO:
+            self.btn_start_radar.setText("启动定位")
+            self.btn_start_rviz.setText("打开定位视图")
+            self.btn_stop_radar.setText("停止定位")
+        else:
+            self.btn_start_radar.setText("启动雷达")
+            self.btn_start_rviz.setText("打开雷达视图")
+            self.btn_stop_radar.setText("停止雷达")
+
     def set_stack_busy(self, busy: bool, phase: str = "") -> None:
         """Disable stack + extrinsics buttons while a remote op is in flight."""
         starting = phase == "start"
@@ -82,6 +93,10 @@ class LidarPanel(QWidget):
         self.btn_start_radar.setEnabled(not busy)
         self.btn_stop_radar.setEnabled(not busy)
         self.btn_extrinsics.setEnabled(not busy)
+        # Mode radios also locked during remote ops
+        self.radio_raw.setEnabled(not busy)
+        self.radio_base.setEnabled(not busy)
+        self.radio_lio.setEnabled(not busy)
         if starting:
             self.btn_start_rviz.setEnabled(not busy)
         elif stopping:

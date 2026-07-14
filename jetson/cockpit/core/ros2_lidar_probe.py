@@ -7,6 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.config import CockpitConfig
 from core.ros2_probe import _run, topic_status
 
 
@@ -84,31 +85,51 @@ def probe_static_tf(
     parent: str = "base_link",
     child: str = "unilidar_lidar",
 ) -> tuple[bool, str]:
-    """Return whether base_link -> unilidar_lidar is visible on /tf_static or tf2."""
+    """Return whether parent -> child is visible via /tf, /tf_static, or tf2_echo.
+
+    Dynamic links (e.g. odom -> base_link) share /tf with Point-LIO, so a single
+    ``echo --once`` often samples the wrong stanza. Stream /tf briefly and match
+    the parent/child pair. tf2_echo may print transient \"frame does not exist\"
+    while the buffer fills — treat that as failure only when no sample succeeds.
+    """
     label = "%s -> %s" % (parent, child)
+    pair_re = re.compile(
+        r"frame_id:\s*%s\s*\n\s*child_frame_id:\s*%s\b"
+        % (re.escape(parent), re.escape(child))
+    )
+
+    # Stream a short window of /tf (beats intermittent --once misses).
     try:
-        proc = _run("timeout 4 ros2 topic echo /tf_static --once 2>&1", timeout=6)
-    except (OSError, subprocess.TimeoutExpired):
-        proc = None
-    if proc is not None:
+        proc = _run("timeout 5 ros2 topic echo /tf 2>&1", timeout=7)
         text = (proc.stdout or "") + "\n" + (proc.stderr or "")
-        if ("frame_id: %s" % parent) in text and ("child_frame_id: %s" % child) in text:
-            return True, "%s OK" % label
+        if pair_re.search(text):
+            return True, "%s OK (/tf)" % label
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+    try:
+        proc = _run("timeout 3 ros2 topic echo /tf_static --once 2>&1", timeout=5)
+        text = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        if pair_re.search(text):
+            return True, "%s OK (/tf_static)" % label
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
     try:
         proc = _run(
-            "timeout 4 ros2 run tf2_ros tf2_echo %s %s 2>&1" % (parent, child),
-            timeout=7,
+            "timeout 10 ros2 run tf2_ros tf2_echo %s %s 2>&1" % (parent, child),
+            timeout=14,
         )
     except (OSError, subprocess.TimeoutExpired):
         return False, "%s missing" % label
 
     text = (proc.stdout or "") + "\n" + (proc.stderr or "")
     lowered = text.lower()
+    # Prefer success: startup often logs "frame does not exist" before data.
+    if "translation:" in lowered or re.search(r"\bat time\b", lowered):
+        return True, "%s OK" % label
     if "frame does not exist" in lowered or "invalid frame" in lowered:
         return False, "%s missing" % label
-    if "translation:" in lowered or "at time" in lowered:
-        return True, "%s OK" % label
     return False, "%s no data" % label
 
 
@@ -133,41 +154,69 @@ def fetch_jetson_lidar_port(cockpit_root: Path | None = None) -> str:
     return "(82 未运行或无法解析 port)"
 
 
-def fetch_jetson_lio_state(cockpit_root: Path | None = None) -> str:
-    root = cockpit_root or Path(__file__).resolve().parent.parent
-    jetson_sh = root.parent / "scripts" / "jetson.sh"
-    if not jetson_sh.is_file():
-        return "(jetson.sh 不可用)"
+def fetch_jetson_lio_state(
+    cfg: CockpitConfig | None = None,
+    cockpit_root: Path | None = None,
+) -> str:
+    """Query Jetson LIO status via SSH (VM does not need jetson.sh)."""
+    del cockpit_root  # kept for call-site compatibility
     try:
-        proc = subprocess.run(
-            ["bash", str(jetson_sh), "ros2", "lio-status"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            timeout=20,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return "(查询失败: %s)" % exc
-    text = (proc.stdout or "").strip().splitlines()
-    return text[0] if text else "(无状态)"
+        from core.config import load_config
+        from core.l1_lio_control import status_l1_lio
+    except ImportError:
+        return "(l1_lio_control 不可用)"
+
+    cfg = cfg or load_config()
+    ok, text = status_l1_lio(cfg=cfg)
+    text = (text or "").strip()
+    if not text:
+        return "(无状态)" if ok else "(查询失败)"
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    wanted = ("LIO=", "adapter=", "odom=")
+    bits = [ln for ln in lines if any(ln.startswith(p) for p in wanted)]
+    if bits:
+        return " ".join(bits)
+    return lines[0]
+
+
+def probe_lio_mapping_ready(
+    cloud_registered_topic: str = "/cloud_registered",
+    odom_topic: str = "/odom",
+    path_topic: str = "/odom_path",
+    odom_frame: str = "odom",
+    base_frame: str = "base_link",
+) -> tuple[bool, list[str]]:
+    """Pre-open checks for localization RViz. Returns (ok, missing_items)."""
+    missing: list[str] = []
+    if not topic_status(cloud_registered_topic).has_publisher:
+        missing.append("%s publisher" % cloud_registered_topic)
+    if not topic_status(odom_topic).has_publisher:
+        missing.append("%s publisher" % odom_topic)
+    if not topic_status(path_topic).has_publisher:
+        missing.append("%s publisher" % path_topic)
+    tf_ok, _detail = probe_static_tf(odom_frame, base_frame)
+    if not tf_ok:
+        missing.append("TF %s -> %s" % (odom_frame, base_frame))
+    return (len(missing) == 0), missing
 
 
 def probe_lio_status(
     odom_topic: str = "/odom",
-    path_topic: str = "/path",
+    path_topic: str = "/odom_path",
     cloud_registered_topic: str = "/cloud_registered",
     cockpit_root: Path | None = None,
+    cfg: CockpitConfig | None = None,
 ) -> LioStatus:
     odom_row = topic_status(odom_topic)
     path_row = topic_status(path_topic)
     cloud_row = topic_status(cloud_registered_topic)
     odom_hz = _topic_hz(odom_topic, seconds=3) if odom_row.has_publisher else None
     cloud_hz = _topic_hz(cloud_registered_topic, seconds=3) if cloud_row.has_publisher else None
-    jetson_lio = fetch_jetson_lio_state(cockpit_root)
+    jetson_lio = fetch_jetson_lio_state(cfg=cfg, cockpit_root=cockpit_root)
 
     parts = []
-    if "stopped" in jetson_lio:
-        parts.append("Jetson LIO 未启动 (jetson.sh ros2 lio-start)")
+    if "LIO=stopped" in jetson_lio or "adapter=stopped" in jetson_lio:
+        parts.append("Jetson 定位栈未就绪 (启动定位)")
     if not odom_row.has_publisher:
         parts.append("%s 无 publisher" % odom_topic)
     if not path_row.has_publisher:

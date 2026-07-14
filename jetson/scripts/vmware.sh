@@ -142,7 +142,9 @@ fix_remote_crlf() {
   ssh_run "
     set -e
     if [[ -d ~/${REMOTE_COCKPIT}/scripts ]]; then
-      find ~/${REMOTE_COCKPIT}/scripts -type f -name '*.sh' -print0 | xargs -0 -r sed -i 's/\\r\$//'
+      # Use \$'\\r' so remote bash expands a real CR (plain sed '\\r' is unreliable).
+      find ~/${REMOTE_COCKPIT}/scripts -type f -name '*.sh' -print0 |
+        xargs -0 -r sed -i \$'s/\\r\$//'
       chmod +x ~/${REMOTE_COCKPIT}/scripts/*.sh 2>/dev/null || true
       echo '[OK] fixed CRLF on remote cockpit scripts'
     fi

@@ -53,11 +53,15 @@
             publish_odometry_without_downsample: false
 
         publish:
-            path_en: true                 # false: close the path output
+            # lio_odom_adapter publishes bounded /odom_path. Disable Point-LIO's
+            # unbounded /path to avoid duplicating an ever-growing Path over DDS.
+            path_en: false
             scan_publish_en: true         # false: close all the point cloud output
             scan_bodyframe_pub_en: false  # true: output the point cloud scans in IMU-body-frame
 
         pcd_save:
-            pcd_save_en: true       # save map to pcd file
+            # interval=-1 retains every registered scan in pcl_wait_save until
+            # shutdown. Keep this off for live localization to prevent linear RSS growth.
+            pcd_save_en: false
             interval: -1            # how many LiDAR frames saved in each pcd file; 
                                         # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.

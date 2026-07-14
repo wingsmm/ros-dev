@@ -8,7 +8,8 @@
 #   ~/qt/ros2_ws/src/l1_tf_bringup/config/l1_extrinsics.yaml
 #
 # stop kills l1_static_tf.launch.py and static_transform_publisher for
-# unilidar_lidar — do not run a second manual static TF to the same child.
+# unilidar_lidar / unilidar_imu — do not run a second manual static TF to
+# the same children.
 
 set -euo pipefail
 
@@ -36,7 +37,10 @@ _launch_pids() {
 }
 
 _tf_publisher_pids() {
-  pgrep -f "static_transform_publisher.*unilidar_lidar" 2>/dev/null || true
+  {
+    pgrep -f "static_transform_publisher.*unilidar_lidar" 2>/dev/null || true
+    pgrep -f "static_transform_publisher.*unilidar_imu" 2>/dev/null || true
+  } | sort -u
 }
 
 _is_running() {

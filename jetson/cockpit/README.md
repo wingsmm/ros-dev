@@ -7,16 +7,19 @@
 ```text
 PC / VMware cockpit Qt
   -> ROS2 /cmd_vel（干跑遥控）
-  -> 雷达观测面板：选视图 + 启动本机 RViz2 + topic/Hz/port 状态
+  -> 雷达观测面板：
+       原始点云 / 车体对齐：启动雷达 / 打开雷达视图 / 停止雷达
+       雷达/里程计：启动定位 / 打开定位视图 / 停止定位
 
 Jetson ~/qt/ros2_ws
-  -> cmd_vel_car_web_bridge
   -> unitree_lidar_ros2 -> /unilidar/cloud + /unilidar/imu
-  -> l1_static_tf       -> base_link -> unilidar_lidar
+  -> l1_static_tf       -> base_link -> unilidar_lidar -> unilidar_imu
   -> l1_cloud_align     -> /unilidar/cloud_aligned (frame=base_link)
+  -> Point-LIO          -> /aft_mapped_to_init + /cloud_registered
+  -> lio_odom_adapter   -> /odom + /odom_path + TF odom->base_link
 ```
 
-本阶段不调用 `car_web` 电机、不驱动真实运动；雷达可视化走观测端本机 RViz2（当前已在 VM `172.0.0.87` 验证，预置 `config/unilidar.rviz`），不在 Qt 内嵌渲染点云。
+本阶段不调用 `car_web` 电机、不从 `/cmd_vel` 伪造 odom；雷达可视化走观测端本机 RViz2。
 
 ## 目录
 
@@ -139,11 +142,11 @@ bash run.sh
 
 雷达观测面板（阶段二闭环；SSH 远程启停 Jetson L1+TF，不暴露 TF 进程按钮）：
 
-| 模式 | RViz 配置 | Fixed Frame | PointCloud2 topic | 阶段 |
-|------|-----------|-------------|-------------------|------|
-| 原始点云 | `unilidar.rviz` | `unilidar_lidar` | `/unilidar/cloud` | 1 |
-| 车体对齐 | `unilidar_base.rviz` | `base_link` | `/unilidar/cloud_aligned` | 2 |
-| 雷达/里程计 | `unilidar_mapping.rviz` | `odom` | `/unilidar/cloud` | 4 |
+| 模式 | RViz 配置 | Fixed Frame | 主显示 | 按钮 | 阶段 |
+|------|-----------|-------------|-----------------|------|------|
+| 原始点云 | `unilidar.rviz` | `unilidar_lidar` | `/unilidar/cloud` | 启动/打开/停止雷达 | 1 |
+| 车体对齐 | `unilidar_base.rviz` | `base_link` | `/unilidar/cloud_aligned` | 启动/打开/停止雷达 | 2 |
+| 雷达/里程计 | `unilidar_mapping.rviz` | `odom` | `/cloud_registered` + `/odom` + `/odom_path` | 启动/打开/停止定位 | 4 |
 
 `/unilidar/cloud_aligned` 由 `l1_cloud_align` 用 ROS2 `SensorDataQoS`
 发布，可靠性是 **Best Effort**。`unilidar_base.rviz` 的 PointCloud2
@@ -154,10 +157,27 @@ Display 必须同样使用 `Reliability Policy: Best Effort`；如果误设为
 
 主按钮：
 
-- **启动雷达**：幂等 start（L1 驱动 + static TF + l1_cloud_align，缺啥起啥）
-- **打开雷达视图**：仅当 `/unilidar/cloud` 有 publisher 时打开本地 RViz；车体对齐模式再检查 `/unilidar/cloud_aligned`
-- **停止雷达**：停 L1 驱动 + static TF + l1_cloud_align，并关闭本地 RViz
+- **启动雷达**（原始/对齐模式）：幂等 start L1 驱动 + static TF + l1_cloud_align
+- **启动定位**（雷达/里程计模式）：SSH 执行 `l1_lio.sh start`（L1 栈 + Point-LIO + lio_odom_adapter）
+- **打开雷达视图 / 打开定位视图**：topic/TF 预检通过后打开本地 RViz
+- **停止雷达 / 停止定位**：对应远端 stop，并关闭本地 RViz
 
+定位视图打开前必须同时满足：
+
+```text
+/cloud_registered publisher
+/odom publisher
+/odom_path publisher
+TF odom -> base_link
+```
+
+任一缺失时拒绝打开，并提示具体缺失项。`/odom` 由 `lio_odom_adapter` 从 `/aft_mapped_to_init` 按
+
+```text
+T_odom_base = T_camera_init_imu * inverse(T_base_imu)
+```
+
+变换得到，**不**使用 `/cmd_vel`。
 一行摘要示例：
 
 ```text
@@ -298,33 +318,34 @@ Jetson ros2 multicast send -> WSL receive: not received
 - **阶段 2（只看原始点云）**：优先用 `Fixed Frame=unilidar_lidar`，不依赖 `odom/base_link` TF，先把点云“能看见”跑通。
 - **阶段 2.5（雷达/里程计联动）**：当你需要 `Fixed Frame=odom`（点云跟随 `/odom` 移动）时，必须保证 TF 链完整：
   `odom -> base_link -> unilidar_lidar`。
-  若确认存在“Z 轴超前”，应只在 **静态 TF**（`base_link -> unilidar_lidar`）里加旋转，把雷达前方轴对齐到 `base_link` 的 **X** 轴；
-  不要改 topic 名称、不要改驱动发布逻辑。
+  若确认存在“Z 轴超前”，L1 卧放安装基准必须在静态 TF 与 `l1_cloud_align` 配置中保持一致，把雷达前方对齐到 `base_link` 的 **X** 轴；
+  现场目视调平只修改 `l1_cloud_align.yaml` 的 `trim_rpy_rad`，不要用转 RViz 坐标轴代替点云对齐，也不要改 topic 名称或驱动发布逻辑。
 
-### LIO / 里程计观测（阶段 2.5，对齐 vmware 雷达/里程计）
+### LIO / 里程计观测（阶段 4）
 
-Jetson 端完整移动观测栈由 `ros2 start` 统一拉起：
+Jetson 端完整定位栈：
 
 ```bash
-bash jetson/scripts/jetson.sh ros2 deploy   # 首次或改代码后
-bash jetson/scripts/jetson.sh ros2 start
+bash jetson/scripts/jetson.sh ros2 push --yes
+bash jetson/scripts/jetson.sh ros2 lio-build
+bash jetson/scripts/jetson.sh ros2 lio-start   # = l1_lio.sh start
 ```
 
-后续 LIO 阶段若恢复该入口，应在 VMware/VM 观测端选择 **「雷达/里程计」**，再点 **「启动 RViz (观测端本地)」**，加载 `config/unilidar_mapping.rviz`：
+或在 VMware cockpit 选择 **「雷达/里程计」** → **「启动定位」** → **「打开定位视图」**，加载 `config/unilidar_mapping.rviz`：
 
 ```text
 Fixed Frame: odom
+CloudRegistered: /cloud_registered
 Odometry: /odom
-Path: /path
-PointCloud2: /cloud_registered
-TF: odom -> base_link -> unilidar_lidar
-Grid
+Path: /odom_path
+TF: enabled（odom -> base_link -> unilidar_lidar -> unilidar_imu）
+RawCloud: disabled
 ```
 
-这里的 `/odom` 由 Jetson 侧 `lio_odom_adapter` 从 Point-LIO 的
-`/aft_mapped_to_init` 适配而来。底盘不可用时，真实移动观测来自 L1 点云 + L1 内置 IMU，不用 `/cmd_vel` 伪造 odom。
-静止验收：`/path` 不乱飞，`/odom`/配准点云有输出。再手动慢速搬车看 path 是否连续。
+`/odom` 由 Jetson 侧 `lio_odom_adapter` 从 Point-LIO 的 `/aft_mapped_to_init` 适配而来。底盘不可用时，真实移动观测来自 L1 点云 + L1 内置 IMU，不用 `/cmd_vel` 伪造 odom。
+2026-07-14 已完成约 35 cm 人工搬运：物理位移可在 RViz 中由 `/odom`、`/odom_path` 和配准点云连续显示，估计位移约 34.9 cm。该结果证明定位观测闭环基本成立，但没有严格地面尺量，不能替代导航级精度验收。
 
+下一步等底盘恢复正常行走后，完成 3～5 米直行、往返和转向测试；通过后再进入台阶识别与相机互补。当前不把短距离搬运结果写成“导航完成”。
 ## 遥控模式
 
 遥控面板参考 `vmware/qt` 的基础遥控模式，保持同一套按键语义：
