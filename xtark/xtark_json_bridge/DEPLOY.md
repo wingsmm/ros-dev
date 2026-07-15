@@ -20,7 +20,7 @@ source devel/setup.bash
 
 推荐用仓库里的 `xtark/scripts/json_stack.sh`（复制到 xtark 后执行）。
 
-复制示例（在 PC / WSL 上，路径按本机仓库调整）：
+复制示例（在开发机终端执行，路径按本机仓库调整）：
 
 ```bash
 scp -r xtark/scripts xtark@192.168.1.168:~/ros_ws/

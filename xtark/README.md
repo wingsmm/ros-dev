@@ -1,8 +1,27 @@
-# xtark Workspace Layout
+# 一代 ROS1：xtark 冻结维护版
 
-This directory keeps robot-side ROS packages separate from deployment helpers.
+`xtark/` 是一代 ROS1 产品线的机器人端权威入口。该产品线由 xtark 真机、VMware ROS1 客户端和 Android RobotCA 组成，现已进入**冻结维护**状态。
 
-## Runtime ROS Packages
+## 冻结基线
+
+| 组件 | 固定基线 | 职责 |
+|---|---|---|
+| xtark 真机 | Jetson Nano、Ubuntu 18.04.5、ROS Melodic | ROS Master、底盘与传感器驱动、SLAM、导航 |
+| VMware | Ubuntu 18.04.5、ROS Melodic、Python 3 + PyQt5 | 纯 ROS1 客户端、RViz、诊断与手动遥控 |
+| Android | RobotCA + rosjava，现有 Gradle/Android SDK 工具链 | 直连真机 ROS Master 的移动客户端 |
+
+冻结后不升级 Ubuntu、ROS、Gradle、Android SDK 或 rosjava，不新增产品功能，不与二代 Jetson ROS2 合并。只接受阻塞性 bug、部署恢复、安全问题和文档纠错；功能扩展必须先明确解除冻结。
+
+## 固定运行入口
+
+| 场景 | 机器人端入口 | 客户端 |
+|---|---|---|
+| Android | `scripts/android_stack.sh` | `../android/`，直接连接 ROS1 Master |
+| VMware | `scripts/pc_stack.sh` | `../vmware/qt/` |
+
+两套机器人端栈互斥，具体启停和冲突规则见 `scripts/README.md`。一代 ROS1 不调用 `jetson/` 下的 ROS2 脚本。
+
+## ROS 运行包
 
 | Path | Responsibility |
 |------|----------------|
@@ -13,7 +32,7 @@ This directory keeps robot-side ROS packages separate from deployment helpers.
 
 Runtime nodes should live inside a ROS package, not in `xtark/scripts/`.
 
-## Robot Deployment Helpers
+## 部署与诊断脚本
 
 | Path | Responsibility |
 |------|----------------|
@@ -24,22 +43,22 @@ Runtime nodes should live inside a ROS package, not in `xtark/scripts/`.
 | `scripts/json_stack.sh` | Starts the PC/Qt JSON bridge validation stack on the robot. |
 | `tools/analyze_laser_odom_bag.py` | Offline rosbag analysis for laser odometry experiments. |
 
-`xtark/scripts/` is for orchestration, deployment, and diagnostics only. It should not contain long-running ROS nodes.
-See `scripts/README.md` for the script entrypoint split.
+`xtark/scripts/` 只放编排、部署和诊断脚本，长期运行节点必须放在 ROS 包内。入口划分见 `scripts/README.md`。
 
-## Client-Side Code
+## 客户端代码
 
-Client applications live outside this directory:
+客户端位于本目录之外：
 
 | Path | Responsibility |
 |------|----------------|
-| `../android/` | Android App source, Gradle build files, and Windows deployment scripts. |
-| `../pc/` | PC/Qt client, ROS2 bridge helpers, and PC-side docs. |
-| `../rk3568/` | RK3568 deployment assets and sensor stack helpers. |
+| `../android/` | 冻结版 Android RobotCA、构建脚本和说明文档。 |
+| `../vmware/` | 冻结版 VMware ROS1/PyQt5 客户端。 |
 
-## Placement Rule
+`jetson/` 属于二代 ROS2 自研产品线，不是本产品线的客户端或升级路径。
+
+## 目录规则
 
 - Robot capability or ROS topic provider: put it in a ROS package under `xtark/`.
 - Remote startup, sync, status, or log collection: put it in `xtark/scripts/` or a client-specific `scripts/` directory.
 - Android-only UI behavior: keep it under `android/`.
-- PC/Qt behavior: keep it under `pc/`.
+- VMware Qt behavior: keep it under `vmware/`.

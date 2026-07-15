@@ -10,7 +10,7 @@
 
 ## 目标与架构
 
-原 `pc/qt_client` 的深度链路较长，卡顿明显。本轮改为使用官方 VMware 开发 VM 作为 ROS1 纯客户端：直连小车 Master，在 VM 本地用 RViz / `image_view` 看流，绕开 PC/WSL 侧桥接。
+原 `pc/qt_client` 的深度链路较长，卡顿明显。本轮改为使用官方 VMware 开发 VM 作为 ROS1 纯客户端：直连小车 Master，在 VM 本地用 RViz / `image_view` 看流，绕开旧 PC 侧桥接。
 
 职责划分：
 

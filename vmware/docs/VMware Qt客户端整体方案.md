@@ -4,8 +4,8 @@
 
 不要把 `qt_stack`、`pc/qt_client`、`pc_stack` 混在一起：
 
-- `pc/qt_client`：PC / WSL 侧旧 Qt 客户端路径。
-- `qt_stack`：对应 PC / WSL Qt 客户端的机器人侧栈，不是本方案主线。
+- `pc/qt_client`：旧 PC Qt 客户端路径。
+- `qt_stack`：对应旧 PC Qt 客户端的机器人侧栈，不是本方案主线。
 - `pc_stack`：对应 VMware Qt 客户端的机器人侧栈，部署并运行在小车 `192.168.1.168`。
 - `vmware/qt`：运行在 VMware `192.168.1.154`，只负责连接、检查、RViz 配置与显示。
 
@@ -21,7 +21,7 @@
 
 - 小车负责启动真实机器人服务。
 - VM 负责连接 ROS Master、检查 topic、打开 RViz。
-- 深度相机优先走 ROS1 topic + RViz Image Display，不绕 Windows / WSL / HTTP / ROS2 Bridge。
+- 深度相机优先走 ROS1 topic + RViz Image Display，不绕 Windows 旧客户端 / HTTP / ROS2 Bridge。
 
 ## 正确分工
 
@@ -434,7 +434,7 @@ cd ~/ros-dev/vmware/qt
 - VMware Qt 不 SSH 到小车。
 - VMware Qt 不启动小车服务。
 - VMware Qt 不依赖 VM 本地 `pc_stack.sh`。
-- 小车侧 `pc_stack` 与 PC/WSL 的 `qt_stack` 不要混用。
+- 小车侧 `pc_stack` 与旧 PC 客户端的 `qt_stack` 不要混用。
 
 ## 深度相机卡顿验证方案
 
@@ -472,7 +472,7 @@ cd ~/ros-dev/vmware/qt
 
 判断：
 
-- VM + `rviz_depth_light.rviz` 流畅：说明 PC/WSL Qt 链路大概率是卡顿主因。
+- VM + `rviz_depth_light.rviz` 流畅：说明旧 PC Qt 链路大概率是卡顿主因。
 - VM 也卡：优先排查小车相机驱动、USB、topic 发布频率、VMware 软件渲染。
 - 只开 PointCloud/DepthCloud 才卡：默认配置不得启用点云。
 

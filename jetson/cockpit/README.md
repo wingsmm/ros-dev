@@ -1,6 +1,6 @@
 # cockpit - PC/VMware Jetson Qt 控制台
 
-`jetson/cockpit/` 是跑在 PC 观测端的 Qt 上位机，不部署到 Jetson。当前 L1/RViz 观测闭环只认 VMware/VM 侧验证；WSL 曾出现 DDS multicast/discovery 问题，不作为阶段一验收路径。
+`jetson/cockpit/` 是运行在 VMware 观测端的 Qt 上位机，不部署到 Jetson。当前 L1/RViz 观测闭环只认 VMware 侧验证。
 
 当前阶段：
 
@@ -48,7 +48,7 @@ cockpit/
   scripts/
     start_unilidar_rviz.sh       无 Qt 时一键 RViz2
     stop_unilidar_rviz.sh
-    verify_cmd_vel_bridge.sh     WSL 本机冒烟脚本（不替代远端验收）
+    verify_cmd_vel_bridge.sh     旧本机冒烟脚本（不作为支持入口）
     cmd_vel_sender.py            CLI 调试：发一次 /cmd_vel
     control_action_echo.py       CLI 调试：监听 /vehicle/control_action
 ```
@@ -283,23 +283,7 @@ PointCloud2: /unilidar/cloud
 RViz 目视点云已确认
 ```
 
-WSL 侧曾出现 DDS 发现问题，因此不作为阶段一验收路径：
-
-```text
-WSL eth1=172.0.0.52/24
-Jetson=172.0.0.82
-ip route get 172.0.0.82 -> dev eth1 src 172.0.0.52
-ros2 topic list -> only /parameter_events, /rosout
-```
-
-`ros2 multicast` 双向测试也未收到：
-
-```text
-WSL ros2 multicast send    -> Jetson receive: not received
-Jetson ros2 multicast send -> WSL receive: not received
-```
-
-因此 WSL 问题不是 L1 硬件、串口、SSH、colcon 或 RViz 配置问题，而是 Windows/WSL 与 Jetson 之间的 ROS2 DDS discovery/multicast 环境问题。它不作为阶段一阻塞项；`jetson/cockpit` 的 L1/RViz 现阶段只在 VMware/VM 观测端验证。后续若要让 cockpit 在 WSL 里稳定一键看点云，再单独恢复 multicast 或改用 FastDDS Discovery Server。
+历史 DDS 观测端故障已经归档到 [../docs/archive/历史-DDS观测端排障记录.md](../docs/archive/历史-DDS观测端排障记录.md)。当前不再维护其他 cockpit/RViz 运行环境。
 
 ### L1 安装方向（卧放）与坐标轴对齐（重要）
 
@@ -410,7 +394,7 @@ python3 scripts/control_action_echo.py
 
 ## 验收边界
 
-`cockpit/` 只运行在 PC/VMware 观测端，不部署到 Jetson。雷达驱动编译与 topic 验证**只认远端 Jetson**；本机 WSL 不做 `mirror/ros2_ws` 的 `colcon build` 作为雷达验收依据，当前 L1/RViz 观测只认 VMware/VM 侧闭环。
+`cockpit/` 只运行在 VMware 观测端，不部署到 Jetson。雷达驱动编译与 topic 验证**只认远端 Jetson**；任何本机构建都不作为雷达验收依据，L1/RViz 观测只认 VMware 侧闭环。
 
 ### 改哪里要部署
 
@@ -452,23 +436,6 @@ VMware/VM -> cockpit 雷达面板 / rviz2（config/unilidar.rviz）
 3. 面板或 CLI：cloud ~9Hz、imu 高频。
 
 `/odom`、`/odom_path`、`/cloud_registered`、TF 链完整性属于后续 LIO / TF 阶段，不作为 L1 原始点云阶段的验收条件。观测端可用 `ros2 topic hz /unilidar/cloud` 辅助确认；最终以 Jetson 侧频率、观测端 topic discovery、RViz 目视三者共同为准。
-
-## 本机冒烟（仅控制 bridge 包）
-
-复杂 ROS2 命令不要在 PowerShell 里拼一行；按 `remote/` 的约定，放进 WSL
-脚本执行。本脚本只用于推远端前快速发现明显问题：
-
-```powershell
-wsl -d Ubuntu-22.04 -- bash /mnt/d/Downloads/work/ros-dev/jetson/cockpit/scripts/verify_cmd_vel_bridge.sh
-```
-
-预期最后一行：
-
-```text
-VERIFY_CMD_VEL_BRIDGE_OK
-```
-
-如果本机冒烟通过，只说明 bridge 包语法/本机 DDS 基本可用；跨机控制与雷达观测仍以远端 Jetson + VMware/VM RViz 为准。
 
 ## 当前边界
 

@@ -10,7 +10,7 @@ COM 电机）。当前 `cmd_vel_car_web_bridge` 只做 dry-run，打印
 ## 目标链路
 
 ```text
-PC/WSL cockpit
+VMware cockpit
   -> ROS2 /cmd_vel                                      (已通)
 Jetson ~/qt/ros2_ws
   -> cmd_vel_car_web_bridge

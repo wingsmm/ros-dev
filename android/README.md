@@ -2,6 +2,22 @@
 
 This directory contains the Android/RobotCA source tree, local build tools, APK outputs, and app-specific documentation.
 
+> **Product status: ROS1 generation 1 frozen maintenance release.** The authoritative product baseline is [xtark/README.md](../xtark/README.md). This app continues to connect directly to the xtark ROS1 Master and does not use the Jetson ROS2 stack.
+
+## Frozen Toolchain
+
+| Item | Version |
+|---|---|
+| Gradle | 2.2.1 |
+| Android Gradle Plugin | 1.5.0 |
+| rosjava buildscript | Indigo branch, current vendored/local dependency set |
+| compileSdk | 25 |
+| targetSdk | 23 |
+| minSdk | 15 |
+| default app version | `1.0-xtark` (`versionCode=2`) |
+
+Do not upgrade this toolchain as routine maintenance. Only blocking fixes, deployment recovery, security fixes, and documentation corrections are accepted unless the ROS1 product line is explicitly unfrozen.
+
 ## Layout
 
 | Path | Responsibility |

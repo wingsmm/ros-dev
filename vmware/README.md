@@ -2,6 +2,8 @@
 
 塔克官方 VMware 虚拟开发机 `xtark-vmpc`（`192.168.1.154`，Ubuntu 18.04 + ROS Melodic）在本仓库的落地目录。
 
+> **产品状态：一代 ROS1 冻结维护版。** 版本基线与维护规则见 [xtark/README.md](../xtark/README.md)。本目录不升级 ROS/Ubuntu/PyQt，不接入二代 Jetson ROS2。
+
 职责与真机 `xtark-robot`（`192.168.1.168`）严格分开：VM 只做**纯客户端**（本地 RViz + topic 诊断 + 手动 `/cmd_vel` 遥控），不跑 roscore、不跑相机 / 雷达驱动。ROS Master 由真机侧的 `pc_stack` 提供，VM 通过 `ROS_MASTER_URI=http://192.168.1.168:11311` 加入。
 
 ## 目录结构

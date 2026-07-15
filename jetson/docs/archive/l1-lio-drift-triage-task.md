@@ -1,7 +1,6 @@
-# Unitree L1 / Point-LIO 漂移混乱记录与排查任务书
+# 历史：Unitree L1 / Point-LIO 漂移混乱记录与排查任务书
 
-> **状态（2026-07-08）**：下文描述的自研整栈（`ros2_stack` / `lio_odom_adapter` 等）已从 `jetson/mirror/ros2_ws` 与远端 `~/qt/ros2_ws` **撤回**。  
-> 改版代码归档在仓库根 `other/ros2_ws/`（不入库）。本文仅作漂移排查经验参考，**不要**再按文中 `jetson.sh ros2 start` 当日常入口。
+> **历史状态（2026-07-08）**：本文描述的是当时已经撤回的旧整栈，只用于追溯排障过程。当前日常入口和验收边界以 `jetson/docs/宇树L1对接方案.md` 为准；不要按本文命令部署或启动当前系统。文中的 WSL 只代表当时的历史观测端，现已废弃。
 
 本文记录 Jetson 上 Unitree L1 雷达、Point-LIO、`lio_odom_adapter`、WSL RViz/cockpit 之间的边界和排查方法。
 

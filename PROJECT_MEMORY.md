@@ -5,7 +5,7 @@ This file is no longer the primary instruction source for Codex or other agents.
 Use these canonical locations instead:
 
 - `AGENTS.md` - Codex working rules, search policy, Windows/encoding cautions, Git/review expectations, and safety boundaries.
-- `pc/README.md` and `pc/docs/` - PC/Qt/ROS2 workflow, WSL2 notes, camera/depth behavior, mapping, and related architecture docs.
+- `pc/README.md` and `pc/docs/archive/` - retired PC/Qt/ROS2 experiments and historical architecture notes; not an active product line.
 - `xtark/docs/` - xtark robot-side behavior, ROS1/JSON adapter notes, scripts, experiments, and chassis-side contracts.
 - `android/docs/` - Android/RobotCA behavior, MuMu workflow, SLAM/navigation notes, and app-specific docs.
 - `rk3568/docs/` and `rk3568/deploy/` - RK3568 sensor stack deployment and sensor-side notes.

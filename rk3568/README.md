@@ -85,7 +85,7 @@ docs/README.md
 deploy/README.md
 ```
 
-跨设备联调、底盘 JSON 协议和 WSL2 方案统一放在：
+跨设备联调和旧底盘 JSON 方案已经归档在：
 
 ```text
 ../pc/docs/

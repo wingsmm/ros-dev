@@ -8,7 +8,7 @@
 | 日期 | 文件 | 摘要 |
 |------|------|------|
 | 2026-07-08 | [todo-20260708.md](./todo-20260708.md) | VMware Qt 雷达/里程计联调口径收口；Jetson L1 自研整链撤回，改版归档 `other/ros2_ws`，mirror 拉回远端原版 |
-| 2026-07-07 | [todo-20260707.md](./todo-20260707.md) | Jetson 82 `~/qt/ros2_ws` 首次编译；cockpit ↔ Jetson 跨机 DDS 干跑控制链路打通；car_web 只读探测 + 对接方案 |
+| 2026-07-07 | [archive/todo-20260707.md](./archive/todo-20260707.md) | 历史 PC 联调记录，相关方案已退出当前两代产品线 |
 | 2026-07-06 | [todo-20260706.md](./todo-20260706.md) | VMware Qt「雷达/里程计」`/odom` 默认可见；teleop bridge 持续发布修复；IP 全局迁 168；VM 部署与真机联调 |
 
 ## 使用约定

@@ -40,12 +40,11 @@ rg -n "keyword" `
 
 ## Remote Access
 
-- For Jetson / VMware / ROS2 runtime checks in this workspace, use the known-good path: Codex/WSL -> SSH -> Jetson or VMware. This path has worked before; do not describe it as "the user manually proved WSL works".
-- If the current Codex tool session cannot enter that previously working WSL context, state the limitation exactly: "this Codex tool session cannot enter the known-good WSL context right now." Do not say or imply that WSL is unavailable on the machine.
-- For source, script, docs, and Chinese-text inspection, prefer WSL. If WSL is not reachable from the current tool session, use Git Bash or another UTF-8-safe reader. Do not use PowerShell `Get-Content` output to judge Chinese text corruption.
-- For shell script syntax checks, prefer WSL `bash`. If WSL is not reachable, Git Bash `bash -n` is acceptable for local syntax checks only; it is not Jetson/VM runtime validation.
-- Treat Windows-side `wsl.exe` failures in Codex as tool-context limitations, not proof that the known-good WSL remote workflow is broken.
-- Do not keep trying Windows OpenSSH password workarounds for Jetson/VM when WSL is the intended access path unless the user explicitly asks.
+- WSL is not a project runtime, build, DDS, RViz, deployment, or validation environment. Do not direct users to run either product line in WSL.
+- Codex may use `Codex -> WSL -> SSH -> Jetson/VMware` only as an optional network transport when that path is available. WSL transport success is not runtime validation; evidence must come from the actual Jetson, xtark robot, or VMware target.
+- Use repository-provided Windows/Git Bash helpers, native SSH, or plink according to the target's documented entrypoint. Do not invent a new WSL-based daily workflow.
+- For source, script, docs, and Chinese-text inspection, use Git Bash or another UTF-8-safe reader. Do not use PowerShell `Get-Content` output to judge Chinese text corruption.
+- For local shell-script syntax checks, use Git Bash `bash -n`. A local syntax check is not Jetson/VMware runtime validation.
 
 ## Documentation And Architecture
 

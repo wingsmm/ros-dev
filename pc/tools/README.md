@@ -12,7 +12,7 @@ python send_cmd_vel_json.py --host 192.168.1.168 --linear-x 0.10 --duration 2
 
 ## 链路检查
 
-检查 WSL2 / PC 到 xtark JSON 和 RK3568 的基础网络：
+检查旧 PC 联调环境到 xtark JSON 和 RK3568 的基础网络：
 
 ```bash
 python check_links.py

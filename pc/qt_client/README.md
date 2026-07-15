@@ -1,6 +1,6 @@
 # xtark Console / PC Qt Client
 
-`pc/qt_client` 是 PC / WSL2 侧的机器人联调入口。**默认入口**为新版机器人 Shell（机器人选择、工作区、摄像头、里程计对照等）。
+`pc/qt_client` 是已退役的 PC 联调客户端，只保留历史代码追溯，不再作为当前产品入口。当前入口见仓库根 `README.md`。
 
 > legacy 旧调试台已 **deprecated**，不再承载新功能；仅作历史对照，且需 `XTARK_ALLOW_LEGACY=1` 才能启动（见文末说明）。
 
@@ -78,7 +78,7 @@ QT_WARNING_MIN_VALID_RANGE_M=0.25       # 近距离噪点过滤阈值，单位 m
 
 若只想临时看黄线形状，使用 `trapezoid`；若要验证真实贴地投影，切到 `geometric` 并先校准 `CAMERA_X/Y/Z/PITCH` 与深度内参。
 
-WSL 下也可使用绝对路径，例如 `XTARK_LOG_DIR=/home/<user>/xtark-logs`。
+历史 Linux 环境也可使用绝对路径，例如 `XTARK_LOG_DIR=/home/<user>/xtark-logs`。
 
 配置优先级：进程环境变量 > `pc/qt_client/.env` > 默认值。默认保留最近 30 个自然日的 `xtark-console-*.log`；不匹配该命名规则的文件不会被自动删除。
 
@@ -345,7 +345,7 @@ ManualControlStrip
 
 ## legacy 调试台（deprecated，冻结）
 
-**不要在此添加新功能。** 新控制、遥测、地图比对、SLAM 相关能力一律进 `ui/` 新 shell，算法进程将来由 PC/WSL ROS2 sidecar 承担（见 `pc/docs/控制端与ROS2硬件平台架构方案.md`）。
+**不要在此添加新功能。** 该客户端及相关 sidecar 方案已经归档；新工作进入一代 ROS1 的冻结维护入口或二代 Jetson ROS2 主线。
 
 仅在必须对照旧 ROS2 调试行为时，可临时启用：
 

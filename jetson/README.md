@@ -9,19 +9,15 @@ jetson/
   cockpit/   PC/VMware 上位机（永不部署到 Jetson）
 ```
 
-> **2026-07-08 回退说明**：自研「雷达整链」（bridge + unilidar_stack + Point-LIO + adapter）方向做错，已撤出工作区。  
-> - 远端 `~/qt/ros2_ws` 已恢复为从 `~/ros2_ws` 拷回的**原版**（仅官方/同事侧包，**无** `scripts/`）。  
-> - 本地改过的完整链路已迁到仓库根 `other/ros2_ws/`（`.gitignore` 忽略，不入库）。  
-> - `jetson/mirror/ros2_ws` 已 `pull` 对齐远端原版。  
-> 日常不要再把 `jetson.sh ros2 start` 当成完整观测栈入口（远端已无 `scripts/ros2_stack.sh`）。
+> **产品状态：二代 ROS2 当前开发主线。** Unitree L1、点云对齐、Point-LIO、`lio_odom_adapter` 和 cockpit 一键定位已经形成短距离观测闭环。当前卡点是底盘改进，不是雷达、DDS 或 RViz；底盘恢复正常行走后再做 3～5 米验收、台阶识别与相机互补。
 
 ## 关系图
 
 ```text
         [PC / VMware]                            [Jetson  ~/qt/]
 
-        cockpit/  ── HTTP / ROS2 DDS ─────────►   car_web/   (副本, 来自同事)
-           │                                      ros2_ws/   (当前=原版镜像)
+        cockpit/  ── SSH / ROS2 DDS ──────────►   car_web/   (副本, 来自同事)
+           │                                      ros2_ws/   (L1 / LIO / adapter)
            │
         mirror/car_web/  ◄── pull ── rsync ────   car_web/
         mirror/ros2_ws/  ◄── pull / push ─────►  ros2_ws/
@@ -33,7 +29,7 @@ jetson/
 |---|---|---|---|---|
 | `scripts/jetson.sh` | 本仓库 | PC | — | connect / probe / pull / push / \<remote cmd\> |
 | `mirror/car_web/` | 同事 Flask 副本 | 尽量对齐同事版本 | 双向（当前手工） | 相对同事仅端口 + `config/` 差异；不是 fork 分支 |
-| `mirror/ros2_ws/` | 原版（unitree / point_lio / 示例包） | 以远端为准 | **先 pull 对齐**；改代码后再 push | 自研整链不在此目录，见 `other/ros2_ws` |
+| `mirror/ros2_ws/` | 官方包 + 本项目 L1/LIO 适配 | 本仓库 | 改代码后 push / build | Unitree L1、Point-LIO、TF、cloud align、odom adapter 与运行脚本 |
 | `cockpit/` | 自己 | PC / VMware | 无 | 控制 / SLAM / 算法；L1/RViz 当前只认 VMware 观测端验证，见 [cockpit/README.md](cockpit/README.md) |
 
 ## `.env`（不入库，不做示例）
@@ -52,15 +48,7 @@ jetson/
 
 ## 常用命令
 
-本目录的运维入口统一用 **WSL / Git Bash** 执行。不要在 PowerShell 里直接拼
-`source ... && colcon ...`、SSH 远端长命令或 ROS2 命令；PowerShell 最多只作为
-启动 WSL 的外壳：
-
-```powershell
-wsl -d Ubuntu-22.04 -- bash -lc "cd /mnt/d/Downloads/work/ros-dev && bash jetson/scripts/jetson.sh probe"
-```
-
-进入 WSL 后推荐直接使用下面这些命令：
+本目录的仓库脚本从 Git Bash 或其他兼容 Bash 环境执行。项目运行、构建、DDS、RViz 和验收只认 Jetson 与 VMware 目标机。复杂远端 ROS2 命令应固化在仓库脚本中，不在 PowerShell 里临时拼接。
 
 ```bash
 # 探远端环境（只读）
@@ -78,21 +66,29 @@ bash jetson/scripts/jetson.sh
 bash jetson/scripts/jetson.sh 'ros2 topic list'
 ```
 
-## ROS2 / L1 现状（2026-07-08 回退后）
+## ROS2 / L1 现状（2026-07-14）
 
-`mirror/ros2_ws/src/` 当前只有原版包：
+当前定位观测链路：
 
 ```text
-my_motor_ctrl / my_py_pkg          # 示例
-unitree_lidar_ros2 / unitree_lidar_sdk
-point_lio_ros2                     # 官方 Point-LIO（有则用官方 launch，勿自造整栈）
+unitree_lidar_ros2
+  -> /unilidar/cloud + /unilidar/imu
+  -> Point-LIO
+  -> /aft_mapped_to_init + /cloud_registered
+  -> lio_odom_adapter
+  -> /odom + /odom_path + TF odom->base_link
+  -> VMware cockpit / RViz
 ```
 
-自研整链（`ros2_stack.sh`、`cmd_vel_car_web_bridge`、`lio_odom_adapter` 等）在 `other/ros2_ws/`，**不是**当前 `mirror` 入口。
+已确认：
 
-雷达第一阶段建议按[宇树官方文档](https://support.unitree.com/home/zh/L1_SDK/L1_Use_unilidar_ros2)在 Jetson 上直接 `ros2 launch` 官方包，本仓库只做同步与观测，不再维护自造 `ros2 start` 全栈。
+- L1 原始点云和内置 IMU 正常发布。
+- 点云卧放基准、车体对齐和现场 trim 已接入 cockpit。
+- Point-LIO、`/odom`、`/odom_path` 和 `odom->base_link` 已在 Jetson/VMware 验证有数据。
+- 约 35 cm 人工搬运时，物理位移可在 RViz 连续显示，估计位移约 34.9 cm。
+- 该结果只证明短距离定位观测闭环，不代表导航级精度、回环或自主导航已经完成。
 
-相关问题排查笔记（**参考用，非日常入口**）：[docs/l1-lio-drift-triage-task.md](docs/l1-lio-drift-triage-task.md)。
+当前等待底盘改进。底盘能够稳定行走后，先完成 3～5 米直行、往返、转向和漂移验收，再进入台阶识别与相机互补。权威阶段说明见 [docs/宇树L1对接方案.md](docs/宇树L1对接方案.md)。历史 LIO 排障记录位于 `docs/archive/`，不是日常操作入口。
 
 ## Unitree L1 最小观测：Jetson 采点云 + VMware RViz2
 
@@ -103,7 +99,7 @@ VMware/PC rviz2
   -> Fixed Frame=unilidar_lidar，PointCloud2=/unilidar/cloud
 ```
 
-2026-07-09 阶段一已通过：Jetson 侧 `/unilidar/cloud` 约 8.76 Hz、`/unilidar/imu` 约 246 Hz；VM `172.0.0.87` 作为观测端已看到 topic、Hz 和 RViz 点云。WSL 曾出现 DDS multicast/discovery 问题，不作为 L1 阶段一验收路径；后续 cockpit 体验若要回到 WSL，再单独修 WSL/Windows DDS。
+2026-07-09 阶段一已通过：Jetson 侧 `/unilidar/cloud` 约 8.76 Hz、`/unilidar/imu` 约 246 Hz；VMware 观测端已看到 topic、Hz 和 RViz 点云。VMware 是当前 cockpit/RViz 唯一支持的观测环境。
 
 ### 固定串口别名（推荐）：`/dev/unilidar_lidar`
 
