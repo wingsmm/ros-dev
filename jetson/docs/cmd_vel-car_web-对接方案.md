@@ -1,8 +1,12 @@
 # cmd_vel → car_web HTTP 对接方案
 
-Jetson `~/qt/car_web/main.py` 已经在 8080 上跑着（stdlib `HTTPServer`，直接驱动
-COM 电机）。当前 `cmd_vel_car_web_bridge` 只做 dry-run，打印
+Jetson `~/qt/car_web/main.py` 在 8080 上提供 HTTP（stdlib `HTTPServer`，直接驱动
+串口电机）。该目录是从同事原项目 `~/newCarProject` 拷入的工作副本。
+当前 `cmd_vel_car_web_bridge` 只做 dry-run，打印
 `CONTROL_ACTION=…` 后回显 `/vehicle/control_action`，不发 HTTP、不动车。
+
+底盘串口拓扑、驱动器型号与 Modbus 约定见
+[car_web-底盘硬件总线.md](./car_web-底盘硬件总线.md)。
 
 本文档规划把 bridge 从 dry-run 升级为「可选调用 car_web」的实现路径，分三步。
 每一步都可以停在原地。

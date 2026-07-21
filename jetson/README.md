@@ -16,11 +16,13 @@ jetson/
 ```text
         [PC / VMware]                            [Jetson  ~/qt/]
 
-        cockpit/  ── SSH / ROS2 DDS ──────────►   car_web/   (副本, 来自同事)
+        cockpit/  ── SSH / ROS2 DDS ──────────►   car_web/   (从 ~/newCarProject 拷入)
            │                                      ros2_ws/   (L1 / LIO / adapter)
            │
         mirror/car_web/  ◄── pull ── rsync ────   car_web/
         mirror/ros2_ws/  ◄── pull / push ─────►  ros2_ws/
+
+        同事原项目（勿改）: ~/newCarProject  →  cp →  ~/qt/car_web
 ```
 
 ## 三个组件
@@ -28,7 +30,7 @@ jetson/
 | 目录 | 谁的代码 | 主开发在哪 | 同步方向 | 说明 |
 |---|---|---|---|---|
 | `scripts/jetson.sh` | 本仓库 | PC | — | connect / probe / pull / push / \<remote cmd\> |
-| `mirror/car_web/` | 同事 Flask 副本 | 尽量对齐同事版本 | 双向（当前手工） | 相对同事仅端口 + `config/` 差异；不是 fork 分支 |
+| `mirror/car_web/` | 同事底盘控制副本 | 尽量对齐 `~/newCarProject` | 双向（当前手工） | 源在 `~/newCarProject`，工作副本在 `~/qt/car_web`；硬件总线见 [docs/car_web-底盘硬件总线.md](docs/car_web-底盘硬件总线.md) |
 | `mirror/ros2_ws/` | 官方包 + 本项目 L1/LIO 适配 | 本仓库 | 改代码后 push / build | Unitree L1、Point-LIO、TF、cloud align、odom adapter 与运行脚本 |
 | `cockpit/` | 自己 | PC / VMware | 无 | 控制 / SLAM / 算法；L1/RViz 当前只认 VMware 观测端验证，见 [cockpit/README.md](cockpit/README.md) |
 
@@ -136,6 +138,6 @@ ls -la /dev/unilidar_lidar
 
 ## 目录约束
 
-- 远端 `~/newCarProject` 和 `~/ros2_ws` **一根手指都不碰**（那是同事的目标接口）。所有工作都发生在 Jetson `~/qt/` 下。
+- 远端 `~/newCarProject` 和 `~/ros2_ws` **一根手指都不碰**（那是同事的目标接口；`~/qt/car_web` 即从 `~/newCarProject` 拷来）。所有工作都发生在 Jetson `~/qt/` 下。底盘串口/驱动器见 [docs/car_web-底盘硬件总线.md](docs/car_web-底盘硬件总线.md)。
 - `cockpit/` **不推**到 Jetson，任何时候都别 push 它。
 - `mirror/` 下的中间产物（`__pycache__` / `.venv` / `log/` / `build/` / `install/`）不入库，见 `.gitignore`。
