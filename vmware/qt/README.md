@@ -72,6 +72,7 @@ cd ~/ros-dev/vmware/qt && ./run.sh
 | `ROS_IP` | VM 本机 IP（可选，不设则自动检测） |
 | `XTARK_LINEAR_SPEED` / `XTARK_ANGULAR_SPEED` | 遥控线/角速度 |
 | `CAMERA_POINTCLOUD_STRIDE` 等 | 深度点云稀疏度（同 pc-client） |
+| `CAMERA_INFO_MAX_AGE_S` | 深度与 CameraInfo 硬拒绝时间差；默认 `0`（只告警不丢帧，适配 Astra 闩锁 CameraInfo） |
 | `CAMERA_X` … `CAMERA_YAW` | 相机外参（同 pc-client） |
 
 VMware 专用：
@@ -103,7 +104,12 @@ RViz 由 Qt 在本机 `rviz -d config/*.rviz` 启动。
 | `/vmware_depth_view` | `/camera/depth/image_raw` |
 | `/vmware_depth_preview_view` | `/camera/depth/preview`（仅深度增强） |
 
-深度增强还会在 VM 本地运行 `depth_image_proc/point_cloud_xyz`，发布 `/vmware/depth/points`（不增加小车算力）。
+深度增强还会在 VM 本地运行
+`scripts/sparse_depth_pointcloud.py`，发布 `/vmware/depth/points`（不增加小车算力）。
+
+隔离近场实验的正式阶段 A 由 `astra_nearfield_ros1/camera_tf.launch`
+唯一发布相机 TF。此时启动 Qt 前必须设置 `CAMERA_TF_ENABLE=0`，机器人侧使用
+`pc_stack.sh camera-nearfield-start`，避免 Astra 驱动与 Qt 重复发布 TF。
 
 停止 RViz 时，Qt 按顺序停止 preview view、RGB/Depth view、点云进程、RViz。
 
@@ -153,7 +159,7 @@ RViz 由 Qt 在本机 `rviz -d config/*.rviz` 启动。
 | Master 不可达 | 小车上 `pc_stack camera-start` 或 `full-start` |
 | 深度增强无 preview | 小车须 `pc_stack camera-deep-start`，不是 `camera-start` |
 | `which rviz` 失败 | `sudo apt install ros-melodic-rviz` |
-| 点云进程立即退出 | `sudo apt install ros-melodic-depth-image-proc` |
+| 点云进程立即退出 | 检查 `scripts/sparse_depth_pointcloud.py` 日志、NumPy 和输入 encoding/CameraInfo |
 | 深度无 publisher | 小车 `pc_stack camera-check` |
 | 深度轻量中间 3D 区域黑屏 | 正常；该模式不启用 Grid/点云，只看 Image / image_view |
 | 点云竖起/飞天 | 优先查 TF：`base_link→camera_link→optical`；深度增强会启 VM static TF |

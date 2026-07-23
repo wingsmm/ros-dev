@@ -4,6 +4,11 @@
 
 > **产品状态：一代 ROS1 冻结维护版。** 版本基线与维护规则见 [xtark/README.md](../xtark/README.md)。本目录不升级 ROS/Ubuntu/PyQt，不接入二代 Jetson ROS2。
 
+`ros_ws/src/astra_nearfield_ros1` 是冻结产品线之外的隔离深度感知实验入口。
+阶段 A 只负责实测外参、严格相机 TF 所有权和点云验收，不接导航或控制；
+未取得 VM/真机证据前统一标记为
+`IMPLEMENTED LOCALLY — NOT RUNTIME VALIDATED`。
+
 职责与真机 `xtark-robot`（`192.168.1.168`）严格分开：VM 只做**纯客户端**（本地 RViz + topic 诊断 + 手动 `/cmd_vel` 遥控），不跑 roscore、不跑相机 / 雷达驱动。ROS Master 由真机侧的 `pc_stack` 提供，VM 通过 `ROS_MASTER_URI=http://192.168.1.168:11311` 加入。
 
 ## 目录结构

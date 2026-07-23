@@ -14,6 +14,16 @@ remote/
 plj/third/
 ros_ws/
 
+# Track only the isolated VMware near-field experiment packages.
+!vmware/ros_ws/
+vmware/ros_ws/*
+!vmware/ros_ws/src/
+vmware/ros_ws/src/*
+!vmware/ros_ws/src/astra_nearfield_core/
+!vmware/ros_ws/src/astra_nearfield_core/**
+!vmware/ros_ws/src/astra_nearfield_ros1/
+!vmware/ros_ws/src/astra_nearfield_ros1/**
+
 # ===== Python =====
 __pycache__/
 *.py[cod]

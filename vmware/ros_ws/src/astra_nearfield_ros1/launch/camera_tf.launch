@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="extrinsics_file"
+       default="$(find astra_nearfield_ros1)/config/astra_extrinsics.yaml" />
+  <arg name="reuse_existing_tf" default="false" />
+  <arg name="allow_provisional" default="false" />
+  <arg name="preflight_duration_s" default="1.5" />
+
+  <node pkg="astra_nearfield_ros1"
+        type="camera_tf_guard.py"
+        name="astra_camera_tf_guard"
+        output="screen"
+        required="true">
+    <rosparam command="load" file="$(arg extrinsics_file)" />
+    <param name="reuse_existing_tf" value="$(arg reuse_existing_tf)" />
+    <param name="allow_provisional" value="$(arg allow_provisional)" />
+    <param name="preflight_duration_s" value="$(arg preflight_duration_s)" />
+  </node>
+</launch>

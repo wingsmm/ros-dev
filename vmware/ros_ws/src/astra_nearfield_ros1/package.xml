@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>astra_nearfield_ros1</name>
+  <version>0.1.0</version>
+  <description>ROS1 wrapper and strict camera TF ownership for isolated Astra near-field experiments.</description>
+
+  <maintainer email="maintainer@example.com">ros-dev maintainer</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+
+  <export />
+</package>

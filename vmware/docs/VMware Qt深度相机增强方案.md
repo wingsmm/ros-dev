@@ -4,6 +4,12 @@
 
 ## 结论
 
+> 本文中的「阶段 A」是历史上的 depth preview 阶段，不等于后续
+> `astra_nearfield_ros1` 实验的「阶段 A：实验台封板」。近场实验使用
+> `camera-nearfield-start`，禁止驱动和 Qt 发布相机 TF，由
+> `camera_tf.launch` 严格独占两条相机 TF 边。该实验当前仅完成本地实现，
+> 尚未获得 VM/真机运行验收。
+
 建议做 **阶段 A + 阶段 B**，但分两个提交、两个验收点：
 
 1. 阶段 A：小车侧 `pc_stack camera-deep-*`，只增加深度伪彩色 preview topic。

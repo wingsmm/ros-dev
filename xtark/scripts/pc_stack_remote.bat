@@ -24,6 +24,10 @@ if /I "%CMD%"=="camera-start" goto :stack
 if /I "%CMD%"=="camera-stop" goto :stack
 if /I "%CMD%"=="camera-status" goto :stack
 if /I "%CMD%"=="camera-check" goto :stack
+if /I "%CMD%"=="camera-nearfield-start" goto :stack
+if /I "%CMD%"=="camera-nearfield-stop" goto :stack
+if /I "%CMD%"=="camera-nearfield-status" goto :stack
+if /I "%CMD%"=="camera-nearfield-check" goto :stack
 if /I "%CMD%"=="camera-deep-start" goto :stack
 if /I "%CMD%"=="camera-deep-stop" goto :stack
 if /I "%CMD%"=="camera-deep-status" goto :stack
@@ -50,6 +54,8 @@ echo Usage: pc_stack_remote.bat [deploy^|camera-start^|radar2d-start^|full-start
 echo.
 echo   deploy        Sync pc_stack scripts to robot (%XTARK_HOST%)
 echo   camera-start       pc_stack camera-start (RGB + depth raw, no preview)
+echo   camera-nearfield-start  depth raw with Astra publish_tf disabled
+echo   camera-nearfield-stop / camera-nearfield-status / camera-nearfield-check
 echo   camera-deep-start  camera + depth_preview (/camera/depth/preview)
 echo   camera-deep-stop / camera-deep-status / camera-deep-check
 echo   radar2d-start pc_stack radar2d-start on robot

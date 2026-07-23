@@ -29,6 +29,7 @@ CAMERA_PKG="${CAMERA_PKG:-xtark_driver}"
 CAMERA_LAUNCH="${CAMERA_LAUNCH:-xtark_camera.launch}"
 DEPTH_CAMERA_PKG="${DEPTH_CAMERA_PKG:-xtark_depth_preview}"
 DEPTH_CAMERA_LAUNCH="${DEPTH_CAMERA_LAUNCH:-astra_depth_only.launch}"
+DEPTH_CAMERA_PUBLISH_TF="${DEPTH_CAMERA_PUBLISH_TF:-1}"
 DEPTH_INPUT_TOPIC="${DEPTH_INPUT_TOPIC:-/camera/depth/image_raw}"
 QT_RGB_TOPIC="${QT_RGB_TOPIC:-/camera/image_raw}"
 ASTRA_RGB_TOPIC="${ASTRA_RGB_TOPIC:-/camera/rgb/image_raw}"
@@ -61,6 +62,7 @@ Does NOT start JSON bridge, HTTP depth, RViz, or teleop.
 
 Commands:
   camera-start / camera-stop / camera-status / camera-check
+  camera-nearfield-start / camera-nearfield-stop / camera-nearfield-status / camera-nearfield-check
   camera-deep-start / camera-deep-stop / camera-deep-status / camera-deep-check
   radar2d-start / radar2d-stop / radar2d-status / radar2d-check
   full-start / full-stop / full-status / full-check
@@ -131,6 +133,17 @@ pc_resolve_profile() {
       CAMERA_MODE=rgb_depth
       RGB_SOURCE="${RGB_SOURCE:-auto}"
       ;;
+    camera_nearfield)
+      BRINGUP_ENABLE=1
+      BRINGUP_WAIT_SCAN=0
+      BRINGUP_WAIT_ODOM_RAW=0
+      CAMERA_ENABLE=1
+      DEPTH_CAMERA_ENABLE=1
+      DEPTH_CAMERA_PUBLISH_TF=0
+      DEPTH_PREVIEW_ENABLE=0
+      CAMERA_MODE=rgb_depth
+      RGB_SOURCE="${RGB_SOURCE:-auto}"
+      ;;
     radar2d)
       BRINGUP_ENABLE=1
       BRINGUP_WAIT_SCAN=1
@@ -150,7 +163,7 @@ pc_resolve_profile() {
       RGB_SOURCE="${RGB_SOURCE:-auto}"
       ;;
     *)
-      echo "[ERR] invalid PROFILE=$PROFILE (use camera|camera_deep|radar2d|full)"
+      echo "[ERR] invalid PROFILE=$PROFILE (use camera|camera_nearfield|camera_deep|radar2d|full)"
       return 1
       ;;
   esac
@@ -328,14 +341,51 @@ pc_stop_rgb_camera() {
   pkill -f "roslaunch ${CAMERA_PKG} ${CAMERA_LAUNCH}" 2>/dev/null || true
 }
 
+pc_depth_publish_tf_stamp() {
+  echo "$PID_DIR/depth_camera_publish_tf"
+}
+
+pc_depth_launch_has_publish_tf() {
+  local desired="$1"
+  # Match the live roslaunch argv recorded by the OS (authoritative for reuse).
+  pgrep -af "roslaunch .*${DEPTH_CAMERA_LAUNCH}" 2>/dev/null \
+    | grep -q "publish_tf:=${desired}"
+}
+
 pc_start_depth_camera() {
   if [ "$DEPTH_CAMERA_ENABLE" != "1" ]; then
     echo "[SKIP] depth camera disabled"
     return 0
   fi
+  local desired="$DEPTH_CAMERA_PUBLISH_TF"
+  local stamp
+  stamp="$(pc_depth_publish_tf_stamp)"
+  local recorded=""
+  if [ -f "$stamp" ]; then
+    recorded="$(cat "$stamp")"
+  fi
+
+  if pc_pid_alive depth_camera; then
+    local must_restart=0
+    if [ "$recorded" != "$desired" ]; then
+      echo "[INFO] depth_camera publish_tf stamp '$recorded' != desired '$desired'; restarting"
+      must_restart=1
+    elif ! pc_depth_launch_has_publish_tf "$desired"; then
+      echo "[INFO] live depth launch argv missing publish_tf:=$desired; restarting"
+      must_restart=1
+    fi
+    if [ "$must_restart" = "1" ]; then
+      pc_stop_depth_camera
+    fi
+  fi
+
   if ! pc_pid_alive depth_camera; then
-    nohup roslaunch "$DEPTH_CAMERA_PKG" "$DEPTH_CAMERA_LAUNCH" >"$DEPTH_CAMERA_LOG" 2>&1 &
+    nohup roslaunch "$DEPTH_CAMERA_PKG" "$DEPTH_CAMERA_LAUNCH" \
+      publish_tf:="$desired" \
+      >"$DEPTH_CAMERA_LOG" 2>&1 &
     pc_write_pid depth_camera "$!"
+    mkdir -p "$PID_DIR"
+    echo "$desired" >"$stamp"
   fi
   pc_wait_topic_publisher "$DEPTH_INPUT_TOPIC" 50
   pc_wait_topic_publisher /camera/depth/camera_info 30
@@ -344,6 +394,7 @@ pc_start_depth_camera() {
 pc_stop_depth_camera() {
   pc_stop_pid depth_camera
   pkill -f "roslaunch ${DEPTH_CAMERA_PKG} ${DEPTH_CAMERA_LAUNCH}" 2>/dev/null || true
+  rm -f "$(pc_depth_publish_tf_stamp)"
 }
 
 pc_depth_preview_enabled() {
@@ -407,6 +458,7 @@ pc_start_with_profile() {
   echo "ROS_MASTER_URI=$ROS_MASTER_URI"
   echo "ROS_IP=$ROS_IP"
   echo "MODE=$PROFILE"
+  echo "DEPTH_CAMERA_PUBLISH_TF=$DEPTH_CAMERA_PUBLISH_TF"
 
   stack_claim_owner "$STACK_NAME"
   STARTED_STOPPERS=()
@@ -429,6 +481,7 @@ pc_start_with_profile() {
 }
 
 pc_camera_start() { pc_start_with_profile camera; }
+pc_camera_nearfield_start() { pc_start_with_profile camera_nearfield; }
 pc_camera_deep_start() { pc_start_with_profile camera_deep; }
 pc_radar2d_start() { pc_start_with_profile radar2d; }
 pc_full_start() { pc_start_with_profile full; }
@@ -438,7 +491,7 @@ pc_camera_stop() {
   pc_stop_depth_preview
   pc_stop_rgb_camera
   pc_stop_depth_camera
-  if [ "$PROFILE" = "camera" ] || [ "$PROFILE" = "camera_deep" ] || [ ! -f "$PID_DIR/mode" ]; then
+  if [ "$PROFILE" = "camera" ] || [ "$PROFILE" = "camera_nearfield" ] || [ "$PROFILE" = "camera_deep" ] || [ ! -f "$PID_DIR/mode" ]; then
     pc_stop_bringup
     pc_stop_roscore
     stack_release_owner "$STACK_NAME"
@@ -448,6 +501,10 @@ pc_camera_stop() {
 }
 
 pc_camera_deep_stop() {
+  pc_camera_stop
+}
+
+pc_camera_nearfield_stop() {
   pc_camera_stop
 }
 
@@ -488,6 +545,7 @@ pc_status() {
 
   echo "=== pc_stack status (robot) ==="
   echo "MODE=${PROFILE:-unknown}"
+  echo "DEPTH_CAMERA_PUBLISH_TF=${DEPTH_CAMERA_PUBLISH_TF:-unknown}"
   echo "ROS_MASTER_URI=${ROS_MASTER_URI:-unset}"
   echo "ROS_IP=${ROS_IP:-unset}"
   echo "LOG_DIR=$LOG_DIR"
@@ -577,6 +635,17 @@ pc_check_topics() {
     done
     echo "[OK] $DEPTH_INPUT_TOPIC publisher present"
 
+    i=0
+    while ! pc_topic_has_publisher /camera/depth/camera_info; do
+      i=$((i + 1))
+      if [ "$i" -ge 30 ]; then
+        echo "[ERR] /camera/depth/camera_info has no publisher"
+        exit 1
+      fi
+      sleep 1
+    done
+    echo "[OK] /camera/depth/camera_info publisher present"
+
     if timeout 10 rostopic echo "$DEPTH_INPUT_TOPIC" -n 1 >/dev/null 2>&1; then
       echo "[OK] depth frame received"
     elif [ "$require_depth_frame" = "1" ]; then
@@ -584,6 +653,12 @@ pc_check_topics() {
       exit 1
     else
       echo "[WARN] depth publisher exists but no frame within 10s"
+    fi
+    if timeout 10 rostopic echo /camera/depth/camera_info -n 1 >/dev/null 2>&1; then
+      echo "[OK] CameraInfo frame received"
+    else
+      echo "[ERR] CameraInfo publisher exists but no message within 10s"
+      exit 1
     fi
   fi
 }
@@ -595,6 +670,40 @@ pc_camera_check() {
     exit 1
   fi
   echo "[OK] $DEPTH_PREVIEW_TOPIC not published (lightweight)"
+}
+pc_assert_nearfield_publish_tf_live() {
+  if [ "$DEPTH_CAMERA_PUBLISH_TF" != "0" ]; then
+    echo "[ERR] PROFILE=$PROFILE resolved DEPTH_CAMERA_PUBLISH_TF=$DEPTH_CAMERA_PUBLISH_TF (want 0)"
+    return 1
+  fi
+  if ! pc_pid_alive depth_camera; then
+    echo "[ERR] depth_camera not running; cannot verify publish_tf"
+    return 1
+  fi
+  local stamp recorded=""
+  stamp="$(pc_depth_publish_tf_stamp)"
+  if [ -f "$stamp" ]; then
+    recorded="$(cat "$stamp")"
+    if [ "$recorded" != "0" ]; then
+      echo "[ERR] depth_camera stamp publish_tf=$recorded (want 0); restart with camera-nearfield-start"
+      return 1
+    fi
+  else
+    echo "[WARN] missing $stamp (legacy start); relying on live argv"
+  fi
+  if ! pc_depth_launch_has_publish_tf 0; then
+    echo "[ERR] live depth launch does not show publish_tf:=0"
+    pgrep -af "roslaunch .*${DEPTH_CAMERA_LAUNCH}" || true
+    return 1
+  fi
+  echo "[OK] live Astra depth launch publish_tf:=0 (profile+stamp+argv)"
+}
+
+pc_camera_nearfield_check() {
+  PROFILE=camera_nearfield
+  pc_resolve_profile || exit 1
+  pc_camera_check
+  pc_assert_nearfield_publish_tf_live || exit 1
 }
 pc_camera_deep_check() {
   PROFILE=camera_deep

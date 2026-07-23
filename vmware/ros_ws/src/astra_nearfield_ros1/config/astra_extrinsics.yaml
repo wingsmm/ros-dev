@@ -1,0 +1,29 @@
+# Nominal product camera pose from factory depthcamera bringup.
+# NOT a tape-remeasured / uncertainy-recorded calibration of this chassis.
+status: nominal
+measured_at: ""
+method: factory_bringup
+physical_measurement: false
+rviz_sanity_checked: true
+
+# Robot TF tree uses base_footprint (no base_link edge on this chassis).
+parent_frame: base_footprint
+camera_frame: camera_link
+optical_frame: camera_depth_optical_frame
+
+# base_footprint -> camera_link
+# Evidence (robot 192.168.1.168, read-only on 2026-07-23):
+#   /home/xtark/ros_ws/src/xtark_nav_depthcamera/launch/Driver/xtark_bringup_depthcamera.launch
+#   static_transform_publisher args: 0.10 0 0.10 0 0 0 base_footprint camera_link 40
+# Local ros-dev/xtark/ does not vendor that package; re-verify on the robot.
+xyz_m: [0.10, 0.0, 0.10]
+rpy_rad: [0.0, 0.0, 0.0]
+
+# camera_link -> camera_depth_optical_frame; standard ROS optical rotation.
+optical_xyz_m: [0.0, 0.0, 0.0]
+optical_rpy_rad: [-1.57079632679, 0.0, -1.57079632679]
+
+notes: >
+  status=nominal allows software wiring acceptance only.
+  Do not claim Stage A physical extrinsics PASS until status=measured
+  with physical_measurement=true and recorded uncertainty.

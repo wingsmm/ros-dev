@@ -7,6 +7,7 @@ import struct
 import rospy
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import CameraInfo, Image, PointCloud2
+from std_msgs.msg import Header
 
 try:
     import numpy as np
@@ -33,6 +34,11 @@ class SparseDepthPointCloud(object):
         self.stride = _cfg_int("CAMERA_POINTCLOUD_STRIDE", 12)
         self.min_m = _cfg_float("CAMERA_POINTCLOUD_MIN_RANGE_M", 0.25)
         self.max_m = _cfg_float("CAMERA_POINTCLOUD_MAX_RANGE_M", 3.0)
+        # Astra often latches CameraInfo with a stale stamp; default is warn-only
+        # unless CAMERA_INFO_MAX_AGE_S is set > 0 as a hard reject threshold.
+        self.max_info_age_s = max(
+            0.0, _cfg_float("CAMERA_INFO_MAX_AGE_S", 0.0)
+        )
         out_topic = os.environ.get(
             "VMWARE_DEPTH_POINTS_TOPIC", "/vmware/depth/points"
         )
@@ -55,46 +61,116 @@ class SparseDepthPointCloud(object):
     def _on_info(self, msg):
         self.info = msg
 
-    def _decode_depth_m(self, img):
-        width = img.width
-        height = img.height
-        enc = img.encoding
-        if np is not None:
-            if enc in ("16UC1", "mono16"):
-                depth = np.frombuffer(img.data, dtype=np.uint16).reshape(
-                    height, width
-                )
-                depth_m = depth.astype(np.float32) * 0.001
-            elif enc == "32FC1":
-                depth_m = np.frombuffer(img.data, dtype=np.float32).reshape(
-                    height, width
-                )
-            else:
-                return None
-            return depth_m
-
-        points = []
-        for v in range(height):
-            for u in range(width):
-                z = self._depth_scalar(img.data, enc, u, v, width)
-                points.append(z)
-        return points
-
     @staticmethod
-    def _depth_scalar(data, encoding, u, v, width):
-        idx = v * width + u
+    def _encoding_layout(encoding):
         if encoding in ("16UC1", "mono16"):
-            raw = struct.unpack_from("<H", data, idx * 2)[0]
+            return "u2", 2, 0.001
+        if encoding == "32FC1":
+            return "f4", 4, 1.0
+        return None
+
+    def _validate_image_layout(self, img):
+        layout = self._encoding_layout(img.encoding)
+        if layout is None:
+            rospy.logwarn_throttle(
+                5.0, "Unsupported depth encoding: %s" % img.encoding
+            )
+            return None
+        _, bytes_per_pixel, _ = layout
+        minimum_step = img.width * bytes_per_pixel
+        if img.step < minimum_step:
+            rospy.logwarn_throttle(
+                5.0,
+                "Invalid depth step=%d, expected at least %d"
+                % (img.step, minimum_step),
+            )
+            return None
+        required_size = img.step * img.height
+        if len(img.data) < required_size:
+            rospy.logwarn_throttle(
+                5.0,
+                "Truncated depth buffer=%d, expected at least %d"
+                % (len(img.data), required_size),
+            )
+            return None
+        return layout
+
+    def _decode_depth_m(self, img):
+        layout = self._validate_image_layout(img)
+        if layout is None or np is None:
+            return None
+        dtype_code, bytes_per_pixel, scale = layout
+        byte_order = ">" if img.is_bigendian else "<"
+        depth = np.ndarray(
+            shape=(img.height, img.width),
+            dtype=np.dtype(byte_order + dtype_code),
+            buffer=img.data,
+            strides=(img.step, bytes_per_pixel),
+        )
+        return depth.astype(np.float32) * scale
+
+    @classmethod
+    def _depth_scalar(cls, img, u, v):
+        layout = cls._encoding_layout(img.encoding)
+        if layout is None:
+            return float("nan")
+        _, bytes_per_pixel, scale = layout
+        offset = v * img.step + u * bytes_per_pixel
+        byte_order = ">" if img.is_bigendian else "<"
+        if img.encoding in ("16UC1", "mono16"):
+            raw = struct.unpack_from(byte_order + "H", img.data, offset)[0]
             if raw == 0:
                 return float("nan")
-            return raw * 0.001
-        if encoding == "32FC1":
-            return struct.unpack_from("<f", data, idx * 4)[0]
+            return raw * scale
+        if img.encoding == "32FC1":
+            return struct.unpack_from(byte_order + "f", img.data, offset)[0]
         return float("nan")
 
     def _on_image(self, img):
         if self.info is None:
+            rospy.logwarn_throttle(5.0, "Waiting for depth CameraInfo")
             return
+
+        if self._validate_image_layout(img) is None:
+            return
+        if self.info.width and self.info.width != img.width:
+            rospy.logwarn_throttle(
+                5.0,
+                "CameraInfo width=%d does not match depth width=%d"
+                % (self.info.width, img.width),
+            )
+            return
+        if self.info.height and self.info.height != img.height:
+            rospy.logwarn_throttle(
+                5.0,
+                "CameraInfo height=%d does not match depth height=%d"
+                % (self.info.height, img.height),
+            )
+            return
+        image_frame = img.header.frame_id
+        info_frame = self.info.header.frame_id
+        if not image_frame:
+            rospy.logwarn_throttle(5.0, "Depth image frame_id is empty")
+            return
+        if info_frame and info_frame.lstrip("/") != image_frame.lstrip("/"):
+            rospy.logwarn_throttle(
+                5.0,
+                "CameraInfo frame=%s does not match depth frame=%s"
+                % (info_frame, image_frame),
+            )
+            return
+        image_stamp = img.header.stamp.to_sec()
+        info_stamp = self.info.header.stamp.to_sec()
+        if image_stamp > 0.0 and info_stamp > 0.0:
+            age = abs(image_stamp - info_stamp)
+            if age > 1.0:
+                rospy.logwarn_throttle(
+                    5.0,
+                    "CameraInfo timestamp differs from depth by %.3fs"
+                    % age,
+                )
+            if self.max_info_age_s > 0.0 and age > self.max_info_age_s:
+                return
 
         fx = self.info.K[0]
         fy = self.info.K[4]
@@ -104,7 +180,6 @@ class SparseDepthPointCloud(object):
             return
 
         stride = self.stride
-        frame_id = self.info.header.frame_id or img.header.frame_id
         points = []
 
         if np is not None:
@@ -131,7 +206,7 @@ class SparseDepthPointCloud(object):
         else:
             for v in range(0, img.height, stride):
                 for u in range(0, img.width, stride):
-                    z = self._depth_scalar(img.data, img.encoding, u, v, img.width)
+                    z = self._depth_scalar(img, u, v)
                     if z != z or z < self.min_m or z > self.max_m:
                         continue
                     x = (u - cx) * z / fx
@@ -141,8 +216,11 @@ class SparseDepthPointCloud(object):
         if not points:
             return
 
-        header = img.header
-        header.frame_id = frame_id
+        header = Header(
+            seq=img.header.seq,
+            stamp=img.header.stamp,
+            frame_id=image_frame,
+        )
         self.pub.publish(pc2.create_cloud_xyz32(header, points))
 
 

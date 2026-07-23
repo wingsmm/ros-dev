@@ -16,6 +16,11 @@ main() {
     camera-status) pc_status ;;
     camera-check) pc_camera_check ;;
 
+    camera-nearfield-start) pc_camera_nearfield_start ;;
+    camera-nearfield-stop) pc_camera_nearfield_stop ;;
+    camera-nearfield-status) pc_status ;;
+    camera-nearfield-check) pc_camera_nearfield_check ;;
+
     camera-deep-start) pc_camera_deep_start ;;
     camera-deep-stop) pc_camera_deep_stop ;;
     camera-deep-status) pc_status ;;
