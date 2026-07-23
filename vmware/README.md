@@ -5,7 +5,8 @@
 > **产品状态：一代 ROS1 冻结维护版。** 版本基线与维护规则见 [xtark/README.md](../xtark/README.md)。本目录不升级 ROS/Ubuntu/PyQt，不接入二代 Jetson ROS2。
 
 `ros_ws/src/astra_nearfield_ros1` 是冻结产品线之外的隔离深度感知实验入口。
-阶段 A 只负责实测外参、严格相机 TF 所有权和点云验收，不接导航或控制；
+阶段 A 负责 **nominal 外参的软件闭环**（严格相机 TF 所有权 + 点云验收），物理卷尺标定另开阶段；
+阶段 B 建设数据闭环（机器人本机录包 + VM 本地 Master 隔离回放），不接导航或控制。
 未取得 VM/真机证据前统一标记为
 `IMPLEMENTED LOCALLY — NOT RUNTIME VALIDATED`。
 

@@ -4,13 +4,19 @@ Windows 侧部署 VMware VM `192.168.1.154` 上的 **vmware/qt** 纯客户端。
 
 | 脚本 | 目标 | 作用 |
 |------|------|------|
-| `vmware/scripts/vm_qt_remote.bat` | VM `154` | 同步 `vmware/qt` + PyQt5 |
-| `xtark/scripts/pc_stack_remote.bat` | 真机 `169` | 部署/启停 `pc_stack`（与 Qt 分离） |
+| `vmware/scripts/vm_qt_remote.bat` | VM `154` | `deploy` 同步 `vmware/qt`；`astra-deploy` 同步近场 ROS 包并 `catkin_make --pkg` |
+| `xtark/scripts/pc_stack_remote.bat` | 真机 `168` | 部署/启停 `pc_stack`（与 Qt 分离）；`deploy` 含 `astra_capture.sh` |
 
 ## 一次性准备（仅 VM Qt）
 
 ```bat
 vmware\scripts\vm_qt_remote.bat bootstrap
+```
+
+近场 Stage B 包部署（不改变默认 Qt `deploy` 语义）：
+
+```bat
+vmware\scripts\vm_qt_remote.bat astra-deploy
 ```
 
 ## 日常使用

@@ -38,6 +38,25 @@ Two mutually exclusive daily entrypoints on the **robot** (`192.168.1.168`), plu
 Windows：`xtark\scripts\pc_stack_remote.bat camera-nearfield-start` 或
 `camera-deep-start`（使用前先显式 `deploy`）。
 
+### `astra_capture.sh` — 近场深度 Stage B1 本机录包
+
+| | |
+|--|--|
+| **Purpose** | 在 168 本机录制原始深度 bag（禁止 VM 经网络录深度） |
+| **Runs on** | Robot `192.168.1.168` |
+| **Requires** | `camera-nearfield` 已启动且 check 通过 |
+| **Output** | `~/xtark_logs/astra_nearfield/bags/<id>/{capture.bag,manifest.json,rosbag_info.txt}` |
+
+```bash
+~/ros_ws/scripts/astra_capture.sh start --scene flat_floor --lighting indoor_day --camera-state stationary --duration 60
+~/ros_ws/scripts/astra_capture.sh status
+~/ros_ws/scripts/astra_capture.sh stop
+~/ros_ws/scripts/astra_capture.sh inspect ~/xtark_logs/astra_nearfield/bags/<id>
+```
+
+`pc_stack_remote.bat deploy` 会同步 `astra_capture.sh`。VM 隔离回放见
+`vmware/scripts/vm_qt_remote.bat astra-deploy` 与包内 `astra_replay.sh`。
+
 详见 [vmware/docs/VMware Qt深度相机增强方案.md](../../vmware/docs/VMware%20Qt深度相机增强方案.md) 阶段 A。
 
 Mutually exclusive with `android_stack` / `qt_stack` on the robot.

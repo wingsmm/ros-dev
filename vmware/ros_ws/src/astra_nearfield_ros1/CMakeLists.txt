@@ -4,6 +4,8 @@ project(astra_nearfield_ros1)
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   rospy
+  sensor_msgs
+  std_msgs
   tf
   tf2_msgs
   tf2_ros
@@ -12,7 +14,15 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package()
 
 catkin_install_python(
-  PROGRAMS scripts/camera_tf_guard.py
+  PROGRAMS
+    scripts/camera_tf_guard.py
+    scripts/tf_edge_filter.py
+    scripts/replay_probe.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(
+  PROGRAMS scripts/astra_replay.sh
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

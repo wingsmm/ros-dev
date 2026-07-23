@@ -52,7 +52,7 @@ goto :help
 :help
 echo Usage: pc_stack_remote.bat [deploy^|camera-start^|radar2d-start^|full-start^|...^|help]
 echo.
-echo   deploy        Sync pc_stack scripts to robot (%XTARK_HOST%)
+echo   deploy        Sync pc_stack scripts + astra_capture.sh to robot (%XTARK_HOST%)
 echo   camera-start       pc_stack camera-start (RGB + depth raw, no preview)
 echo   camera-nearfield-start  depth raw with Astra publish_tf disabled
 echo   camera-nearfield-stop / camera-nearfield-status / camera-nearfield-check
@@ -71,13 +71,13 @@ exit /b 0
 echo [1/2] sync pc_stack scripts to robot ...
 "%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "mkdir -p %XTARK_REMOTE_SCRIPTS%"
 if errorlevel 1 exit /b 1
-for %%F in (pc_stack.sh pc_stack_modules.sh stack_common.sh) do (
+for %%F in (pc_stack.sh pc_stack_modules.sh stack_common.sh astra_capture.sh) do (
     "%PSCP%" -batch -hostkey "%XTARK_HOSTKEY%" -pw %XTARK_PASSWORD% "%REPO_ROOT%xtark\scripts\%%F" "%XTARK_REMOTE%:%XTARK_REMOTE_SCRIPTS%/%%F"
     if errorlevel 1 exit /b 1
 )
 
 echo [2/2] chmod + strip CRLF ...
-"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "for f in %XTARK_REMOTE_SCRIPTS%/pc_stack.sh %XTARK_REMOTE_SCRIPTS%/pc_stack_modules.sh %XTARK_REMOTE_SCRIPTS%/stack_common.sh; do sed -i 's/\r$//' \"$f\"; chmod +x \"$f\"; done"
+"%PLINK%" -ssh %XTARK_REMOTE% -pw %XTARK_PASSWORD% -batch -hostkey "%XTARK_HOSTKEY%" "for f in %XTARK_REMOTE_SCRIPTS%/pc_stack.sh %XTARK_REMOTE_SCRIPTS%/pc_stack_modules.sh %XTARK_REMOTE_SCRIPTS%/stack_common.sh %XTARK_REMOTE_SCRIPTS%/astra_capture.sh; do sed -i 's/\r$//' \"$f\"; chmod +x \"$f\"; done"
 exit /b %ERRORLEVEL%
 
 :stack

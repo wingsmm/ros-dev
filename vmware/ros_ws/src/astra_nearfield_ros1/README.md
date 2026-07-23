@@ -1,8 +1,9 @@
 # astra_nearfield_ros1
 
-ROS1 Melodic adapter for the isolated Astra near-field experiment. Stage A
-owns camera extrinsics status and strict TF ownership; perception algorithms
-are intentionally deferred.
+ROS1 Melodic adapter for the isolated Astra near-field experiment.
+
+- **Stage A**: extrinsics status + strict camera TF ownership
+- **Stage B**: robot-side bag capture + VM isolated replay (no perception)
 
 ## Extrinsics status contract
 
@@ -12,79 +13,82 @@ are intentionally deferred.
 | `nominal` | Factory / product install pose, not tape-measured on this unit | Allowed for **software wiring** acceptance only |
 | `measured` | On-robot measurement with uncertainty recorded | Requires `physical_measurement: true`; formal physical path |
 
-Current checked-in YAML is **`nominal`** (copied from robot factory bringup).
-That is **not** physical calibration PASS.
+Current checked-in YAML is **`nominal`**.
 
 ## Stage A startup
 
-1. On the robot, use the experiment profile so the Astra driver does not
-   publish its own camera TF:
+1. Robot: `~/ros_ws/scripts/pc_stack.sh camera-nearfield-start` then `camera-nearfield-check`
+2. VM (online Master path): `CAMERA_TF_ENABLE=0` then `roslaunch astra_nearfield_ros1 camera_tf.launch`
 
-   ```bash
-   ~/ros_ws/scripts/pc_stack.sh camera-nearfield-start
-   ~/ros_ws/scripts/pc_stack.sh camera-nearfield-check
-   ```
+## Stage B1: capture on robot 168
 
-   Check must verify the **live** depth launch argv `publish_tf:=0` (not only
-   the profile variable). Switching from `camera` / `camera_deep` restarts the
-   depth driver when `publish_tf` changes.
+Deploy:
 
-2. Keep `config/astra_extrinsics.yaml` accurate:
-   - `status: nominal` + `physical_measurement: false` for product pose;
-   - `status: measured` only after measuring this chassis and recording
-     uncertainty, with `physical_measurement: true`.
-
-   Parent frame on this xtark chassis is **`base_footprint`** (there is no
-   `base_link` edge in the live TF tree).
-
-3. On VMware, disable the Qt-owned TF before starting Qt:
-
-   ```bash
-   export CAMERA_TF_ENABLE=0
-   ```
-
-4. Start the sole owner of both camera edges:
-
-   ```bash
-   roslaunch astra_nearfield_ros1 camera_tf.launch
-   ```
-
-The launch fails if either `base_footprint -> camera_link` or
-`camera_link -> camera_depth_optical_frame` already exists on `/tf` or
-`/tf_static` (unless debug `reuse_existing_tf:=true`). After a locked claim,
-it keeps monitoring and exits if an external publisher later claims either
-edge.
-
-For local wiring checks with untrusted zeros only:
-
-```bash
-roslaunch astra_nearfield_ros1 camera_tf.launch allow_provisional:=true
+```bat
+xtark\scripts\pc_stack_remote.bat deploy
 ```
 
-## Stage A acceptance boundary
+On robot (after nearfield stack is up):
 
-Package presence / compile is not runtime validation.
+```bash
+~/ros_ws/scripts/astra_capture.sh start \
+  --scene flat_floor \
+  --lighting indoor_day \
+  --camera-state stationary \
+  --duration 60
+~/ros_ws/scripts/astra_capture.sh inspect ~/xtark_logs/astra_nearfield/bags/<id>
+```
 
-**Software closed-loop PASS (status=nominal, recorded 2026-07-23):**
+Bags land under `~/xtark_logs/astra_nearfield/bags/` with `capture.bag`, `manifest.json`, `rosbag_info.txt`.
 
-- robot `camera-nearfield-check` live `publish_tf:=0`;
-- unique TF ownership by `astra_camera_tf_guard`;
-- `/vmware/depth/points` publishing;
-- RViz Fixed Frame=`base_footprint`;
-- directional check: front / left / right / ground-ish / 60s stable — OK.
+## Stage B2: isolated replay on VM 154
 
-**Near blind zone (expected):**
+Deploy package (does **not** change default Qt `deploy`):
 
-- software filter: `CAMERA_POINTCLOUD_MIN_RANGE_M=0.25`;
-- Astra Pro hardware: depth weak/empty roughly inside 0.4-0.6 m.
+```bat
+vmware\scripts\vm_qt_remote.bat astra-deploy
+```
 
-**Still not claimed:**
+On VM:
 
-- physical extrinsics PASS (`status: measured` + uncertainty);
-- obstacle / drop / step perception.
+```bash
+source /opt/ros/melodic/setup.bash
+source ~/ros_ws/devel/setup.bash
+REPLAY=$(rosrun astra_nearfield_ros1 astra_replay.sh 2>/dev/null | head -n0)
+# Prefer explicit path:
+~/ros_ws/devel/lib/astra_nearfield_ros1/astra_replay.sh check /path/to/capture.bag
+~/ros_ws/devel/lib/astra_nearfield_ros1/astra_replay.sh raw /path/to/capture.bag
+~/ros_ws/devel/lib/astra_nearfield_ros1/astra_replay.sh cloud /path/to/capture.bag
+~/ros_ws/devel/lib/astra_nearfield_ros1/astra_replay.sh stop
+```
+
+Hard constraints:
+
+- Master is forced to `http://127.0.0.1:11321`
+- `/use_sim_time=true` + `rosbag play --clock --rate 0.5`
+- `/tf` and `/tf_static` remapped to `/bag/*`, then `tf_edge_filter` strips only:
+  - `base_footprint -> camera_link`
+  - `camera_link -> camera_depth_optical_frame`
+- Cloud mode republishes camera edges from nominal YAML via `camera_tf_guard`
+- Point cloud script default: `~/ros-dev/vmware/qt/scripts/sparse_depth_pointcloud.py`
+
+**Nearfield bags may drop 0 camera TF edges** (driver `publish_tf:=0`). That is normal.
+Synthetic unit tests must still prove both target edges are deleted.
+
+`perception` mode is reserved; not implemented in Stage B.
+
+## Unit tests (no Master)
+
+```bash
+python2 $(rospack find astra_nearfield_ros1)/../src/astra_nearfield_ros1/test/test_tf_edge_filter.py
+# or from checkout:
+python2 vmware/ros_ws/src/astra_nearfield_ros1/test/test_tf_edge_filter.py
+```
+
+## Stage A acceptance label
 
 ```text
 STAGE A SOFTWARE CLOSED-LOOP PASS (nominal extrinsics)
-NEAR BLIND ZONE DOCUMENTED
-PHYSICAL EXTRINSICS NOT MEASURED
 ```
+
+Physical extrinsics PASS and perception algorithms remain out of scope.

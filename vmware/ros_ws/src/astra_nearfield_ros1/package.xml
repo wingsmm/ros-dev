@@ -1,8 +1,11 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>astra_nearfield_ros1</name>
-  <version>0.1.0</version>
-  <description>ROS1 wrapper and strict camera TF ownership for isolated Astra near-field experiments.</description>
+  <version>0.2.0</version>
+  <description>
+    Isolated Astra near-field experiment: Stage A TF ownership plus Stage B
+    capture/replay data closed loop (no perception algorithms).
+  </description>
 
   <maintainer email="maintainer@example.com">ros-dev maintainer</maintainer>
   <license>MIT</license>
@@ -11,6 +14,8 @@
 
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>rospy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
   <exec_depend>tf</exec_depend>
   <exec_depend>tf2_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
