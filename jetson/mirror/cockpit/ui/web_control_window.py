@@ -3,7 +3,56 @@
 from __future__ import annotations
 
 from PyQt5.QtCore import QUrl
-from PyQt5.QtWidgets import QAction, QMainWindow, QMessageBox, QToolBar, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QAction, QMainWindow, QMessageBox, QToolBar
+
+# QtWebKit 无 Fetch API；car_web control.js 依赖 fetch。在页面脚本前注入 XHR polyfill。
+_FETCH_POLYFILL_JS = r"""
+(function () {
+  if (typeof window.fetch === 'function') { return; }
+  if (typeof Promise === 'undefined') { return; }
+  window.fetch = function (url, opts) {
+    opts = opts || {};
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      var method = (opts.method || 'GET').toUpperCase();
+      xhr.open(method, url, true);
+      if (opts.headers) {
+        var h = opts.headers;
+        if (typeof h.forEach === 'function') {
+          h.forEach(function (v, k) { xhr.setRequestHeader(k, v); });
+        } else {
+          for (var k in h) {
+            if (Object.prototype.hasOwnProperty.call(h, k)) {
+              xhr.setRequestHeader(k, h[k]);
+            }
+          }
+        }
+      }
+      xhr.onload = function () {
+        var body = xhr.responseText;
+        var status = xhr.status;
+        resolve({
+          ok: status >= 200 && status < 300,
+          status: status,
+          statusText: xhr.statusText,
+          url: url,
+          json: function () {
+            return new Promise(function (res, rej) {
+              try { res(JSON.parse(body)); }
+              catch (e) { rej(e); }
+            });
+          },
+          text: function () { return Promise.resolve(body); }
+        });
+      };
+      xhr.onerror = function () {
+        reject(new TypeError('Network request failed'));
+      };
+      xhr.send(opts.body || null);
+    });
+  };
+})();
+"""
 
 
 def _probe_backends() -> tuple[str, str]:
@@ -52,8 +101,18 @@ class WebControlWindow(QMainWindow):
 
             self._view = QWebView(self)
             self.setCentralWidget(self._view)
+            frame = self._view.page().mainFrame()
+            frame.javaScriptWindowObjectCleared.connect(self._inject_fetch_polyfill)
 
         self._view.load(QUrl(url))
+
+    def _inject_fetch_polyfill(self) -> None:
+        if self._backend != "webkit":
+            return
+        try:
+            self._view.page().mainFrame().evaluateJavaScript(_FETCH_POLYFILL_JS)
+        except Exception:
+            pass
 
     def go_home(self) -> None:
         self._view.load(QUrl(self._url))

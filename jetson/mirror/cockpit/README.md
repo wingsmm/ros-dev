@@ -5,7 +5,9 @@
 
 本阶段只有：状态 / topic 诊断 / 五键 `/cmd_vel` 干跑 / 内嵌 Web控制窗口。不含 SSH、RViz、雷达一键。
 
-`WEB_CONTROL_URL`（`.env`）默认 `http://172.0.0.82:8080/ctl`；「Web控制」打开 **PyQt 内嵌窗口**（优先 `QWebEngineView`，否则 `QWebView`），不走系统浏览器。缺包时：
+`WEB_CONTROL_URL`（`.env`）默认 `http://172.0.0.82:8080/ctl`；「Web控制」打开 **PyQt 内嵌窗口**（优先 `QWebEngineView`，否则 `QWebView`），不走系统浏览器。
+
+WebKit 路径会注入 `fetch` polyfill（`control.js` 依赖 Fetch；旧 QtWebKit 没有）。缺包时：
 
 ```bash
 sudo apt install -y python3-pyqt5.qtwebengine
