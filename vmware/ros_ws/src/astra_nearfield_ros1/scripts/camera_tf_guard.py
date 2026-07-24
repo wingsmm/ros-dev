@@ -3,6 +3,7 @@
 
 from __future__ import print_function
 
+import json
 import math
 import sys
 import threading
@@ -11,6 +12,7 @@ import time
 import rospy
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
+from std_msgs.msg import String
 from tf.transformations import quaternion_from_euler
 from tf2_msgs.msg import TFMessage
 
@@ -139,13 +141,27 @@ class CameraTfGuard(object):
         self.lock = threading.Lock()
         self.active = False
         self.conflict = False
+        self.conflict_detail = ""
         self.broadcaster = tf2_ros.StaticTransformBroadcaster()
+        self.status_pub = rospy.Publisher(
+            "~status", String, queue_size=1, latch=True
+        )
         self.tf_subscriber = rospy.Subscriber(
             "/tf", TFMessage, self._on_tf, queue_size=100
         )
         self.tf_static_subscriber = rospy.Subscriber(
             "/tf_static", TFMessage, self._on_tf, queue_size=100
         )
+        self._publish_status()
+
+    def _publish_status(self):
+        payload = {
+            "node": self.node_name,
+            "active": bool(self.active),
+            "conflict": bool(self.conflict),
+            "detail": self.conflict_detail or "",
+        }
+        self.status_pub.publish(String(data=json.dumps(payload, sort_keys=True)))
 
     def _on_tf(self, message):
         header = getattr(message, "_connection_header", {}) or {}
@@ -164,6 +180,12 @@ class CameraTfGuard(object):
                 )
             if external_conflict:
                 self.conflict = True
+                self.conflict_detail = "%s -> %s from %s" % (
+                    edge[0],
+                    edge[1],
+                    caller,
+                )
+                self._publish_status()
                 rospy.logfatal(
                     "TF ownership conflict after startup: %s -> %s from %s",
                     edge[0],
@@ -238,6 +260,7 @@ class CameraTfGuard(object):
         with self.lock:
             ok, to_publish = self._claim_under_lock()
         if not ok:
+            self._publish_status()
             return False
 
         if to_publish:
@@ -251,6 +274,7 @@ class CameraTfGuard(object):
                     transform.header.frame_id,
                     transform.child_frame_id,
                 )
+        self._publish_status()
         return True
 
 

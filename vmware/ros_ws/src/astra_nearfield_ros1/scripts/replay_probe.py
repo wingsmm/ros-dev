@@ -26,7 +26,9 @@ class ReplayProbe(object):
         self.cloud_frame = ""
         self.filter_stats = {}
         self.guard_alive = False
-        self.guard_conflict = False
+        self.guard_status_received = False
+        self.guard_conflict = None  # None until status topic received
+        self.guard_status = {}
         self.started_wall = time.time()
 
         rospy.Subscriber(
@@ -42,6 +44,12 @@ class ReplayProbe(object):
             "/astra_tf_edge_filter/stats",
             String,
             self._on_filter_stats,
+            queue_size=10,
+        )
+        rospy.Subscriber(
+            "/astra_camera_tf_guard/status",
+            String,
+            self._on_guard_status,
             queue_size=10,
         )
 
@@ -80,6 +88,16 @@ class ReplayProbe(object):
         with self.lock:
             self.filter_stats = payload
 
+    def _on_guard_status(self, msg):
+        try:
+            payload = json.loads(msg.data)
+        except ValueError:
+            return
+        with self.lock:
+            self.guard_status_received = True
+            self.guard_status = payload
+            self.guard_conflict = bool(payload.get("conflict", False))
+
     def snapshot(self):
         with self.lock:
             duration = 0.0
@@ -103,7 +121,9 @@ class ReplayProbe(object):
                 "tf_filter_stats": dict(self.filter_stats),
                 "tf_filter_dropped": int(self.filter_stats.get("dropped", 0)),
                 "tf_guard_alive": self.guard_alive,
+                "tf_guard_status_received": self.guard_status_received,
                 "tf_guard_conflict": self.guard_conflict,
+                "tf_guard_status": dict(self.guard_status),
                 "wall_elapsed_s": time.time() - self.started_wall,
                 "ROS_MASTER_URI": os.environ.get("ROS_MASTER_URI", ""),
             }
@@ -134,11 +154,12 @@ def main():
     def _on_shutdown():
         payload = probe.write_report()
         rospy.loginfo(
-            "probe final depth=%s info=%s cloud=%s dropped=%s",
+            "probe final depth=%s info=%s cloud=%s dropped=%s conflict=%s",
             payload["depth_frame_count"],
             payload["camera_info_count"],
             payload["point_cloud_count"],
             payload["tf_filter_dropped"],
+            payload["tf_guard_conflict"],
         )
 
     rospy.on_shutdown(_on_shutdown)

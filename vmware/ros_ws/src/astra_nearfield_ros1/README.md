@@ -65,7 +65,9 @@ REPLAY=$(rosrun astra_nearfield_ros1 astra_replay.sh 2>/dev/null | head -n0)
 Hard constraints:
 
 - Master is forced to `http://127.0.0.1:11321`
-- `/use_sim_time=true` + `rosbag play --clock --rate 0.5`
+- `/use_sim_time=true` + `rosbag play --clock` (default rate **0.25**; override with `ASTRA_REPLAY_RATE`)
+- After success/failure the stack is cleaned unless `--keep-alive`
+- Foreign nearfield processes on the live Master are refused unless `ASTRA_REPLAY_ALLOW_FOREIGN=1`
 - `/tf` and `/tf_static` remapped to `/bag/*`, then `tf_edge_filter` strips only:
   - `base_footprint -> camera_link`
   - `camera_link -> camera_depth_optical_frame`
