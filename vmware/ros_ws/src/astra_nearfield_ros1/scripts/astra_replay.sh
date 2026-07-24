@@ -462,8 +462,14 @@ if mode == "cloud":
         raise SystemExit("tf_guard_conflict=true")
     if data.get("tf_guard_conflict") is None:
         raise SystemExit("tf_guard_conflict is null (status missing)")
-print "report_ok mode=%s depth=%s info=%s cloud=%s dur=%.3f conflict=%s" % (
-    mode, depth, info, cloud, dur, data.get("tf_guard_conflict"))
+    if not data.get("tf_guard_alive"):
+        raise SystemExit("tf_guard_alive must be true")
+    status = data.get("tf_guard_status") or {}
+    if not status.get("active"):
+        raise SystemExit("tf_guard_status.active must be true")
+print "report_ok mode=%s depth=%s info=%s cloud=%s dur=%.3f conflict=%s active=%s alive=%s" % (
+    mode, depth, info, cloud, dur, data.get("tf_guard_conflict"),
+    (data.get("tf_guard_status") or {}).get("active"), data.get("tf_guard_alive"))
 PY
 }
 
@@ -545,6 +551,8 @@ cmd_cloud() {
 }
 
 cmd_stop_quiet() {
+  # Only stop processes we own via PID/cmd markers. Never kill an unknown Master
+  # on MASTER_PORT — ensure_roscore refuses takeover if the port stays occupied.
   mkdir -p "$PID_DIR" "$LOG_DIR"
   stop_one player INT || true
   stop_one probe INT || true
@@ -552,39 +560,6 @@ cmd_stop_quiet() {
   stop_one tf_guard TERM || true
   stop_one tf_filter TERM || true
   stop_one roscore TERM || true
-  cleanup_orphan_roscore_on_port || true
-}
-
-cleanup_orphan_roscore_on_port() {
-  port_listening || return 0
-  local pids="" pid cmdline
-  if command -v fuser >/dev/null 2>&1; then
-    pids="$(fuser "${MASTER_PORT}/tcp" 2>/dev/null || true)"
-  elif command -v lsof >/dev/null 2>&1; then
-    pids="$(lsof -t -iTCP:"${MASTER_PORT}" -sTCP:LISTEN 2>/dev/null || true)"
-  fi
-  for pid in $pids; do
-    cmdline="$(pid_cmdline "$pid" || true)"
-    if echo "$cmdline" | grep -Eq "roscore|rosmaster"; then
-      if echo "$cmdline" | grep -Eq -- "-p[[:space:]]*${MASTER_PORT}|-p=${MASTER_PORT}|[[:space:]]${MASTER_PORT}([[:space:]]|$)"; then
-        info "stop orphan ROS master on :${MASTER_PORT} pid=$pid"
-        kill -TERM "$pid" 2>/dev/null || true
-        local i=0
-        while kill -0 "$pid" 2>/dev/null; do
-          i=$((i + 1))
-          if [ "$i" -ge 20 ]; then
-            kill -KILL "$pid" 2>/dev/null || true
-            break
-          fi
-          sleep 0.5
-        done
-      else
-        info "port ${MASTER_PORT} held by unrelated ROS master pid=$pid ($cmdline); not killing"
-      fi
-    else
-      info "port ${MASTER_PORT} held by non-roscore pid=$pid ($cmdline); not killing"
-    fi
-  done
 }
 
 cmd_stop() {

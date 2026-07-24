@@ -67,7 +67,9 @@ Hard constraints:
 - Master is forced to `http://127.0.0.1:11321`
 - `/use_sim_time=true` + `rosbag play --clock` (default rate **0.25**; override with `ASTRA_REPLAY_RATE`)
 - After success/failure the stack is cleaned unless `--keep-alive`
+- Only owned PIDs (PID/cmd markers) are stopped; an unknown process on `:11321` is never killed — start refuses takeover
 - Foreign nearfield processes on the live Master are refused unless `ASTRA_REPLAY_ALLOW_FOREIGN=1`
+- Cloud reports must show `tf_guard_alive=true` and `tf_guard_status.active=true` (not only `conflict=false`)
 - `/tf` and `/tf_static` remapped to `/bag/*`, then `tf_edge_filter` strips only:
   - `base_footprint -> camera_link`
   - `camera_link -> camera_depth_optical_frame`

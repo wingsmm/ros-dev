@@ -222,6 +222,8 @@ PY
 }
 
 finalize_manifest() {
+  # Commit only while exit_status is still "recording" (single writer).
+  # Prints "committed:<status>" or "skipped:<existing>".
   local path="$1"
   local exit_status="$2"
   local bag_path="$3"
@@ -232,6 +234,10 @@ path, exit_status, bag_path = sys.argv[1], sys.argv[2], sys.argv[3]
 rosbag_rc = sys.argv[4] if len(sys.argv) > 4 else ""
 with open(path) as f:
     data = json.load(f)
+cur = data.get("exit_status", "")
+if cur != "recording":
+    print "skipped:%s" % cur
+    sys.exit(0)
 data["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
 data["exit_status"] = exit_status
 if rosbag_rc != "":
@@ -246,6 +252,52 @@ else:
 with open(path, "w") as f:
     json.dump(data, f, indent=2, sort_keys=True)
     f.write("\n")
+print "committed:%s" % exit_status
+PY
+}
+
+mark_stop_requested() {
+  local session_dir="${1:-}"
+  local reason="${2:-manual}"
+  mkdir -p "$PID_DIR"
+  # Atomic create: O_CREAT|O_EXCL via noclobber.
+  local marker="${PID_DIR}/stop.requested"
+  if (set -o noclobber; echo "$reason $(date +%Y-%m-%dT%H:%M:%S%z)" >"$marker") 2>/dev/null; then
+    ok "stop.requested written ($reason)"
+  else
+    info "stop.requested already present"
+  fi
+  if [ -n "$session_dir" ] && [ -d "$session_dir" ]; then
+    (set -o noclobber; echo "$reason $(date +%Y-%m-%dT%H:%M:%S%z)" >"${session_dir}/stop.requested") 2>/dev/null || true
+  fi
+}
+
+stop_was_requested() {
+  local session_dir="${1:-}"
+  [ -f "${PID_DIR}/stop.requested" ] && return 0
+  [ -n "$session_dir" ] && [ -f "${session_dir}/stop.requested" ] && return 0
+  return 1
+}
+
+clear_stop_requested() {
+  rm -f "${PID_DIR}/stop.requested"
+}
+
+validate_bag_min_frames() {
+  local info_path="$1"
+  python2 - "$info_path" <<'PY'
+import re, sys
+text = open(sys.argv[1]).read()
+def count_for(topic):
+    m = re.search(r"%s\s+(\d+)\s+msgs" % re.escape(topic), text)
+    return int(m.group(1)) if m else 0
+depth = count_for("/camera/depth/image_raw")
+info = count_for("/camera/depth/camera_info")
+if depth <= 0:
+    raise SystemExit("bag has no /camera/depth/image_raw messages")
+if info <= 0:
+    raise SystemExit("bag has no /camera/depth/camera_info messages")
+print "bag_min_ok depth=%s info=%s" % (depth, info)
 PY
 }
 
@@ -391,6 +443,8 @@ PY
   echo "$session_dir" >"${PID_DIR}/session.dir"
   echo "$bag_path" >"${PID_DIR}/bag.path"
   echo "$manifest_path" >"${PID_DIR}/manifest.path"
+  clear_stop_requested
+  rm -f "${session_dir}/stop.requested"
 
   info "recording ${duration}s -> $bag_path"
   info "topics: ${topics[*]}"
@@ -412,6 +466,7 @@ PY
     waited=$((waited + 1))
     if [ "$waited" -ge "$max_wait" ]; then
       info "duration watchdog: sending SIGINT to rosbag pid=$rb_pid"
+      mark_stop_requested "$session_dir" "watchdog"
       if pid_is_our_rosbag "$rb_pid"; then
         kill -INT "$rb_pid" 2>/dev/null || true
       fi
@@ -452,22 +507,30 @@ PY
     sleep 1
   done
 
-  # External stop (SIGINT) is success if bag finalized; record status accordingly.
+  # Non-zero exit is "stopped" only with an explicit stop.requested marker.
   if [ "$rb_rc" -ne 0 ]; then
-    if [ -f "$bag_path" ]; then
-      info "rosbag non-zero exit but bag present; treating as stopped/interrupted"
-      if ! rosbag info "$bag_path" >"$info_path" 2>&1; then
-        finalize_manifest "$manifest_path" "rosbag_info_failed" "$bag_path" "$rb_rc"
-        die "rosbag info failed; see $info_path"
-      fi
-      finalize_manifest "$manifest_path" "stopped" "$bag_path" "$rb_rc"
-      ok "capture stopped early: $bag_path"
-      ok "manifest: $manifest_path"
-      echo "$session_dir"
-      return 0
+    if ! stop_was_requested "$session_dir"; then
+      finalize_manifest "$manifest_path" "rosbag_failed" "$bag_path" "$rb_rc"
+      die "rosbag record failed exit_code=$rb_rc (no stop.requested); see $log_path"
     fi
-    finalize_manifest "$manifest_path" "rosbag_failed" "$bag_path" "$rb_rc"
-    die "rosbag record failed exit_code=$rb_rc; see $log_path"
+    if [ ! -f "$bag_path" ]; then
+      finalize_manifest "$manifest_path" "missing_bag" "$bag_path" "$rb_rc"
+      die "stop requested but bag missing under $session_dir"
+    fi
+    if ! rosbag info "$bag_path" >"$info_path" 2>&1; then
+      finalize_manifest "$manifest_path" "rosbag_info_failed" "$bag_path" "$rb_rc"
+      die "rosbag info failed after stop; see $info_path"
+    fi
+    if ! validate_bag_min_frames "$info_path"; then
+      finalize_manifest "$manifest_path" "bag_validation_failed" "$bag_path" "$rb_rc"
+      die "stopped bag failed min frame check; see $info_path"
+    fi
+    finalize_manifest "$manifest_path" "stopped" "$bag_path" "$rb_rc"
+    clear_stop_requested
+    ok "capture stopped early: $bag_path"
+    ok "manifest: $manifest_path"
+    echo "$session_dir"
+    return 0
   fi
 
   if ! rosbag info "$bag_path" >"$info_path" 2>&1; then
@@ -479,6 +542,7 @@ PY
     die "bag validation failed; see $info_path"
   fi
   finalize_manifest "$manifest_path" "ok" "$bag_path" "$rb_rc"
+  clear_stop_requested
   ok "capture complete: $bag_path"
   ok "manifest: $manifest_path"
   echo "$session_dir"
@@ -502,7 +566,7 @@ cmd_stop() {
     ok "no active capture"
     return 0
   fi
-  local pid session_dir bag_path manifest_path
+  local pid session_dir bag_path manifest_path info_path
   pid="$(cat "$(pid_file rosbag)")"
   if ! pid_is_our_rosbag "$pid"; then
     die "refuse to signal pid=$pid; not our rosbag record process"
@@ -513,6 +577,9 @@ cmd_stop() {
   [ -f "${PID_DIR}/session.dir" ] && session_dir="$(cat "${PID_DIR}/session.dir")"
   [ -f "${PID_DIR}/bag.path" ] && bag_path="$(cat "${PID_DIR}/bag.path")"
   [ -f "${PID_DIR}/manifest.path" ] && manifest_path="$(cat "${PID_DIR}/manifest.path")"
+
+  # Ownership marker BEFORE signal — start shell may finalize from wait().
+  mark_stop_requested "$session_dir" "manual"
 
   info "SIGINT rosbag pid=$pid"
   kill -INT "$pid" 2>/dev/null || true
@@ -528,44 +595,55 @@ cmd_stop() {
   rm -f "$(pid_file rosbag)" "$(cmd_file rosbag)"
   info "rosbag process exited (rc unknown from this shell; recorded as signal)"
 
-  if [ -n "$session_dir" ]; then
-    i=0
-    while ls "${session_dir}"/*.bag.active >/dev/null 2>&1; do
-      i=$((i + 1))
-      if [ "$i" -ge 60 ]; then
-        die ".bag.active still present under $session_dir"
-      fi
-      sleep 1
-    done
-    i=0
-    while [ -z "$bag_path" ] || [ ! -f "$bag_path" ]; do
-      bag_path="$(ls -1 "$session_dir"/*.bag 2>/dev/null | head -n1 || true)"
-      if [ -n "$bag_path" ] && [ -f "$bag_path" ]; then
-        break
-      fi
-      i=$((i + 1))
-      if [ "$i" -ge 30 ]; then
-        if [ -n "$manifest_path" ] && [ -f "$manifest_path" ]; then
-          finalize_manifest "$manifest_path" "missing_bag" "${bag_path:-}" "$rb_rc"
-        fi
-        die "bag file missing under $session_dir after stop"
-      fi
-      sleep 1
-    done
-    source_ros
-    rosbag info "$bag_path" >"${session_dir}/rosbag_info.txt" 2>&1 || true
-    if [ -n "$manifest_path" ] && [ -f "$manifest_path" ]; then
-      # Prefer stopped if start has not already finalized as ok.
-      local cur
-      cur="$(python2 -c 'import json,sys; print json.load(open(sys.argv[1])).get("exit_status","")' "$manifest_path" 2>/dev/null || true)"
-      if [ "$cur" = "recording" ] || [ "$cur" = "ok" ] || [ -z "$cur" ] || [ "$cur" = "missing_bag" ]; then
-        finalize_manifest "$manifest_path" "stopped" "$bag_path" "$rb_rc"
-      fi
-    fi
-    ok "capture stopped bag=$bag_path"
-  else
+  if [ -z "$session_dir" ]; then
     ok "capture stopped"
+    return 0
   fi
+
+  i=0
+  while ls "${session_dir}"/*.bag.active >/dev/null 2>&1; do
+    i=$((i + 1))
+    if [ "$i" -ge 60 ]; then
+      die ".bag.active still present under $session_dir"
+    fi
+    sleep 1
+  done
+  i=0
+  while [ -z "$bag_path" ] || [ ! -f "$bag_path" ]; do
+    bag_path="$(ls -1 "$session_dir"/*.bag 2>/dev/null | head -n1 || true)"
+    if [ -n "$bag_path" ] && [ -f "$bag_path" ]; then
+      break
+    fi
+    i=$((i + 1))
+    if [ "$i" -ge 30 ]; then
+      if [ -n "$manifest_path" ] && [ -f "$manifest_path" ]; then
+        finalize_manifest "$manifest_path" "missing_bag" "${bag_path:-}" "$rb_rc"
+      fi
+      die "bag file missing under $session_dir after stop"
+    fi
+    sleep 1
+  done
+
+  source_ros
+  info_path="${session_dir}/rosbag_info.txt"
+  if ! rosbag info "$bag_path" >"$info_path" 2>&1; then
+    if [ -n "$manifest_path" ] && [ -f "$manifest_path" ]; then
+      finalize_manifest "$manifest_path" "rosbag_info_failed" "$bag_path" "$rb_rc"
+    fi
+    die "rosbag info failed after stop; see $info_path"
+  fi
+  if ! validate_bag_min_frames "$info_path"; then
+    if [ -n "$manifest_path" ] && [ -f "$manifest_path" ]; then
+      finalize_manifest "$manifest_path" "bag_validation_failed" "$bag_path" "$rb_rc"
+    fi
+    die "stopped bag failed min frame check; see $info_path"
+  fi
+  # Only commit if start shell has not already finalized (still recording).
+  if [ -n "$manifest_path" ] && [ -f "$manifest_path" ]; then
+    finalize_manifest "$manifest_path" "stopped" "$bag_path" "$rb_rc"
+  fi
+  # Leave stop.requested for the start shell to observe; next start clears it.
+  ok "capture stopped bag=$bag_path"
 }
 
 cmd_inspect() {
