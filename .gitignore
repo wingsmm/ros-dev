@@ -112,5 +112,5 @@ android/**/local.properties
 android/**/.catkin_workspace
 android/**/.rosinstall
 
-# Stage B local bag transfer scratch
-.tmp_astra_bag_xfer/
+# Agent / session scratch (startup helpers, bag xfer, one-off audits)
+.tmp_*/

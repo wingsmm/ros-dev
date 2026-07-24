@@ -1,0 +1,8 @@
+# Onboard Qt deps (Jetson ~/qt/cockpit).
+# rclpy comes from apt (ros-humble-rclpy), not pip.
+# Web控制内嵌页（二选一）：
+#   sudo apt install -y python3-pyqt5.qtwebengine
+#   sudo apt install -y python3-pyqt5.qtwebkit
+# 清华源 403 时可：wget ports.ubuntu.com 对应 .deb 后 sudo dpkg -i
+
+PyQt5>=5.12

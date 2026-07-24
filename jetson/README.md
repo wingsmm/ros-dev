@@ -1,13 +1,23 @@
 # jetson
 
-Jetson（`scripts/.env` 里的 `HOST`，当前多为 `172.0.0.82`）相关开发资产。三块：
+Jetson（`scripts/.env` 里的 `HOST`，当前多为 `172.0.0.82`）相关开发资产：
 
 ```text
 jetson/
-  scripts/   与远端通信的入口（ssh / rsync）
-  mirror/    远端 ~/qt/ 的同步区
-  cockpit/   PC/VMware 上位机（永不部署到 Jetson）
+  scripts/          与远端通信的入口（ssh / rsync）
+  mirror/           远端 ~/qt/ 的同步区
+    car_web/        → ~/qt/car_web
+    ros2_ws/        → ~/qt/ros2_ws
+    cockpit/        → ~/qt/cockpit   （Jetson 本机 Qt 最小壳）
+  cockpit/          PC/VMware 观测端上位机（永不部署到 Jetson）
 ```
+
+两套 cockpit **不要混用**：
+
+| 路径 | 跑在哪 | 同步 | 职责 |
+|------|--------|------|------|
+| `jetson/cockpit/` | VMware / PC | `vmware.sh deploy` → VM；**不**进 Jetson | SSH 启停 L1/LIO、本机 RViz、观测验收 |
+| `jetson/mirror/cockpit/` | Jetson 本机 | `jetson.sh push cockpit` → `~/qt/cockpit` | 本机状态 / topic / `/cmd_vel` 干跑壳；无 SSH、无 RViz |
 
 > **产品状态：二代 ROS2 当前开发主线。** Unitree L1、点云对齐、Point-LIO、`lio_odom_adapter` 和 cockpit 一键定位已经形成短距离观测闭环。当前卡点是底盘改进，不是雷达、DDS 或 RViz；底盘恢复正常行走后再做 3～5 米验收、台阶识别与相机互补。
 
@@ -16,37 +26,40 @@ jetson/
 ```text
         [PC / VMware]                            [Jetson  ~/qt/]
 
-        cockpit/  ── SSH / ROS2 DDS ──────────►   car_web/   (从 ~/newCarProject 拷入)
-           │                                      ros2_ws/   (L1 / LIO / adapter)
-           │
-        mirror/car_web/  ◄── pull ── rsync ────   car_web/
-        mirror/ros2_ws/  ◄── pull / push ─────►  ros2_ws/
+        cockpit/  ── SSH / ROS2 DDS ──────────►   car_web/     (从 ~/newCarProject 拷入)
+           │                                      ros2_ws/     (L1 / LIO / adapter)
+           │                                      cockpit/     (本机 Qt 壳，mirror 推上去)
+           │                                           ▲
+        mirror/car_web/  ◄── pull ── rsync ────   car_web/     │
+        mirror/ros2_ws/  ◄── pull / push ─────►  ros2_ws/      │
+        mirror/cockpit/  ────── push ──────────────────────────┘
 
         同事原项目（勿改）: ~/newCarProject  →  cp →  ~/qt/car_web
 ```
 
-## 三个组件
+## 组件
 
 | 目录 | 谁的代码 | 主开发在哪 | 同步方向 | 说明 |
 |---|---|---|---|---|
 | `scripts/jetson.sh` | 本仓库 | PC | — | connect / probe / pull / push / \<remote cmd\> |
 | `mirror/car_web/` | 同事底盘控制副本 | 尽量对齐 `~/newCarProject` | 双向（当前手工） | 源在 `~/newCarProject`，工作副本在 `~/qt/car_web`；硬件总线见 [docs/car_web-底盘硬件总线.md](docs/car_web-底盘硬件总线.md) |
 | `mirror/ros2_ws/` | 官方包 + 本项目 L1/LIO 适配 | 本仓库 | 改代码后 push / build | Unitree L1、Point-LIO、TF、cloud align、odom adapter 与运行脚本 |
-| `cockpit/` | 自己 | PC / VMware | 无 | 控制 / SLAM / 算法；L1/RViz 当前只认 VMware 观测端验证，见 [cockpit/README.md](cockpit/README.md) |
+| `mirror/cockpit/` | 自己 | 本仓库 → Jetson | `push cockpit` → `~/qt/cockpit` | Jetson 本机 Qt 最小壳；见 [mirror/cockpit/README.md](mirror/cockpit/README.md) |
+| `cockpit/` | 自己 | PC / VMware | `vmware.sh` → VM；**永不** push 到 Jetson | 观测端：SSH + RViz + L1/LIO 一键；验收只认 VMware，见 [cockpit/README.md](cockpit/README.md) |
 
-## `.env`（不入库，不做示例）
+## `.env`
 
-| 文件 | 谁读它 | 内容 |
-|---|---|---|
-| `scripts/.env` | `scripts/jetson.sh`（ssh/rsync 用） | `HOST` `USER` `PORT` `PASSWORD` `KEY` |
-| `cockpit/.env` | cockpit 应用运行时 | `ROS_DOMAIN_ID` `CMD_VEL_TOPIC` `CONTROL_ACTION_TOPIC` 等 |
+| 文件 | 谁读它 | 入库 | 内容 |
+|---|---|---|---|
+| `scripts/.env` | `scripts/jetson.sh`（ssh/rsync） | 否 | `HOST` `USER` `PORT` `PASSWORD` `KEY` |
+| `cockpit/.env` | VMware 观测端 Qt | 否（可有本地副本） | `ROS_DOMAIN_ID`、topic、**`JETSON_SSH_*`** 等 |
+| `mirror/cockpit/.env` | Jetson 本机 Qt（板上 `~/qt/cockpit/.env`） | 否；有 `.env.example` | `ROS_DOMAIN_ID`、topic、遥控参数（无 SSH） |
 
-两份 `.env` 互相独立，不互相读取、不嵌套、不共享变量：
+各 `.env` 互相独立，不互相读取：
 
-- `scripts/.env` 只给同目录的 `jetson.sh` 用，用来连接 Jetson。
-- `cockpit/.env` 只给本地 Qt cockpit 用，用来设置 ROS2 DDS / topic / UI 参数。
-
-单人开发，不留 `.env.example`；缺 key 时按 `jetson.sh` / cockpit 代码里的报错提示补即可。
+- `scripts/.env`：只连 Jetson。
+- `cockpit/.env`：观测端 DDS + 远端 SSH 启停。
+- `mirror/cockpit/.env`：本机壳参数；`jetson.sh push` **排除** `.env`，板上用 `cp -n .env.example .env`。
 
 ## 常用命令
 
@@ -56,16 +69,26 @@ jetson/
 # 探远端环境（只读）
 bash jetson/scripts/jetson.sh probe
 
-# 同步
+# 同步 mirror → ~/qt/
 bash jetson/scripts/jetson.sh pull car_web        # 远端 ~/qt/car_web → 本地
 bash jetson/scripts/jetson.sh pull ros2_ws        # 远端原版 → mirror（先对齐）
-# 同步 ros2_ws（含 l1_static_tf.sh、l1_tf_bringup 等）
-bash jetson/scripts/jetson.sh ros2 push        # dry-run
-bash jetson/scripts/jetson.sh ros2 push --yes  # 真写；默认不带 --delete
+bash jetson/scripts/jetson.sh ros2 push        # dry-run ros2_ws
+bash jetson/scripts/jetson.sh ros2 push --yes  # 真写 ros2_ws；默认不带 --delete
+bash jetson/scripts/jetson.sh push cockpit        # dry-run 本机 Qt 壳
+bash jetson/scripts/jetson.sh push cockpit --yes  # → ~/qt/cockpit
+
+# VMware 观测端 cockpit（不是 Jetson）
+bash jetson/scripts/vmware.sh deploy
 
 # 交互式 ssh / 单条远端命令
 bash jetson/scripts/jetson.sh
 bash jetson/scripts/jetson.sh 'ros2 topic list'
+```
+
+Jetson 本机壳启动（需 `DISPLAY`）：
+
+```bash
+cd ~/qt/cockpit && cp -n .env.example .env && bash run.sh
 ```
 
 ## ROS2 / L1 现状（2026-07-14）
@@ -139,5 +162,6 @@ ls -la /dev/unilidar_lidar
 ## 目录约束
 
 - 远端 `~/newCarProject` 和 `~/ros2_ws` **一根手指都不碰**（那是同事的目标接口；`~/qt/car_web` 即从 `~/newCarProject` 拷来）。所有工作都发生在 Jetson `~/qt/` 下。底盘串口/驱动器见 [docs/car_web-底盘硬件总线.md](docs/car_web-底盘硬件总线.md)。
-- `cockpit/` **不推**到 Jetson，任何时候都别 push 它。
-- `mirror/` 下的中间产物（`__pycache__` / `.venv` / `log/` / `build/` / `install/`）不入库，见 `.gitignore`。
+- `jetson/cockpit/`（VMware 观测端）**不推**到 Jetson，任何时候都别把它 rsync 进 `~/qt/`。
+- `jetson/mirror/cockpit/` **要**推到 Jetson：`jetson.sh push cockpit --yes` → `~/qt/cockpit`。
+- `mirror/` 下的中间产物（`__pycache__` / `.venv` / `log/` / `logs/` / `build/` / `install/`）不入库，见 `.gitignore`。

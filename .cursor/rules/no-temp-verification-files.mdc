@@ -1,39 +1,52 @@
 ---
-description: 禁止为临时验证新建 scripts/tests 文件；用命令或测完即删
+description: 禁止落库存验证脚本；允许 .tmp_* 临时启停脚本但用完必删
 alwaysApply: true
 ---
 
-# 禁止临时验证专用文件
+# 临时验证与启动类脚本
 
 ## 原则
 
-一次性联调、真机验证、截图、冒烟检查**不要**落成仓库里的专用脚本或测试文件。
+一次性联调、真机验证、截图、冒烟、bag 传输、启停复验**不要**落成仓库正式脚本。
 
 优先：
 
-1. **直接在终端跑命令**（`python -m unittest …`、`plink`/`curl`、现有 `xtark/scripts/*.bat` 等）
-2. **必须写临时代码时**：任务结束前删除，不要提交、不要留在工作区
+1. **直接在终端跑命令**或复用已有入口（`xtark/scripts/*.bat`、`jetson/scripts/jetson.sh`、`vmware.sh`、现有 `*_stack.sh` 等）
+2. **必须写临时代码时**：放在仓库根 `.tmp_<任务名>/`，**任务结束前一律删除**（含目录本身）
+3. 允许调用「启动类」脚本（bringup / start / stop / status），但本会话新建的临时包装脚本用完必须清掉
 
 ## 禁止（除非用户明确要求保留）
 
-- 在 `pc/qt_client/scripts/` 下新建「只为这次验证」的 `.py`
-- 在 `pc/qt_client/tests/` 下新建或扩充「只为这次修复」的 `test_*.py`
-- 在 `pc/tools/` 下新建 `verify_*` / `check_*` 一类一次性脚本
-- 在 `xtark/**/scripts/` 下新建与 ROS 节点无关的 `test_*.py`
+- 在 `pc/qt_client/scripts/`、`pc/tools/`、`xtark/**/scripts/`、`jetson/**/scripts/` 等正式目录新建「只为这次验证」的 `verify_*` / `check_*` / `*_revalidate.*`
+- 把临时脚本提交进 git
+- 任务结束后仍留下 `.tmp_*` 目录（例如历史残留 `.tmp_astra_bag_xfer/`）
 
 ## 允许
 
-- 用户明确说「加测试」「保留脚本」「做截图工具进文档」
-- 复用仓库已有入口：`xtark/scripts/deploy_*.bat`、`pc/tools/send_cmd_vel_json.py`、`json_stack.sh` 等
-- 在对话里给出可复制命令，而不是新建文件
+- 用户明确说「加测试」「保留脚本」「做工具进文档」
+- 复用仓库已有入口；在对话里给可复制命令
+- 会话内在 `.tmp_<任务>/` 写短时启停/传输/审计脚本，**用完即删**
+- `.gitignore` 已覆盖 `.tmp_*/`；仍须主动删，不能只靠 ignore
+
+## 收尾检查（每次临时脚本任务结束）
+
+```text
+1. 停掉自己拉起的后台进程（若有）
+2. rm -rf .tmp_<任务名>/
+3. 不要把临时路径写进正式 README / 方案文档当长期入口
+```
 
 ## 示例
 
 ```
 用户：验证 scan_warning 是否通
-→ plink 看进程 + python 一行 socket 读 JSON，或 deploy_json_bridge.bat status
+→ 终端直接查进程 + 现有 status 脚本
 → 不要新建 pc/tools/verify_scan_warning_json.py
 
+用户：这次 bag 传输/启停复验需要几段 ssh 包装
+→ 可建 .tmp_astra_bag_xfer/*.sh 跑完
+→ 任务结束：rm -rf .tmp_astra_bag_xfer/
+
 用户：设置页截图进文档，以后要复用
-→ 可先问是否保留；未确认则跑完删临时脚本
+→ 先问是否保留；未确认则跑完删临时脚本
 ```
